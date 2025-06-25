@@ -17,6 +17,9 @@ add_library(imgui
 )
 
 set(GLFW_GLAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/include)
+set(VULKAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/VulkanSDK/1.3.275.0)
+set(VULKAN_INCLUDE_DIR ${VULKAN_DIR}/Include)
+set(VULKAN_LIB ${VULKAN_DIR}/Lib/vulkan-1.lib)
 set(GLFW_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/lib/glfw3.lib)
 
 #收集文件
@@ -51,6 +54,7 @@ set(THIRD_PARTY_INCLUDE_DIR
 #添加依赖的头文件
 include_directories(
 	${GLFW_GLAD_INCLUDE_DIR}
+	${VULKAN_INCLUDE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_BINARY_DIR}/configuration
 	${THIRD_PARTY_INCLUDE_DIR})
@@ -83,11 +87,13 @@ target_compile_features(GTinyEngine PRIVATE cxx_std_17)
 
 set(ALL_LIBS
 	${GLFW_LIB}
+	${VULKAN_LIB}
 	GTinyEngine
 	${THIRD_PARTY_LIB}
 )
 
 #生成可执行程序
 add_subdirectory(TestRenderer)
+add_subdirectory(VulkanHelloWorld)
 
 
