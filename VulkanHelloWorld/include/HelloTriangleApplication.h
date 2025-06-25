@@ -90,6 +90,8 @@ namespace vulkan
 		void createLogicalDevice();
 		void createSwapChain();
 		void createImageViews();
+		void createGraphicsPipeline();
+		VkShaderModule createShaderModule(const std::vector<char>& code);
 		bool isDeviceSuitable(VkPhysicalDevice device);
 		bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 		VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -101,6 +103,7 @@ namespace vulkan
 
 		bool checkValidationLayerSupport();
 
+		static std::vector<char> readFile(const std::string& filename);
 		static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
 			const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 	};

@@ -92,8 +92,22 @@ set(ALL_LIBS
 	${THIRD_PARTY_LIB}
 )
 
+# 设置资源目录路径（假设资源在项目根目录的 Resources/ 下）
+set(RESOURCE_DIR ${CMAKE_SOURCE_DIR}/resources)
+# 创建构建输出目录中的资源目录
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/resources)
+# 复制所有资源到输出目录
+add_custom_command(TARGET GTinyEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${RESOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/resources
+    COMMENT "Copying resources to build directory"
+)
+# 定义宏将资源路径传递给代码
+target_compile_definitions(GTinyEngine PRIVATE 
+    RESOURCE_PATH="${CMAKE_BINARY_DIR}/resources/"
+)
+
 #生成可执行程序
 add_subdirectory(TestRenderer)
 add_subdirectory(VulkanHelloWorld)
-
-
