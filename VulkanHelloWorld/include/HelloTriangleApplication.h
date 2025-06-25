@@ -71,6 +71,7 @@ namespace vulkan
 		std::vector<VkImage> swapChainImages;
 		VkFormat swapChainImageFormat;
 		VkExtent2D swapChainExtent;
+		std::vector<VkImageView> swapChainImageViews;
 
 		void initWindow();
 		void initVulkan();
@@ -88,6 +89,7 @@ namespace vulkan
 		void pickPhysicalDevice();
 		void createLogicalDevice();
 		void createSwapChain();
+		void createImageViews();
 		bool isDeviceSuitable(VkPhysicalDevice device);
 		bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 		VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
