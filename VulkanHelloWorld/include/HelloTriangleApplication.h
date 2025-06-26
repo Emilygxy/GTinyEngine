@@ -73,6 +73,7 @@ namespace vulkan
 		VkExtent2D swapChainExtent;
 		std::vector<VkImageView> swapChainImageViews;
 
+		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
 
 		void initWindow();
@@ -92,6 +93,7 @@ namespace vulkan
 		void createLogicalDevice();
 		void createSwapChain();
 		void createImageViews();
+		void createRenderPass();
 		void createGraphicsPipeline();
 		VkShaderModule createShaderModule(const std::vector<char>& code);
 		bool isDeviceSuitable(VkPhysicalDevice device);
