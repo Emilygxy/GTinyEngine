@@ -80,6 +80,10 @@ namespace vulkan
 
 		VkCommandPool commandPool;
 		VkCommandBuffer commandBuffer;
+
+		VkSemaphore imageAvailableSemaphore;
+		VkSemaphore renderFinishedSemaphore;
+		VkFence inFlightFence;
 		
 		void initWindow();
 		void initVulkan();
@@ -103,7 +107,9 @@ namespace vulkan
 		void createFramebuffers();
 		void createCommandPool();
 		void createCommandBuffer();
+		void createSyncObjects();
 		void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void drawFrame();
 		VkShaderModule createShaderModule(const std::vector<char>& code);
 		bool isDeviceSuitable(VkPhysicalDevice device);
 		bool checkDeviceExtensionSupport(VkPhysicalDevice device);
