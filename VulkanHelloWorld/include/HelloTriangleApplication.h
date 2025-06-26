@@ -77,6 +77,9 @@ namespace vulkan
 		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
 		VkPipeline graphicsPipeline;
+
+		VkCommandPool commandPool;
+		VkCommandBuffer commandBuffer;
 		
 		void initWindow();
 		void initVulkan();
@@ -98,6 +101,9 @@ namespace vulkan
 		void createRenderPass();
 		void createGraphicsPipeline();
 		void createFramebuffers();
+		void createCommandPool();
+		void createCommandBuffer();
+		void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		VkShaderModule createShaderModule(const std::vector<char>& code);
 		bool isDeviceSuitable(VkPhysicalDevice device);
 		bool checkDeviceExtensionSupport(VkPhysicalDevice device);
