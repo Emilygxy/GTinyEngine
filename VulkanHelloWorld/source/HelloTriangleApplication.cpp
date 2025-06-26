@@ -321,8 +321,8 @@ namespace vulkan
 
     void HelloTriangleApplication::createGraphicsPipeline()
     {
-        auto vertShaderCode = readFile(resourcePath + "shaders/vk/vert.spv");
-        auto fragShaderCode = readFile(resourcePath + "shaders/vk/frag.spv");
+        auto vertShaderCode = readFile("resources/compiled_shaders/shader_base_vert.spv");
+        auto fragShaderCode = readFile("resources/compiled_shaders/shader_base_frag.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
