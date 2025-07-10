@@ -115,6 +115,7 @@ target_compile_definitions(GTinyEngine PUBLIC
 #生成可执行程序
 add_subdirectory(TestRenderer)
 add_subdirectory(VulkanHelloWorld)
+add_subdirectory(VulkanPractice1)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RESOURCE_OUTPUT_DIR}
