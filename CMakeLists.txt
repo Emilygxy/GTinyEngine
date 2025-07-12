@@ -27,6 +27,11 @@ add_library(imgui
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/misc/cpp/imgui_stdlib.cpp
 )
 
+set_target_properties(imgui
+    PROPERTIES
+	FOLDER "Libraries"
+)
+
 set(GLFW_GLAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/include)
 set(VULKAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/VulkanSDK/1.3.275.0)
 set(VULKAN_INCLUDE_DIR ${VULKAN_DIR}/Include)

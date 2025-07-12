@@ -49,6 +49,7 @@ target_include_directories(VulkanPractice1 PRIVATE
 target_link_libraries(VulkanPractice1 PUBLIC ${ALL_LIBS})
 set_target_properties(VulkanPractice1
 	PROPERTIES 
+    FOLDER "Examples"
 	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>/
 )
 target_compile_features(VulkanPractice1 PRIVATE cxx_std_17)

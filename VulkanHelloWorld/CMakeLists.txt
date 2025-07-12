@@ -49,6 +49,7 @@ target_include_directories(VulkanHelloWorld PRIVATE
 target_link_libraries(VulkanHelloWorld PUBLIC ${ALL_LIBS})
 set_target_properties(VulkanHelloWorld
 	PROPERTIES 
+    FOLDER "Examples"
 	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>/
 )
 target_compile_features(VulkanHelloWorld PRIVATE cxx_std_17)
