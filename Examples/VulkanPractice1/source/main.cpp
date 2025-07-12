@@ -1,4 +1,4 @@
-#include"../VulkanHelloWorld/include/HelloTriangleApplication.h"
+#include "HelloTriangleApplication.h"
 
 int main() {
     vulkan::HelloTriangleApplication app;

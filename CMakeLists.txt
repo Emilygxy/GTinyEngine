@@ -118,9 +118,10 @@ target_compile_definitions(GTinyEngine PUBLIC
 )
 
 #生成可执行程序
-add_subdirectory(TestRenderer)
-add_subdirectory(VulkanHelloWorld)
-add_subdirectory(VulkanPractice1)
+add_subdirectory(Examples/TestRenderer)
+add_subdirectory(Examples/VulkanHelloWorld)
+add_subdirectory(Examples/VulkanPractice1)
+add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RESOURCE_OUTPUT_DIR}
@@ -163,8 +164,8 @@ set(SHADER_TYPES
     ".geom=geom" 
     ".comp=comp"
 )
-# 收集所有着色器文件
-file(GLOB_RECURSE SHADER_SOURCES 
+# 收集所有着色器文件, CONFIGURE_DEPENDS确保新增文件时自动更新列表
+file(GLOB_RECURSE SHADER_SOURCES CONFIGURE_DEPENDS
     "${VK_SHADER_SOURCE_DIR}/*.vert"
     "${VK_SHADER_SOURCE_DIR}/*.frag"
     "${VK_SHADER_SOURCE_DIR}/*.tesc"
@@ -172,6 +173,9 @@ file(GLOB_RECURSE SHADER_SOURCES
     "${VK_SHADER_SOURCE_DIR}/*.geom"
     "${VK_SHADER_SOURCE_DIR}/*.comp"
 )
+# Print file length
+list(LENGTH SHADER_SOURCES TOTAL_FILES)
+message(STATUS "Total vk shader source files: ${TOTAL_FILES}")
 
 # 创建着色器编译命令
 foreach(SHADER_SOURCE ${SHADER_SOURCES})
@@ -216,13 +220,18 @@ foreach(SHADER_SOURCE ${SHADER_SOURCES})
     list(APPEND SHADER_BINARIES ${OUTPUT_FILE})
 endforeach()
 
+# 计算文件数量
+list(LENGTH SHADER_BINARIES SHADER_BINARIES_COUNT)
+# 输出日志（STATUS 前缀显示为 "--"）
+message(STATUS "Number of .spv files: ${SHADER_BINARIES_COUNT}")
+
 # 创建自定义目标以编译所有着色器
 
 add_custom_target(CompileToVKShaders ALL
     DEPENDS ${SHADER_BINARIES}
     COMMENT "Compiling all shaders to SPIR-V"
 )
-
+# 设置VS项目文件夹
 set_target_properties(CompileToVKShaders
     PROPERTIES
 	FOLDER "Libraries"
