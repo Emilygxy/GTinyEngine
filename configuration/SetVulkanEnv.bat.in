@@ -1,0 +1,2 @@
+@echo off
+setx "PROJECT_VULKAN_SDK" "{{VULKAN_SDK_VALUE}}"
