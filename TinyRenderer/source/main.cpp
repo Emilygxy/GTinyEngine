@@ -5,6 +5,11 @@
 #include "shader.h"
 #include "filesystem.h"
 #include <memory>
+
+#include "Camera.h"
+
+#include "Skybox.h"
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
@@ -24,6 +29,30 @@ const unsigned int SCR_HEIGHT = 600;
 //"{\n"
 //"   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
 //"}\n\0";
+
+std::shared_ptr<Camera> g_pCamera = nullptr;
+std::shared_ptr<Skybox> g_pSkybox = nullptr;
+std::shared_ptr<Camera_Event> g_pCameraEvent = nullptr;
+
+void InitCamera()
+{
+    g_pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
+    g_pCameraEvent = std::make_shared<Camera_Event>(g_pCamera);
+}
+
+void InitSkybox()
+{
+    std::vector<std::string> faces
+    {
+        FileSystem::getPath("resources/textures/skybox/right.jpg"),
+        FileSystem::getPath("resources/textures/skybox/left.jpg"),
+        FileSystem::getPath("resources/textures/skybox/top.jpg"),
+        FileSystem::getPath("resources/textures/skybox/bottom.jpg"),
+        FileSystem::getPath("resources/textures/skybox/front.jpg"),
+        FileSystem::getPath("resources/textures/skybox/back.jpg")
+    };
+    g_pSkybox = std::make_shared<Skybox>(faces);
+}
 
 int main()
 {
@@ -49,6 +78,7 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -58,6 +88,8 @@ int main()
         return -1;
     }
 
+    InitCamera();
+    InitSkybox();
 
     // build and compile our shader program
     // ------------------------------------
@@ -114,6 +146,7 @@ int main()
         glDrawArrays(GL_LINE_LOOP, 0, 3);//GL_TRIANGLES
         // glBindVertexArray(0); // no need to unbind it every time 
 
+        g_pSkybox->Draw(g_pCamera->GetViewMatrix(), g_pCamera->GetProjectionMatrix());
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
