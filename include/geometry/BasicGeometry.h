@@ -5,6 +5,8 @@
 #include<vector>
 #include "materials/BaseMaterial.h"
 
+#define M_PI 3.14159265358979323846;
+
 class BasicGeometry : public std::enable_shared_from_this<BasicGeometry>
 {
 public:

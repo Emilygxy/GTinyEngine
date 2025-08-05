@@ -4,11 +4,6 @@
 #include "ultis.h"
 #include "materials/BaseMaterial.h"
 
-namespace
-{
-    const float M_PI = 3.14159265358979323846f;
-}
-
 Sphere::Sphere(float radius, int sectors, int stacks)   
     :m_Radius(radius)
 {
@@ -36,12 +31,12 @@ float Sphere::GetRadius() const noexcept
 void Sphere::CreateSphere(int sectors, int stacks) {
     mVertices.clear();
     mIndices.clear();
-
-    float sectorStep = 2 * M_PI / sectors;
-    float stackStep = M_PI / stacks;
+    float kpi = (float) M_PI;
+    float sectorStep = 2 * kpi / sectors;
+    float stackStep = kpi / stacks;
 
     for (int i = 0; i <= stacks; ++i) {
-        float stackAngle = M_PI / 2 - i * stackStep;
+        float stackAngle = kpi / 2.0f - i * stackStep;
         float xy = m_Radius * cosf(stackAngle);
         float z = m_Radius * sinf(stackAngle);
 

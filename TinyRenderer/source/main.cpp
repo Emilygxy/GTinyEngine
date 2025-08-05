@@ -11,6 +11,7 @@
 #include "Skybox.h"
 
 #include "geometry/Sphere.h"
+#include "geometry/Torus.h"
 #include "materials/BaseMaterial.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -34,7 +35,7 @@ float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
-std::shared_ptr<Sphere> g_pSphere = nullptr;
+std::shared_ptr<BasicGeometry> g_pGeometry = nullptr;
 
 void InitCamera()
 {
@@ -65,9 +66,10 @@ void InitSkybox()
 
 void InitSphere()
 {
-    g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
-    g_pSphere->GetMaterial()->AttachedCamera(g_pCamera);
-    g_pSphere->GetMaterial()->AttachedLight(g_pLight);
+    //g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
+    g_pGeometry = std::make_shared<Torus>();
+    g_pGeometry->GetMaterial()->AttachedCamera(g_pCamera);
+    g_pGeometry->GetMaterial()->AttachedLight(g_pLight);
 }
 
 int main()
@@ -140,11 +142,11 @@ int main()
         g_pSkybox->Draw(g_pCamera->GetViewMatrix(), g_pCamera->GetProjectionMatrix());
 
         // apply shader
-        g_pSphere->GetMaterial()->OnApply();
-        g_pSphere->GetMaterial()->UpdateUniform();
+        g_pGeometry->GetMaterial()->OnApply();
+        g_pGeometry->GetMaterial()->UpdateUniform();
 
         // Render sphere
-        g_pSphere->Draw();
+        g_pGeometry->Draw();
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
