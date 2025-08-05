@@ -72,6 +72,22 @@ void InitSphere()
     g_pGeometry->GetMaterial()->AttachedLight(g_pLight);
 }
 
+void PrintCullingInfo()
+{
+    GLboolean cullFaceEnabled;
+    glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    
+    GLint cullFace;
+    glGetIntegerv(GL_CULL_FACE, &cullFace);
+    
+    GLint frontFace;
+    glGetIntegerv(GL_FRONT_FACE, &frontFace);
+    
+    std::cout << "Cull Face Enabled: " << (cullFaceEnabled ? "Yes" : "No") << std::endl;
+    std::cout << "Cull Face Mode: " << (cullFace == GL_BACK ? "GL_BACK" : "GL_FRONT") << std::endl;
+    std::cout << "Front Face: " << (frontFace == GL_CCW ? "GL_CCW" : "GL_CW") << std::endl;
+}
+
 int main()
 {
     // glfw: initialize and configure
@@ -108,6 +124,11 @@ int main()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
+
+    // enable backface culling
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW); // ccw is default positive face
 
     // build and compile our shader program
     // prepare mesh
@@ -152,6 +173,8 @@ int main()
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -212,6 +235,33 @@ void processInput(GLFWwindow* window)
             g_pCameraEvent->ProcessKeyboard(Camera_Movement::LEFT, deltaTime);
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             g_pCameraEvent->ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
+    }
+
+    // switch culling mode with B key
+    static bool cullingEnabled = true;
+    static bool cullingKeyPressed = false;
+    
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
+    {
+        if (!cullingKeyPressed)
+        {
+            cullingEnabled = !cullingEnabled;
+            if (cullingEnabled)
+            {
+                glEnable(GL_CULL_FACE);
+                std::cout << "Backface Culling: Enabled" << std::endl;
+            }
+            else
+            {
+                glDisable(GL_CULL_FACE);
+                std::cout << "Backface Culling: Disabled" << std::endl;
+            }
+            cullingKeyPressed = true;
+        }
+    }
+    else
+    {
+        cullingKeyPressed = false;
     }
 }
 
