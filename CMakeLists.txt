@@ -53,10 +53,12 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/materials/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/skybox/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/curve/*.cpp
-				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/geometry/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
-				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h)
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
+                  )
 
 # configure root dir for cpp
 configure_file(configuration/root_dir.h.in configuration/root_dir.h)

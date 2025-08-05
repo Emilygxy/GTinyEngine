@@ -9,7 +9,7 @@ const std::string g_resource_path = RESOURCE_PATH;
 
 // utility function for loading a 2D texture from file
 // ---------------------------------------------------
-unsigned int loadTexture(char const* path);
+unsigned int loadTexture(char const* path, bool generateMipMap = true);
 
 // loads a cubemap texture from 6 individual texture faces
 // order:
