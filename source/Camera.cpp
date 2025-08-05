@@ -377,3 +377,19 @@ void Camera_Event::ProcessMouseMovement(float xoffset, float yoffset, bool const
 
     mpCamera->updateCameraVectors();
 }
+
+void Camera_Event::ProcessMouseScroll(float delta)
+{
+    // Implement mouse wheel zoom functionality
+    float zoomSpeed = 2.0f;
+    float fov = mpCamera->GetFov();
+    fov -= delta * zoomSpeed;
+
+    // Limit FOV range
+    if (fov < 1.0f)
+        fov = 1.0f;
+    if (fov > 90.0f)
+        fov = 90.0f;
+
+    mpCamera->SetFov(fov);
+}

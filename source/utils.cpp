@@ -43,7 +43,6 @@ unsigned int loadTexture(char const* path)
     return textureID;
 }
 
-
 unsigned int loadCubemap(const std::vector<std::string>& faces)
 {
     unsigned int textureID;

@@ -34,7 +34,10 @@ add_library(imgui
 
 set_target_properties(imgui
     PROPERTIES
-	FOLDER "Libraries"
+    FOLDER "Libraries"
+    # 设置PDB文件输出路径，避免PDB冲突
+    PDB_NAME "imgui"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>"
 )
 
 set(GLFW_GLAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/include)
