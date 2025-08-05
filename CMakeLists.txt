@@ -58,6 +58,7 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/materials/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/mesh/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
                   )
 

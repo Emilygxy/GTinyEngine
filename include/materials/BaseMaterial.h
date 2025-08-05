@@ -11,15 +11,15 @@ public:
 	MaterialBase() = delete;
 	virtual ~MaterialBase() = default;
 	virtual void OnPerFrameUpdate() = 0;
-	void OnApply();
+	virtual void OnBind() = 0;
+	virtual void UpdateUniform() = 0;
 
+	void OnApply();
 	void AttachedCamera(const std::shared_ptr<Camera>& pcamera);
 
 protected:
 	MaterialBase(const std::string& vs_path, const std::string& fs_path);
-	virtual void UpdateUniform() = 0;
 
-	virtual void OnBind() = 0;
 
 	std::shared_ptr<Shader> mpShader{ nullptr };
 	std::weak_ptr<Camera> mpAttachedCamera;
