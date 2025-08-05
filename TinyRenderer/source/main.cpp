@@ -10,6 +10,7 @@
 #include "Skybox.h"
 
 #include "geometry/Sphere.h"
+#include "materials/BaseMaterial.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -58,7 +59,7 @@ void InitSkybox()
 void InitSphere()
 {
     g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
-    g_pSphere->SetTexturePath("resources/textures/IMG_8515.JPG");
+    g_pSphere->GetMaterial()->AttachedCamera(g_pCamera);
 }
 
 int main()
@@ -105,7 +106,6 @@ int main()
     // build and compile our shader program
     // ------------------------------------
     std::shared_ptr<Shader> shader = std::make_shared<Shader>("resources/shaders/TinyRenderer/base.vs", "resources/shaders/TinyRenderer/base.fs");
-    std::shared_ptr<Shader> sphereShader = std::make_shared<Shader>("resources/shaders/common/common.vs", "resources/shaders/common/phong.fs");
 
     //// set up vertex data (and buffer(s)) and configure vertex attributes
     //// ------------------------------------------------------------------
@@ -162,25 +162,26 @@ int main()
 
         //render model - line triangle
         //shader->use();
-        sphereShader->use();
+        g_pSphere->GetMaterial()->OnApply();
+        //sphereShader->use();
         // draw our first triangle
         //glUseProgram(shaderProgram);
         //glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
         //glDrawArrays(GL_LINE_LOOP, 0, 3);//GL_TRIANGLES
         // glBindVertexArray(0); // no need to unbind it every time 
+        g_pSphere->GetMaterial()->UpdateUniform();
+        //// Set transformation matrix
+        //glm::mat4 model = glm::mat4(1.0f);
+        //model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+        //model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
 
-        // Set transformation matrix
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
+        //sphereShader->setMat4("model", model);
+        //sphereShader->setMat4("view", g_pCamera->GetViewMatrix());
+        //sphereShader->setMat4("projection", g_pCamera->GetProjectionMatrix());
 
-        sphereShader->setMat4("model", model);
-        sphereShader->setMat4("view", g_pCamera->GetViewMatrix());
-        sphereShader->setMat4("projection", g_pCamera->GetProjectionMatrix());
-
-        // Set lighting parameters
-        sphereShader->setVec3("objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
-        sphereShader->setInt("diffuseTexture", 0);
+        //// Set lighting parameters
+        //sphereShader->setVec3("objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
+        //sphereShader->setInt("diffuseTexture", 0);
 
         // Render sphere
         g_pSphere->Draw();

@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <memory>
 #include <glm/glm.hpp>
 #include "glad/glad.h"
 
@@ -10,6 +11,7 @@ struct SphereVertex {
     glm::vec2 texCoords;
 };
 
+class UnlitMaterial;
 
 class Sphere
 {
@@ -20,16 +22,10 @@ public:
     void Draw() const;
     void SetupMesh();
 
-    void SetTexturePath(const std::string& path);
+    std::shared_ptr<UnlitMaterial> GetMaterial();
 
 private:
     void CreateSphere(float radius, int sectors, int stacks);
-    void CalculateTangentBasis();
-
-    //texture 
-    void SetTexture(unsigned int textureID);
-    unsigned int GetTexture() const { return textureID; }
-    bool HasTexture() const { return hasTexture; }
 
     std::vector<SphereVertex> vertices;
     std::vector<unsigned int> indices;
@@ -37,9 +33,6 @@ private:
     unsigned int VAO, VBO, EBO;
     bool initialized = false;
 
-    unsigned int textureID;
-    bool hasTexture = false;
-
     glm::vec3 m_Pos{0.0f, 0.0f, 0.0f};
-
+    std::shared_ptr<UnlitMaterial> mpUnlitMaterial{ nullptr };
 };

@@ -2,15 +2,20 @@
 #include <cmath>
 #include <iostream>
 #include "ultis.h"
+#include "materials/BaseMaterial.h"
 
 namespace
 {
     const float M_PI = 3.14159265358979323846f;
 }
 
-Sphere::Sphere(float radius, int sectors, int stacks) {
+Sphere::Sphere(float radius, int sectors, int stacks)
+    :mpUnlitMaterial(std::make_shared<UnlitMaterial>())
+{
     m_Pos = glm::vec3(0.0f, 0.0f, -10.0f);
     CreateSphere(radius, sectors, stacks);
+
+    mpUnlitMaterial->SetTexturePath("resources/textures/IMG_8515.JPG");
 }
 
 Sphere::~Sphere() {
@@ -71,6 +76,11 @@ void Sphere::CreateSphere(float radius, int sectors, int stacks) {
     SetupMesh();
 }
 
+std::shared_ptr<UnlitMaterial> Sphere::GetMaterial()
+{
+    return mpUnlitMaterial;
+}
+
 void Sphere::SetupMesh() {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -100,34 +110,13 @@ void Sphere::SetupMesh() {
     initialized = true;
 }
 
-void Sphere::SetTexturePath(const std::string& path)
-{
-    if (path.empty())
-    {
-        std::cout << "Sphere::SetTexturePath - Empty path" << std::endl;
-        return;
-    }
-
-    textureID = loadTexture(path.c_str());
-    hasTexture = true;
-}
-
-void Sphere::SetTexture(unsigned int textureID)
-{
-    textureID = textureID;
-    hasTexture = true;
-}
-
 void Sphere::Draw() const {
     if (!initialized) return;
 
     // bind texture
-    if (hasTexture) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-    }
+    mpUnlitMaterial->OnBind();
 
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, GLsizei(indices.size()), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
