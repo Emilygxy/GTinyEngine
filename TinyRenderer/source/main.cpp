@@ -7,9 +7,12 @@
 #include <memory>
 
 #include "Camera.h"
+#include "Light.h"
 #include "Skybox.h"
 
 #include "geometry/Sphere.h"
+#include "geometry/Torus.h"
+#include "materials/BaseMaterial.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -21,6 +24,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 std::shared_ptr<Camera> g_pCamera = nullptr;
+std::shared_ptr<Light> g_pLight = nullptr;
 std::shared_ptr<Skybox> g_pSkybox = nullptr;
 std::shared_ptr<Camera_Event> g_pCameraEvent = nullptr;
 bool enableInteraction = false;
@@ -31,7 +35,7 @@ float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
-std::shared_ptr<Sphere> g_pSphere = nullptr;
+std::shared_ptr<BasicGeometry> g_pGeometry = nullptr;
 
 void InitCamera()
 {
@@ -39,6 +43,11 @@ void InitCamera()
     g_pCameraEvent = std::make_shared<Camera_Event>(g_pCamera);
 
     g_pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
+}
+
+void InitLight()
+{
+    g_pLight = std::make_shared<Light>();
 }
 
 void InitSkybox()
@@ -57,8 +66,26 @@ void InitSkybox()
 
 void InitSphere()
 {
-    g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
-    g_pSphere->SetTexturePath("resources/textures/IMG_8515.JPG");
+    //g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
+    g_pGeometry = std::make_shared<Torus>();
+    g_pGeometry->GetMaterial()->AttachedCamera(g_pCamera);
+    g_pGeometry->GetMaterial()->AttachedLight(g_pLight);
+}
+
+void PrintCullingInfo()
+{
+    GLboolean cullFaceEnabled;
+    glGetBooleanv(GL_CULL_FACE, &cullFaceEnabled);
+    
+    GLint cullFace;
+    glGetIntegerv(GL_CULL_FACE, &cullFace);
+    
+    GLint frontFace;
+    glGetIntegerv(GL_FRONT_FACE, &frontFace);
+    
+    std::cout << "Cull Face Enabled: " << (cullFaceEnabled ? "Yes" : "No") << std::endl;
+    std::cout << "Cull Face Mode: " << (cullFace == GL_BACK ? "GL_BACK" : "GL_FRONT") << std::endl;
+    std::cout << "Front Face: " << (frontFace == GL_CCW ? "GL_CCW" : "GL_CW") << std::endl;
 }
 
 int main()
@@ -98,42 +125,17 @@ int main()
         return -1;
     }
 
-    InitCamera();
-    InitSkybox();
-    InitSphere();
+    // enable backface culling
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW); // ccw is default positive face
 
     // build and compile our shader program
-    // ------------------------------------
-    std::shared_ptr<Shader> shader = std::make_shared<Shader>("resources/shaders/TinyRenderer/base.vs", "resources/shaders/TinyRenderer/base.fs");
-    std::shared_ptr<Shader> sphereShader = std::make_shared<Shader>("resources/shaders/common/common.vs", "resources/shaders/common/phong.fs");
-
-    //// set up vertex data (and buffer(s)) and configure vertex attributes
-    //// ------------------------------------------------------------------
-    //float vertices[] = {
-    //    -0.5f, -0.5f, 0.0f, // left  
-    //     0.5f, -0.5f, 0.0f, // right 
-    //     0.0f,  0.5f, 0.0f  // top   
-    //};
-
-    //unsigned int VBO, VAO;
-    //glGenVertexArrays(1, &VAO);
-    //glGenBuffers(1, &VBO);
-    //// bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-    //glBindVertexArray(VAO);
-
-    //glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    //glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    //glEnableVertexAttribArray(0);
-
-    //// note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
-    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    //// You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
-    //// VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    //glBindVertexArray(0);
-
+    // prepare mesh
+    InitCamera();
+    InitLight();
+    InitSkybox();
+    InitSphere();
 
     // uncomment this call to draw in wireframe polygons.
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -160,42 +162,24 @@ int main()
         //render skybox first
         g_pSkybox->Draw(g_pCamera->GetViewMatrix(), g_pCamera->GetProjectionMatrix());
 
-        //render model - line triangle
-        //shader->use();
-        sphereShader->use();
-        // draw our first triangle
-        //glUseProgram(shaderProgram);
-        //glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        //glDrawArrays(GL_LINE_LOOP, 0, 3);//GL_TRIANGLES
-        // glBindVertexArray(0); // no need to unbind it every time 
-
-        // Set transformation matrix
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
-
-        sphereShader->setMat4("model", model);
-        sphereShader->setMat4("view", g_pCamera->GetViewMatrix());
-        sphereShader->setMat4("projection", g_pCamera->GetProjectionMatrix());
-
-        // Set lighting parameters
-        sphereShader->setVec3("objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
-        sphereShader->setInt("diffuseTexture", 0);
+        // apply shader
+        g_pGeometry->GetMaterial()->OnApply();
+        g_pGeometry->GetMaterial()->UpdateUniform();
 
         // Render sphere
-        g_pSphere->Draw();
+        g_pGeometry->Draw();
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
-    //glDeleteVertexArrays(1, &VAO);
-    //glDeleteBuffers(1, &VBO);
-    shader.reset();
+    //
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
@@ -251,6 +235,33 @@ void processInput(GLFWwindow* window)
             g_pCameraEvent->ProcessKeyboard(Camera_Movement::LEFT, deltaTime);
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             g_pCameraEvent->ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
+    }
+
+    // switch culling mode with B key
+    static bool cullingEnabled = true;
+    static bool cullingKeyPressed = false;
+    
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
+    {
+        if (!cullingKeyPressed)
+        {
+            cullingEnabled = !cullingEnabled;
+            if (cullingEnabled)
+            {
+                glEnable(GL_CULL_FACE);
+                std::cout << "Backface Culling: Enabled" << std::endl;
+            }
+            else
+            {
+                glDisable(GL_CULL_FACE);
+                std::cout << "Backface Culling: Disabled" << std::endl;
+            }
+            cullingKeyPressed = true;
+        }
+    }
+    else
+    {
+        cullingKeyPressed = false;
     }
 }
 
