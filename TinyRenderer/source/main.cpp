@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "Camera.h"
+#include "Light.h"
 #include "Skybox.h"
 
 #include "geometry/Sphere.h"
@@ -22,6 +23,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 std::shared_ptr<Camera> g_pCamera = nullptr;
+std::shared_ptr<Light> g_pLight = nullptr;
 std::shared_ptr<Skybox> g_pSkybox = nullptr;
 std::shared_ptr<Camera_Event> g_pCameraEvent = nullptr;
 bool enableInteraction = false;
@@ -42,6 +44,11 @@ void InitCamera()
     g_pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
 }
 
+void InitLight()
+{
+    g_pLight = std::make_shared<Light>();
+}
+
 void InitSkybox()
 {
     std::vector<std::string> faces
@@ -60,6 +67,7 @@ void InitSphere()
 {
     g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
     g_pSphere->GetMaterial()->AttachedCamera(g_pCamera);
+    g_pSphere->GetMaterial()->AttachedLight(g_pLight);
 }
 
 int main()
@@ -102,6 +110,7 @@ int main()
     // build and compile our shader program
     // prepare mesh
     InitCamera();
+    InitLight();
     InitSkybox();
     InitSphere();
 
