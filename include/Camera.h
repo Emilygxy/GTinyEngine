@@ -123,7 +123,7 @@ private:
     glm::mat4 mViewMatrix;
     glm::mat4 mProjectionMatrix;
 
-    CProjectionMode mProjectionMode;
+    CProjectionMode mProjectionMode{ CProjectionMode::PERSPECTIVE };
 
     mutable bool mViewDirty{ true };
     mutable bool mProjDirty{ true };

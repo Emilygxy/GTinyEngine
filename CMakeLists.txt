@@ -15,7 +15,7 @@ get_config_output_path(CURRENT_CONFIG_OUTPUT_DIR)
 # Vulkan Env
 set(VULKAN_SDK_VALUE "${CMAKE_SOURCE_DIR}/VulkanSDK/1.3.275.0/Bin")
 configure_file(configuration/SetVulkanEnv.bat.in configuration/SetVulkanEnv.bat @ONLY)
-message(STATUS "请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
+message(STATUS "若未安装Vulkan环境，请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
 
 add_library(imgui
 	#ImGui Core

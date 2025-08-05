@@ -8,6 +8,21 @@ Camera::Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch)
     mWorldUp = up;
     mYaw = yaw;
     mPitch = pitch;
+    
+    // Initialize projection parameters
+    mFov = glm::vec4(ZOOM, ZOOM, ZOOM, ZOOM);
+    mAspectRatio = 800.0f / 600.0f;  // Default aspect ratio
+    mNearPlane = 0.1f;
+    mFarPlane = 100.0f;
+    mDistance = 3.0f;
+    mOrthoScale = 1.0f;
+    
+    // Initialize movement parameters
+    mMovementSpeed = SPEED;
+    mMouseSensitivity = SENSITIVITY;
+    
+    // Initialize target position
+    mTarget = mPosition + glm::vec3(0.0f, 0.0f, -1.0f);
 
     updateCameraVectors();
 }
@@ -276,7 +291,9 @@ void Camera::updateCameraVectors()
     mRight = glm::normalize(glm::cross(mFront, mWorldUp));
     mUp = glm::normalize(glm::cross(mRight, mFront));
 
-    mPosition = mTarget - mFront * mDistance;
+    // Update target position based on current position and front direction
+    mTarget = mPosition + mFront;
+    
     mViewMatrix = glm::lookAt(mPosition, mTarget, mUp);
     mProjectionMatrix = glm::perspective(glm::radians(mFov.x), mAspectRatio, mNearPlane, mFarPlane);
 
