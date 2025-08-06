@@ -66,4 +66,5 @@ private:
 	std::shared_ptr<TextureBase> mpDiffuseTexture{ nullptr };
 	bool mbHasTexture = false;
 	glm::vec4 mIntensities{ 1.0f,1.0f, 1.0f, 1.0f};// environment,diffuse,specular,shininess
+	bool useBlinnPhong = true;
 };

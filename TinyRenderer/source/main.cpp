@@ -11,17 +11,17 @@ int main()
     gRenderAgent.InitGL();
     // build and compile our shader program
     // prepare mesh
-    gRenderAgent.SetupRenderer();
+    gRenderAgent.PreRender();
 
     // uncomment this call to draw in wireframe polygons.
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    gRenderAgent.RenderFrameBegin();
+    gRenderAgent.Render();
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
     //
-    gRenderAgent.RenderFrameEnd();
+    gRenderAgent.PostRender();
     
     return 0;
 }

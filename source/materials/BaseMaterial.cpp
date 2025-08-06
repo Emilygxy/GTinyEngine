@@ -121,6 +121,10 @@ void PhongMaterial::UpdateUniform()
         mpShader->setVec3("u_lightColor", pLight->GetColor());
         mpShader->setVec3("u_lightPos", pLight->GetPosition());
     }
+    if (useBlinnPhong)
+    {
+        mpShader->setFloat("u_UseBlinnPhong", useBlinnPhong ? 1.0f : 0.0f);
+    }
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)

@@ -45,10 +45,9 @@ public:
 
 	void InitGL();
 
-	void SetupRenderer();
-
-	void RenderFrameBegin();
-	void RenderFrameEnd();
+	void PreRender();
+	void Render();
+	void PostRender();
 
 	GLFWwindow* GetWindow()
 	{
@@ -60,6 +59,8 @@ public:
 		return mpCameraEvent;
 	}
 private:
+	void SetupRenderer();
+
 	GLFWwindow* mWindow { nullptr };
 
 	Renderer* mRenderer{ nullptr };

@@ -99,7 +99,7 @@ void RenderAgent::SetupRenderer()
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
 }
 
-void RenderAgent::RenderFrameBegin()
+void RenderAgent::Render()
 {
     // render loop
     // -----------
@@ -131,11 +131,16 @@ void RenderAgent::RenderFrameBegin()
     }
 }
 
-void RenderAgent::RenderFrameEnd()
+void RenderAgent::PostRender()
 {
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
+}
+
+void RenderAgent::PreRender()
+{
+    SetupRenderer();
 }
 
 /** 
