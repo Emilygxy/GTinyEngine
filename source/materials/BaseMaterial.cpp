@@ -2,7 +2,6 @@
 #include <iostream>
 #include "ultis.h"
 #include "glad/glad.h"
-#include "shader.h"
 #include "Camera.h"
 #include "Light.h"
 
@@ -120,6 +119,10 @@ void PhongMaterial::UpdateUniform()
     {
         mpShader->setVec3("u_lightColor", pLight->GetColor());
         mpShader->setVec3("u_lightPos", pLight->GetPosition());
+    }
+    if (useBlinnPhong)
+    {
+        mpShader->setFloat("u_UseBlinnPhong", useBlinnPhong ? 1.0f : 0.0f);
     }
 }
 

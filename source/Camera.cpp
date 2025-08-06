@@ -296,8 +296,6 @@ void Camera::updateCameraVectors()
     
     mViewMatrix = glm::lookAt(mPosition, mTarget, mUp);
     mProjectionMatrix = glm::perspective(glm::radians(mFov.x), mAspectRatio, mNearPlane, mFarPlane);
-
-    //mCounter++;
 }
 
 void Camera::SetProjectionMode(CProjectionMode mode)
@@ -346,6 +344,12 @@ Camera_Event::~Camera_Event()
 
 void Camera_Event::ProcessKeyboard(Camera_Movement direction, float deltaTime)
 {
+    if (!mpCamera)
+    {
+        std::cout << "ProcessKeyboard Unkown Camera Object" << std::endl;
+        return;
+    }
+
     float velocity = mpCamera->mMovementSpeed * deltaTime;
     if (direction == Camera_Movement::FORWARD)
         mpCamera->mPosition += mpCamera->GetFront() * velocity;
@@ -361,6 +365,12 @@ void Camera_Event::ProcessKeyboard(Camera_Movement direction, float deltaTime)
 
 void Camera_Event::ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch)
 {
+    if (!mpCamera)
+    {
+        std::cout << "ProcessMouseMovement Unkown Camera Object" << std::endl;
+        return;
+    }
+
     xoffset *= mpCamera->mMouseSensitivity;
     yoffset *= mpCamera->mMouseSensitivity;
 
@@ -380,6 +390,12 @@ void Camera_Event::ProcessMouseMovement(float xoffset, float yoffset, bool const
 
 void Camera_Event::ProcessMouseScroll(float delta)
 {
+    if (!mpCamera)
+    {
+        std::cout << "ProcessMouseScroll Unkown Camera Object" << std::endl;
+        return;
+    }
+
     // Implement mouse wheel zoom functionality
     float zoomSpeed = 2.0f;
     float fov = mpCamera->GetFov();

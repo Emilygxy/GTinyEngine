@@ -17,6 +17,16 @@ public:
 	std::shared_ptr<MaterialBase> GetMaterial();
 	void Draw() const;
 
+	std::vector<Vertex> GetVertices() const noexcept
+	{
+		return mVertices;
+	}
+
+	std::vector<unsigned int> GetIndices() const noexcept
+	{
+		return mIndices;
+	}
+
 protected:
 	virtual void SetupMesh();
 

@@ -7,6 +7,7 @@ public:
 	Light();
 	~Light();
 
+	void SetPosition(const glm::vec3& pos);
 	glm::vec3 GetPosition() const noexcept 
 	{
 		return mPos;
@@ -17,6 +18,7 @@ public:
 		return mDirection;
 	}
 
+	void SetColor(const glm::vec3& color);
 	glm::vec3 GetColor() const noexcept
 	{
 		return mColor;

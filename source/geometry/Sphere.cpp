@@ -11,9 +11,9 @@ Sphere::Sphere(float radius, int sectors, int stacks)
     CreateSphere(sectors, stacks);
 
     //material
-    auto pUnlitMaterial = std::make_shared<PhongMaterial>();
-    pUnlitMaterial->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
-    SetMaterial(pUnlitMaterial);
+    auto pPhongMaterial = std::make_shared<PhongMaterial>();
+    pPhongMaterial->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+    SetMaterial(pPhongMaterial);
 }
 
 Sphere::~Sphere() {}

@@ -52,10 +52,12 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/materials/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/textures/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/framework/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/curve/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/materials/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/mesh/*.h
@@ -134,6 +136,7 @@ target_compile_definitions(GTinyEngine PUBLIC
 add_subdirectory(Examples/TestRenderer)
 add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
+add_subdirectory(Examples/RendererDemo)
 add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
