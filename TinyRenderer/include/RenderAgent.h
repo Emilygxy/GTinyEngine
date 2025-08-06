@@ -6,8 +6,10 @@
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-
-class Renderer;
+namespace te
+{
+	class Renderer;
+}
 class Camera_Event;
 class RenderAgent;
 
@@ -63,7 +65,7 @@ private:
 
 	GLFWwindow* mWindow { nullptr };
 
-	Renderer* mRenderer{ nullptr };
+	te::Renderer* mRenderer{ nullptr };
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
 };

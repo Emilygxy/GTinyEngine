@@ -2,7 +2,6 @@
 #include <iostream>
 #include "ultis.h"
 #include "glad/glad.h"
-#include "shader.h"
 #include "Camera.h"
 #include "Light.h"
 

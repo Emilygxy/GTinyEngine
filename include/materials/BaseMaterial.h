@@ -3,8 +3,8 @@
 #include<string>
 #include "textures/Texture.h"
 #include <glm/glm.hpp>
+#include "shader.h"
 
-class Shader;
 class Camera;
 class Light;
 
@@ -21,9 +21,13 @@ public:
 	void AttachedCamera(const std::shared_ptr<Camera>& pcamera);
 	void AttachedLight(const std::shared_ptr<Light>& pLight);
 
+	std::shared_ptr<Shader> GetShader() const noexcept 
+	{
+		return mpShader;
+	}
+
 protected:
 	MaterialBase(const std::string& vs_path, const std::string& fs_path);
-
 
 	std::shared_ptr<Shader> mpShader{ nullptr };
 	std::weak_ptr<Camera> mpAttachedCamera;

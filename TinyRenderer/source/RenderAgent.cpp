@@ -1,6 +1,7 @@
 #include "RenderAgent.h"
 #include "Renderer.h"
 
+using namespace te;
 namespace
 {
     void PrintCullingInfo()
@@ -33,7 +34,7 @@ namespace
 */
 RenderAgent::RenderAgent()
 {
-    mRenderer = new Renderer();
+    mRenderer = new te::Renderer();
 }
 
 RenderAgent::~RenderAgent()
