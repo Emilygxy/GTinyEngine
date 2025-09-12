@@ -76,6 +76,7 @@ public:
     // set global render params
     virtual void SetCamera(const std::shared_ptr<Camera>& camera) = 0;
     virtual void SetLight(const std::shared_ptr<Light>& light) = 0;
+    virtual std::shared_ptr<Light> GetLight() const = 0;
 };
 
 enum class RendererBackend
@@ -122,6 +123,7 @@ public:
     
     void SetCamera(const std::shared_ptr<Camera>& camera) override { mpCamera = camera; }
     void SetLight(const std::shared_ptr<Light>& light) override { mpLight = light; }
+    std::shared_ptr<Light> GetLight() const override { return mpLight; }
 
 private:
     void SetupMeshBuffers(const std::vector<Vertex>& vertices, 
