@@ -62,3 +62,40 @@ void BasicGeometry::SetupMesh()
     glBindVertexArray(0);
     initialized = true;
 }
+
+std::optional<te::AaBB> BasicGeometry::GetAABB(bool update)
+{
+    if (update || !mAabb)
+    {
+        int vSize = mVertices.size();
+        if (!(mAabb) && (vSize > 0))
+        {
+            mAabb = te::AaBB();
+        }
+        if (vSize > 0)
+        {
+            te::AaBB abab;
+            toAabb(abab, mVertices.data(), vSize, sizeof(Vertex)/*GetVertexStride()*/ , /*GetPositionOffset()*/ 0 );
+            mAabb = abab;
+        }
+       /* if (m_pData->m_vertices)
+            gw::render::toAabb(*m_pData->m_aabb, m_pData->m_vertices->Get(), m_pData->m_numVertices, GetVertexStride(), GetPositionOffset());*/
+    }
+
+    return mAabb;
+}
+
+std::optional<te::AaBB> BasicGeometry::GetWorldAABB()
+{
+    if (!(mAabb))
+    {
+        GetAABB(true);
+    }
+    auto worldAABB = mAabb.value().ApplyTransform(mWorldTransform);
+    return worldAABB;
+}
+
+void BasicGeometry::SetWorldTransform(const glm::mat4& trn)
+{
+    mWorldTransform = trn;
+}
