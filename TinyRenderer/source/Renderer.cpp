@@ -30,8 +30,8 @@ namespace te
 
     void Renderer::InitGeometry()
     {
-        //g_pSphere = std::make_shared<Sphere>(1.0f, 32, 32);
-        mpGeometry = std::make_shared<Torus>();
+        mpGeometry = std::make_shared<Sphere>(1.0f, 32, 32);
+        //mpGeometry = std::make_shared<Torus>();
         mpGeometry->GetMaterial()->AttachedCamera(mpCamera);
         mpGeometry->GetMaterial()->AttachedLight(mpLight);
     }
@@ -58,6 +58,11 @@ namespace te
 
     void Renderer::Render()
     {
+        // init geometry
+        if (!mpGeometry)
+        {
+            InitGeometry();
+        }
         //render skybox first
         mpSkybox->Draw(mpCamera->GetViewMatrix(), mpCamera->GetProjectionMatrix());
 

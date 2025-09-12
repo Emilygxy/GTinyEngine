@@ -94,7 +94,6 @@ void RenderAgent::SetupRenderer()
     mRenderer->InitCamera(SCR_WIDTH, SCR_HEIGHT);
     mRenderer->InitSkybox();
     mRenderer->InitLight();
-    mRenderer->InitGeometry();
 
     mpCameraEvent = std::make_shared<Camera_Event>(mRenderer->GetCamera());
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
