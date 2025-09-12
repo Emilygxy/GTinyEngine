@@ -6,7 +6,7 @@
 
 // utility function for loading a 2D texture from file
 // ---------------------------------------------------
-unsigned int loadTexture(char const* path)
+unsigned int loadTexture(char const* path, bool generateMipMap)
 {
     unsigned int textureID;
     glGenTextures(1, &textureID);
@@ -25,7 +25,10 @@ unsigned int loadTexture(char const* path)
 
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        if (generateMipMap)
+        {
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -42,7 +45,6 @@ unsigned int loadTexture(char const* path)
 
     return textureID;
 }
-
 
 unsigned int loadCubemap(const std::vector<std::string>& faces)
 {

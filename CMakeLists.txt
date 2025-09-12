@@ -15,7 +15,7 @@ get_config_output_path(CURRENT_CONFIG_OUTPUT_DIR)
 # Vulkan Env
 set(VULKAN_SDK_VALUE "${CMAKE_SOURCE_DIR}/VulkanSDK/1.3.275.0/Bin")
 configure_file(configuration/SetVulkanEnv.bat.in configuration/SetVulkanEnv.bat @ONLY)
-message(STATUS "请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
+message(STATUS "若未安装Vulkan环境，请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
 
 add_library(imgui
 	#ImGui Core
@@ -34,7 +34,10 @@ add_library(imgui
 
 set_target_properties(imgui
     PROPERTIES
-	FOLDER "Libraries"
+    FOLDER "Libraries"
+    # 设置PDB文件输出路径，避免PDB冲突
+    PDB_NAME "imgui"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>"
 )
 
 set(GLFW_GLAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/include)
@@ -47,13 +50,22 @@ set(GLFW_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/lib/glfw3.lib)
 file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/memory/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/*.cpp
+                   ${CMAKE_CURRENT_SOURCE_DIR}/source/skybox/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/materials/*.cpp
-				   ${CMAKE_CURRENT_SOURCE_DIR}/source/skybox/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/textures/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/framework/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/curve/*.cpp
-				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/geometry/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
-				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h)
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/materials/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/mesh/*.h
+                  ${CMAKE_CURRENT_SOURCE_DIR}/include/skybox/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/textures/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
+                  )
 
 # configure root dir for cpp
 configure_file(configuration/root_dir.h.in configuration/root_dir.h)
@@ -126,6 +138,7 @@ target_compile_definitions(GTinyEngine PUBLIC
 add_subdirectory(Examples/TestRenderer)
 add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
+add_subdirectory(Examples/RendererDemo)
 add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD

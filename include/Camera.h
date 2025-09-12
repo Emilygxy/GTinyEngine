@@ -37,6 +37,7 @@ public:
     ~Camera_Event();
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
+    void ProcessMouseScroll(float deta);
 private:
     std::shared_ptr<Camera> mpCamera;
 };
@@ -123,7 +124,7 @@ private:
     glm::mat4 mViewMatrix;
     glm::mat4 mProjectionMatrix;
 
-    CProjectionMode mProjectionMode;
+    CProjectionMode mProjectionMode{ CProjectionMode::PERSPECTIVE };
 
     mutable bool mViewDirty{ true };
     mutable bool mProjDirty{ true };
