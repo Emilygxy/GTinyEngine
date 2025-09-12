@@ -93,7 +93,7 @@ void RenderAgent::InitGL()
 
 void RenderAgent::SetupRenderer()
 {
-    // ´´½¨äÖÈ¾Æ÷
+    // create renderer
     mpRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
     if (!mpRenderer || !mpRenderer->Initialize())
     {
@@ -108,6 +108,8 @@ void RenderAgent::SetupRenderer()
     mpRenderer->SetCamera(pCamera);
     //init light
     auto pLight = std::make_shared<Light>();
+    pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
+    pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
     mpRenderer->SetLight(pLight);
 }
 
@@ -116,7 +118,19 @@ void RenderAgent::Render()
     if (!mpGeometry)
     {
         mpGeometry = std::make_shared<Sphere>();
-        mpGeometry->SetMaterial(std::make_shared<BlinnPhongMaterial>());
+        auto material = std::make_shared<BlinnPhongMaterial>();
+        
+        // attach light to material
+        if (mpRenderer)
+        {
+            auto light = mpRenderer->GetLight();
+            if (light)
+            {
+                material->AttachedLight(light);
+            }
+        }
+        
+        mpGeometry->SetMaterial(material);
     }
     // render loop
     // -----------
@@ -132,36 +146,23 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
-        // ¿ªÊ¼äÖÈ¾Ö¡
+        // Begin Render Frame
         mpRenderer->BeginFrame();
 
-        // ÉèÖÃÊÓ¿ÚºÍÇå³ýÑÕÉ«
+        // ï¿½ï¿½ï¿½ï¿½ï¿½Ó¿Úºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É«
         mpRenderer->SetViewport(0, 0, 800, 600);
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // Çå³ýÑÕÉ«ºÍÉî¶È»º³å
+        mpRenderer->Clear(0x3); // ï¿½ï¿½ï¿½ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½È»ï¿½ï¿½ï¿½
 
         mpRenderer->DrawBackgroud();
-        //// äÖÈ¾ÇòÌå
-        //RenderSphere();
 
-        //// äÖÈ¾»·Ãæ
-        //RenderTorus();
-
-        
-
-        // render
-        // ------
-        //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        //glClear(GL_COLOR_BUFFER_BIT);
-
-        //mpRenderer->Render();
-        // Ê¹ÓÃÍ³Ò»µÄ DrawMesh ½Ó¿ÚäÖÈ¾ÇòÌå
+        // DrawMesh
         mpRenderer->DrawMesh(mpGeometry->GetVertices(),
             mpGeometry->GetIndices(),
             mpGeometry->GetMaterial(),
             glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
 
-        // ½áÊøäÖÈ¾Ö¡
+        // End Render Frame
         mpRenderer->EndFrame();
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
