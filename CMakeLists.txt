@@ -12,6 +12,11 @@ endfunction()
 # 调用函数获取当前路径
 get_config_output_path(CURRENT_CONFIG_OUTPUT_DIR)
 
+# Vulkan Env
+set(VULKAN_SDK_VALUE "${CMAKE_SOURCE_DIR}/VulkanSDK/1.3.275.0/Bin")
+configure_file(configuration/SetVulkanEnv.bat.in configuration/SetVulkanEnv.bat @ONLY)
+message(STATUS "若未安装Vulkan环境，请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
+
 add_library(imgui
 	#ImGui Core
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/imgui.cpp
@@ -27,6 +32,14 @@ add_library(imgui
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/misc/cpp/imgui_stdlib.cpp
 )
 
+set_target_properties(imgui
+    PROPERTIES
+    FOLDER "Libraries"
+    # 设置PDB文件输出路径，避免PDB冲突
+    PDB_NAME "imgui"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>"
+)
+
 set(GLFW_GLAD_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/include)
 set(VULKAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/VulkanSDK/1.3.275.0)
 set(VULKAN_INCLUDE_DIR ${VULKAN_DIR}/Include)
@@ -38,12 +51,19 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/memory/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/materials/*.cpp
-				   ${CMAKE_CURRENT_SOURCE_DIR}/source/skybox/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/textures/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/framework/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/curve/*.cpp
-				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/geometry/*.cpp
+				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
-				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h)
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/materials/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/mesh/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/textures/*.h
+				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
+                  )
 
 # configure root dir for cpp
 configure_file(configuration/root_dir.h.in configuration/root_dir.h)
@@ -113,9 +133,11 @@ target_compile_definitions(GTinyEngine PUBLIC
 )
 
 #生成可执行程序
-add_subdirectory(TestRenderer)
-add_subdirectory(VulkanHelloWorld)
-add_subdirectory(VulkanPractice1)
+add_subdirectory(Examples/TestRenderer)
+add_subdirectory(Examples/VulkanHelloWorld)
+add_subdirectory(Examples/VulkanPractice1)
+add_subdirectory(Examples/RendererDemo)
+add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RESOURCE_OUTPUT_DIR}
@@ -158,8 +180,8 @@ set(SHADER_TYPES
     ".geom=geom" 
     ".comp=comp"
 )
-# 收集所有着色器文件
-file(GLOB_RECURSE SHADER_SOURCES 
+# 收集所有着色器文件, CONFIGURE_DEPENDS确保新增文件时自动更新列表
+file(GLOB_RECURSE SHADER_SOURCES CONFIGURE_DEPENDS
     "${VK_SHADER_SOURCE_DIR}/*.vert"
     "${VK_SHADER_SOURCE_DIR}/*.frag"
     "${VK_SHADER_SOURCE_DIR}/*.tesc"
@@ -167,6 +189,9 @@ file(GLOB_RECURSE SHADER_SOURCES
     "${VK_SHADER_SOURCE_DIR}/*.geom"
     "${VK_SHADER_SOURCE_DIR}/*.comp"
 )
+# Print file length
+list(LENGTH SHADER_SOURCES TOTAL_FILES)
+message(STATUS "Total vk shader source files: ${TOTAL_FILES}")
 
 # 创建着色器编译命令
 foreach(SHADER_SOURCE ${SHADER_SOURCES})
@@ -211,13 +236,18 @@ foreach(SHADER_SOURCE ${SHADER_SOURCES})
     list(APPEND SHADER_BINARIES ${OUTPUT_FILE})
 endforeach()
 
+# 计算文件数量
+list(LENGTH SHADER_BINARIES SHADER_BINARIES_COUNT)
+# 输出日志（STATUS 前缀显示为 "--"）
+message(STATUS "Number of .spv files: ${SHADER_BINARIES_COUNT}")
+
 # 创建自定义目标以编译所有着色器
 
 add_custom_target(CompileToVKShaders ALL
     DEPENDS ${SHADER_BINARIES}
     COMMENT "Compiling all shaders to SPIR-V"
 )
-
+# 设置VS项目文件夹
 set_target_properties(CompileToVKShaders
     PROPERTIES
 	FOLDER "Libraries"
