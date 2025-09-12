@@ -1,4 +1,4 @@
-#include "Renderer.h"
+#include "Renderer_Legacy.h"
 
 namespace te
 {

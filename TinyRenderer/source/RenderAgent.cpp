@@ -1,7 +1,11 @@
 #include "RenderAgent.h"
-#include "Renderer.h"
+//#include "Renderer.h"
+#include "framework/Renderer.h"
+#include "geometry/Sphere.h"
+#include "materials/BlinnPhongMaterial.h"
+#include "Camera.h"
+#include "Light.h"
 
-using namespace te;
 namespace
 {
     void PrintCullingInfo()
@@ -34,15 +38,13 @@ namespace
 */
 RenderAgent::RenderAgent()
 {
-    mRenderer = new te::Renderer();
 }
 
 RenderAgent::~RenderAgent()
 {
-    if (mRenderer)
+    if (mpRenderer)
     {
-        delete mRenderer;
-        mRenderer = nullptr;
+        mpRenderer.reset();
     }
 }
 
@@ -91,16 +93,31 @@ void RenderAgent::InitGL()
 
 void RenderAgent::SetupRenderer()
 {
-    mRenderer->InitCamera(SCR_WIDTH, SCR_HEIGHT);
-    mRenderer->InitSkybox();
-    mRenderer->InitLight();
+    // 创建渲染器
+    mpRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
+    if (!mpRenderer || !mpRenderer->Initialize())
+    {
+        std::cout << "Failed to initialize renderer" << std::endl;
+    }
 
-    mpCameraEvent = std::make_shared<Camera_Event>(mRenderer->GetCamera());
+    //init camera
+    auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
+    pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
+    mpCameraEvent = std::make_shared<Camera_Event>(pCamera);
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
+    mpRenderer->SetCamera(pCamera);
+    //init light
+    auto pLight = std::make_shared<Light>();
+    mpRenderer->SetLight(pLight);
 }
 
 void RenderAgent::Render()
 {
+    if (!mpGeometry)
+    {
+        mpGeometry = std::make_shared<Sphere>();
+        mpGeometry->SetMaterial(std::make_shared<BlinnPhongMaterial>());
+    }
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -115,13 +132,37 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
+        // 开始渲染帧
+        mpRenderer->BeginFrame();
+
+        // 设置视口和清除颜色
+        mpRenderer->SetViewport(0, 0, 800, 600);
+        mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        mpRenderer->Clear(0x3); // 清除颜色和深度缓冲
+
+        mpRenderer->DrawBackgroud();
+        //// 渲染球体
+        //RenderSphere();
+
+        //// 渲染环面
+        //RenderTorus();
+
+        
+
         // render
         // ------
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        //glClear(GL_COLOR_BUFFER_BIT);
 
-        mRenderer->Render();
+        //mpRenderer->Render();
+        // 使用统一的 DrawMesh 接口渲染球体
+        mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+            mpGeometry->GetIndices(),
+            mpGeometry->GetMaterial(),
+            glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
 
+        // 结束渲染帧
+        mpRenderer->EndFrame();
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(mWindow);
@@ -133,6 +174,8 @@ void RenderAgent::Render()
 
 void RenderAgent::PostRender()
 {
+    mpRenderer->Shutdown();
+
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
@@ -290,6 +333,6 @@ void EventHelper::scroll_callback(GLFWwindow* window, double xoffset, double yof
 
     if (enableInteraction)
     {
-        cameraEvent->ProcessMouseScroll(yoffset);
+        cameraEvent->ProcessMouseScroll(float(yoffset));
     }
 }

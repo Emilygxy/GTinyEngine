@@ -2,7 +2,7 @@
 
 #include "Camera.h"
 #include "Light.h"
-#include "Skybox.h"
+#include "skybox/Skybox.h"
 #include "filesystem.h"
 
 #include "geometry/Sphere.h"
