@@ -1,7 +1,6 @@
 #include "shader.h"
 #include <memory>
 
-#include "Renderer.h"
 #include "RenderAgent.h"
 
 RenderAgent gRenderAgent;

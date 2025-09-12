@@ -7,6 +7,9 @@
 #include <unordered_map>
 #include <functional>
 
+#include "filesystem.h"
+#include "skybox/Skybox.h"
+
 // 渲染器工厂实现
 std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backend)
 {
@@ -60,6 +63,21 @@ void OpenGLRenderer::Shutdown()
 void OpenGLRenderer::BeginFrame()
 {
     mStats.Reset();
+
+    // init bachground
+    if (!mpSkybox)
+    {
+        std::vector<std::string> faces
+        {
+            FileSystem::getPath("resources/textures/skybox/right.jpg"),
+            FileSystem::getPath("resources/textures/skybox/left.jpg"),
+            FileSystem::getPath("resources/textures/skybox/top.jpg"),
+            FileSystem::getPath("resources/textures/skybox/bottom.jpg"),
+            FileSystem::getPath("resources/textures/skybox/front.jpg"),
+            FileSystem::getPath("resources/textures/skybox/back.jpg")
+        };
+        mpSkybox = std::make_shared<Skybox>(faces);
+    }
 }
 
 void OpenGLRenderer::EndFrame()
@@ -140,6 +158,15 @@ void OpenGLRenderer::DrawMeshes(const std::vector<RenderCommand>& commands)
     for (const auto& command : commands)
     {
         DrawMesh(command);
+    }
+}
+
+void OpenGLRenderer::DrawBackgroud()
+{
+    //render skybox first
+    if (mpSkybox)
+    {
+        mpSkybox->Draw(mpCamera->GetViewMatrix(), mpCamera->GetProjectionMatrix());
     }
 }
 

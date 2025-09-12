@@ -10,6 +10,7 @@
 class Camera;
 class Light;
 class Shader;
+class Skybox;
 
 enum class RenderState
 {
@@ -62,6 +63,8 @@ public:
     
     // batch rendering
     virtual void DrawMeshes(const std::vector<RenderCommand>& commands) = 0;
+
+    virtual void DrawBackgroud() = 0;
     
     virtual void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) = 0;
     virtual void SetClearColor(float r, float g, float b, float a) = 0;
@@ -107,6 +110,8 @@ public:
                  const glm::mat4& transform = glm::mat4(1.0f)) override;
     
     void DrawMeshes(const std::vector<RenderCommand>& commands) override;
+
+    void DrawBackgroud() override;
     
     void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
     void SetClearColor(float r, float g, float b, float a) override;
@@ -128,6 +133,7 @@ private:
     RenderStats mStats;
     std::shared_ptr<Camera> mpCamera;
     std::shared_ptr<Light> mpLight;
+    std::shared_ptr<Skybox> mpSkybox{nullptr};
     
     // OpenGL statu
     uint32_t mCurrentVAO = 0;

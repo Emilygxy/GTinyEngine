@@ -50,6 +50,7 @@ set(GLFW_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/lib/glfw3.lib)
 file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/memory/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/mesh/*.cpp
+                   ${CMAKE_CURRENT_SOURCE_DIR}/source/skybox/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/materials/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/textures/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/framework/*.cpp
@@ -61,6 +62,7 @@ file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/common/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/materials/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/mesh/*.h
+                  ${CMAKE_CURRENT_SOURCE_DIR}/include/skybox/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/textures/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
                   )
