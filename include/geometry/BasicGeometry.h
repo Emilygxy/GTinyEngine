@@ -30,6 +30,7 @@ public:
 	}
 
 	std::optional<te::AaBB> GetAABB(bool update);
+	std::optional<te::AaBB> GetAABB();
 	std::optional<te::AaBB> GetWorldAABB();
 
 	void SetWorldTransform(const glm::mat4& trn);

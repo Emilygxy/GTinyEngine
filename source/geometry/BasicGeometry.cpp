@@ -85,6 +85,16 @@ std::optional<te::AaBB> BasicGeometry::GetAABB(bool update)
     return mAabb;
 }
 
+std::optional<te::AaBB> BasicGeometry::GetAABB()
+{
+    if (!mAabb)
+    {
+        return GetAABB(true);
+    }
+
+    return mAabb;
+}
+
 std::optional<te::AaBB> BasicGeometry::GetWorldAABB()
 {
     if (!(mAabb))
