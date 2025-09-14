@@ -30,9 +30,14 @@ public:
 	}
 
 	std::optional<te::AaBB> GetAABB(bool update);
-	std::optional<te::AaBB> GetAABB();
+	std::optional<te::AaBB> GetLocalAABB();
 	std::optional<te::AaBB> GetWorldAABB();
 
+	void SetLocalTransform(const glm::mat4& trn);
+	glm::mat4 GetLocalTransform() const noexcept
+	{
+		return mLocalTransform;
+	}
 	void SetWorldTransform(const glm::mat4& trn);
 	glm::mat4 GetWorldTransform() const noexcept
 	{
@@ -54,4 +59,5 @@ private:
 	bool initialized = false;
 
 	glm::mat4 mWorldTransform{ glm::mat4(1.0) };
+	glm::mat4 mLocalTransform{ glm::mat4(1.0) };
 };

@@ -85,11 +85,12 @@ std::optional<te::AaBB> BasicGeometry::GetAABB(bool update)
     return mAabb;
 }
 
-std::optional<te::AaBB> BasicGeometry::GetAABB()
+std::optional<te::AaBB> BasicGeometry::GetLocalAABB()
 {
     if (!mAabb)
     {
-        return GetAABB(true);
+        GetAABB(true);
+        mAabb = mAabb.value().ApplyTransform(mLocalTransform);
     }
 
     return mAabb;
@@ -103,6 +104,11 @@ std::optional<te::AaBB> BasicGeometry::GetWorldAABB()
     }
     auto worldAABB = mAabb.value().ApplyTransform(mWorldTransform);
     return worldAABB;
+}
+
+void BasicGeometry::SetLocalTransform(const glm::mat4& trn)
+{
+    mLocalTransform = trn;
 }
 
 void BasicGeometry::SetWorldTransform(const glm::mat4& trn)

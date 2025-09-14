@@ -264,7 +264,7 @@ void RenderAgent::RenderImGui()
     
     if (mGeomSelected)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected!");
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected! Hit by AABB, there may in delta errors.");
         ImGui::Text("Position: (%.2f, %.2f, %.2f)", 
                    mSelectedGeomPosition.x, 
                    mSelectedGeomPosition.y, 
@@ -287,36 +287,44 @@ void RenderAgent::RenderImGui()
 }
 
 // Mouse picking implementation
-glm::vec3 RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
+RenderAgent::Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
-    // 1. screen to ndc
-    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
-    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // // Flip Y: screen Y=0 is top, NDC Y=1 is top
-    glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
-    glm::vec4 rayClipFar(ndcX, ndcY, 1.0f, 1.0f);   // far plane Z=1<cite data-id='10007'>10007</cite>
-
-    //2. NDC → clip space → view space（inverse proj）
-     // Get camera matrices
+    // Get camera matrices
     auto camera = mpRenderer->GetCamera();
-    if (!camera) return glm::vec3(0.0f);
+    if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
+    
     glm::mat4 viewMatrix = camera->GetViewMatrix();
     glm::mat4 projectionMatrix = camera->GetProjectionMatrix();
-
+    
+    // Step 1: Convert screen coordinates to normalized device coordinates (NDC)
+    // Screen coordinates: (0,0) at top-left, (SCR_WIDTH, SCR_HEIGHT) at bottom-right
+    // NDC coordinates: (-1,-1) at bottom-left, (1,1) at top-right
+    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // Flip Y: screen Y=0 is top, NDC Y=1 is top
+    
+    // Step 2: Create two points in clip space (near and far planes)
+    glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
+    glm::vec4 rayClipFar(ndcX, ndcY, 1.0f, 1.0f);   // far plane Z=1
+    
+    // Step 3: Transform from clip space to eye space (inverse projection)
     glm::mat4 invProj = glm::inverse(projectionMatrix);
     glm::vec4 rayEyeNear = invProj * rayClipNear;
     glm::vec4 rayEyeFar = invProj * rayClipFar;
-
+    
+    // Step 4: Perspective divide
     rayEyeNear /= rayEyeNear.w; 
-    rayEyeFar /= rayEyeFar.w;  // view coordinate
-
+    rayEyeFar /= rayEyeFar.w;
+    
+    // Step 5: Transform from eye space to world space (inverse view)
     glm::mat4 invView = glm::inverse(viewMatrix);
     glm::vec3 worldNear = glm::vec3(invView * rayEyeNear);
     glm::vec3 worldFar = glm::vec3(invView * rayEyeFar);
-
-    glm::vec3 rayOrigin = camera->GetEye();  // camera world coordinate
-    glm::vec3 rayDir = glm::normalize(worldFar - worldNear);
-
-    return rayDir;
+    
+    // Step 6: Calculate ray origin and direction
+    glm::vec3 rayOrigin = camera->GetEye();  // Camera position in world space
+    glm::vec3 rayDirection = glm::normalize(worldFar - worldNear);
+    
+    return {rayOrigin, rayDirection};
 }
 
 bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
@@ -407,17 +415,17 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     if (!camera) return;
     
     glm::vec3 cameraPos = camera->GetEye();
-    glm::vec3 rayDirection = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));//������������⵼��������transform��geometry�� hit ����
+    auto re_ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
     
     // Debug output
     std::cout << "Mouse click at: (" << xpos << ", " << ypos << ")" << std::endl;
     std::cout << "Camera position: (" << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << ")" << std::endl;
-    std::cout << "Ray direction: (" << rayDirection.x << ", " << rayDirection.y << ", " << rayDirection.z << ")" << std::endl;
+    std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
     
     // Get sphere information for intersection testing
     if (!mpGeometry) return;
     
-    // Get sphere's world transform to find center position
+    // Get geometry's world transform to find center position
     glm::mat4 worldTransform = mpGeometry->GetWorldTransform();
     glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
     
@@ -431,20 +439,27 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     // Debug sphere info
     std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
     
+    // 获取几何体的世界AABB（已经应用了世界变换）
     auto worldAABB = mpGeometry->GetWorldAABB();
-    //worldAABB = worldAABB->ApplyTransform(camera->GetProjectionMatrix());
-    // Test intersection with sphere using precise ray-sphere intersection
+    
+    if (!worldAABB.has_value()) {
+        std::cout << "No AABB available for geometry" << std::endl;
+        return;
+    }
+    
+    // Debug AABB info
+    std::cout << "World AABB min: (" << worldAABB->min.x << ", " << worldAABB->min.y << ", " << worldAABB->min.z << ")" << std::endl;
+    std::cout << "World AABB max: (" << worldAABB->max.x << ", " << worldAABB->max.y << ", " << worldAABB->max.z << ")" << std::endl;
+    
+    // Test intersection with geometry's world AABB
+    // Both ray and AABB are in world space, so we can test directly
     float t;
-    //
-    // transform ray
-    auto localRayPos = glm::vec4(cameraPos, 1.0f) * worldTransform;
-    auto localRayDir = glm::vec4(rayDirection, 1.0f) * worldTransform;
-    if (RayIntersection(localRayPos, localRayDir, worldAABB.value(), t))
+    if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
     {
         mGeomSelected = true;
         //mSelectedSpherePosition = sphereCenter;
         //mSelectedSphereRadius = sphereRadius;
-        mSelectedGeomPosition = worldAABB.value().Diagnoal() * 0.5f;
+        mSelectedGeomPosition = geomCenter;
         std::cout << "Geometry hit! Distance: " << t << std::endl;
     }
     else {

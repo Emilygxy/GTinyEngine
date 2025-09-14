@@ -74,7 +74,11 @@ private:
 	void RenderImGui();
 	
 	// Mouse picking functions
-	glm::vec3 ScreenToWorldRay(float mouseX, float mouseY);
+	struct Ray {
+		glm::vec3 origin;
+		glm::vec3 direction;
+	};
+	Ray ScreenToWorldRay(float mouseX, float mouseY);
 	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
 	bool RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 

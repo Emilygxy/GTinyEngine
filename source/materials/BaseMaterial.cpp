@@ -51,10 +51,8 @@ void UnlitMaterial::OnPerFrameUpdate()
 
 void UnlitMaterial::UpdateUniform()
 {
-    // Set transformation matrix
-    glm::mat4 model = glm::mat4(1.0f);
-    mpShader->setMat4("model", model);
-
+    // Note: model matrix is set by the renderer, don't override it here
+    
     if (auto pCamera = mpAttachedCamera.lock())
     {
         mpShader->setMat4("view", pCamera->GetViewMatrix());
@@ -99,9 +97,7 @@ void PhongMaterial::OnBind()
 
 void PhongMaterial::UpdateUniform()
 {
-    // Set transformation matrix
-    glm::mat4 model = glm::mat4(1.0f);
-    mpShader->setMat4("model", model);
+    // Note: model matrix is set by the renderer, don't override it here
 
     if (auto pCamera = mpAttachedCamera.lock())
     {
