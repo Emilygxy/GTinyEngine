@@ -147,7 +147,8 @@ void RenderAgent::Render()
 {
     if (!mpGeometry)
     {
-        mpGeometry = std::make_shared<Sphere>();
+        mpGeometry = std::make_shared<Box>(2.0f, 2.0f, 2.0f);
+        //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
         
         // attach light to material
@@ -161,7 +162,7 @@ void RenderAgent::Render()
         }
         
         mpGeometry->SetMaterial(material);
-        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 2.0f)));
+        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
     }
     // render loop
     // -----------
