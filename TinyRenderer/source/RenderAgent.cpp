@@ -17,6 +17,9 @@
 #include <limits>
 #include <algorithm>
 
+#include "RenderView.h"
+#include "framework/RenderContext.h"
+
 namespace
 {
     void PrintCullingInfo()
@@ -130,17 +133,21 @@ void RenderAgent::SetupRenderer()
         std::cout << "Failed to initialize renderer" << std::endl;
     }
 
+    mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
+    mpRenderContext = std::make_shared<RenderContext>();
+    mpRenderer->SetRenderContext(mpRenderContext);
+
     //init camera
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
     mpCameraEvent = std::make_shared<Camera_Event>(pCamera);
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
-    mpRenderer->SetCamera(pCamera);
+    mpRenderContext->AttachCamera(pCamera);
     //init light
     auto pLight = std::make_shared<Light>();
     pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
     pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
-    mpRenderer->SetLight(pLight);
+    mpRenderContext->PushAttachLight(pLight);
 }
 
 void RenderAgent::Render()
@@ -154,7 +161,7 @@ void RenderAgent::Render()
         // attach light to material
         if (mpRenderer)
         {
-            auto light = mpRenderer->GetLight();
+            auto light = mpRenderContext->GetDefaultLight();
             if (light)
             {
                 material->AttachedLight(light);
@@ -185,7 +192,7 @@ void RenderAgent::Render()
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         mpRenderer->Clear(0x3); // 
 
-        mpRenderer->DrawBackgroud();
+        //mpRenderer->DrawBackgroud();
 
         // DrawMesh
         mpRenderer->DrawMesh(mpGeometry->GetVertices(),
@@ -291,7 +298,7 @@ void RenderAgent::RenderImGui()
 Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
-    auto camera = mpRenderer->GetCamera();
+    auto camera = mpRenderContext->GetAttachedCamera();
     if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
     
     glm::mat4 viewMatrix = camera->GetViewMatrix();
@@ -381,7 +388,7 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
 {
     // Get camera position
-    auto camera = mpRenderer->GetCamera();
+    auto camera = mpRenderContext->GetAttachedCamera();
     if (!camera) return;
     
     glm::vec3 cameraPos = camera->GetEye();

@@ -1,4 +1,5 @@
 #include "framework/Renderer.h"
+#include "framework/RenderPass.h"
 #include "glad/glad.h"
 #include "shader.h"
 #include "Camera.h"
@@ -6,9 +7,8 @@
 #include <iostream>
 #include <unordered_map>
 #include <functional>
-
-#include "filesystem.h"
-#include "skybox/Skybox.h"
+#include <algorithm>
+#include "framework/RenderContext.h"
 
 // Render Factory Impl
 std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backend)
@@ -31,6 +31,7 @@ std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backe
 // OpenGL renderer Impl
 OpenGLRenderer::OpenGLRenderer()
 {
+    mpRenderContext = nullptr;
 }
 
 OpenGLRenderer::~OpenGLRenderer()
@@ -65,19 +66,7 @@ void OpenGLRenderer::BeginFrame()
     mStats.Reset();
 
     // init bachground
-    if (!mpSkybox)
-    {
-        std::vector<std::string> faces
-        {
-            FileSystem::getPath("resources/textures/skybox/right.jpg"),
-            FileSystem::getPath("resources/textures/skybox/left.jpg"),
-            FileSystem::getPath("resources/textures/skybox/top.jpg"),
-            FileSystem::getPath("resources/textures/skybox/bottom.jpg"),
-            FileSystem::getPath("resources/textures/skybox/front.jpg"),
-            FileSystem::getPath("resources/textures/skybox/back.jpg")
-        };
-        mpSkybox = std::make_shared<Skybox>(faces);
-    }
+    
 }
 
 void OpenGLRenderer::EndFrame()
@@ -95,7 +84,7 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
                              const std::shared_ptr<MaterialBase>& material,
                              const glm::mat4& transform)
 {
-    if (!material || vertices.empty() || indices.empty())
+    if (!material || vertices.empty() || indices.empty() || (!mpRenderContext))
         return;
 
     // 应用渲染状态
@@ -108,16 +97,16 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
     material->GetShader()->setMat4("model", transform);
     
     // 设置相机和光照参数
-    if (mpCamera)
+    if (auto pCamera = mpRenderContext->GetAttachedCamera())
     {
-        material->GetShader()->setMat4("view", mpCamera->GetViewMatrix());
-        material->GetShader()->setMat4("projection", mpCamera->GetProjectionMatrix());
+        material->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+        material->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
     }
     
-    if (mpLight)
+    if (auto pLight = mpRenderContext->GetDefaultLight())
     {
-        material->GetShader()->setVec3("u_lightPos", mpLight->GetPosition());
-        material->GetShader()->setVec3("u_lightColor", mpLight->GetColor());
+        material->GetShader()->setVec3("u_lightPos", pLight->GetPosition());
+        material->GetShader()->setVec3("u_lightColor", pLight->GetColor());
     }
     
     // 更新材质 uniform
@@ -158,15 +147,6 @@ void OpenGLRenderer::DrawMeshes(const std::vector<RenderCommand>& commands)
     for (const auto& command : commands)
     {
         DrawMesh(command);
-    }
-}
-
-void OpenGLRenderer::DrawBackgroud()
-{
-    //render skybox first
-    if (mpSkybox)
-    {
-        mpSkybox->Draw(mpCamera->GetViewMatrix(), mpCamera->GetProjectionMatrix());
     }
 }
 
@@ -259,4 +239,99 @@ void OpenGLRenderer::ApplyRenderState(RenderState state)
     }
 
     mCurrentState = state;
+}
+
+// Multi-pass rendering implementation
+void OpenGLRenderer::AddRenderPass(const std::shared_ptr<te::RenderPass>& pass)
+{
+    if (!pass)
+        return;
+
+    const std::string& name = pass->GetConfig().name;
+    
+    // 检查是否已存在
+    if (mRenderPassIndexMap.find(name) != mRenderPassIndexMap.end())
+    {
+        std::cout << "RenderPass with name '" << name << "' already exists" << std::endl;
+        return;
+    }
+
+    // 添加到列表
+    size_t index = mRenderPasses.size();
+    mRenderPasses.push_back(pass);
+    mRenderPassIndexMap[name] = index;
+}
+
+void OpenGLRenderer::RemoveRenderPass(const std::string& name)
+{
+    auto it = mRenderPassIndexMap.find(name);
+    if (it == mRenderPassIndexMap.end())
+        return;
+
+    size_t index = it->second;
+    mRenderPasses.erase(mRenderPasses.begin() + index);
+    mRenderPassIndexMap.erase(it);
+
+    // 重新构建索引映射
+    mRenderPassIndexMap.clear();
+    for (size_t i = 0; i < mRenderPasses.size(); ++i)
+    {
+        mRenderPassIndexMap[mRenderPasses[i]->GetConfig().name] = i;
+    }
+}
+
+std::shared_ptr<te::RenderPass> OpenGLRenderer::GetRenderPass(const std::string& name) const
+{
+    auto it = mRenderPassIndexMap.find(name);
+    if (it == mRenderPassIndexMap.end())
+        return nullptr;
+    
+    return mRenderPasses[it->second];
+}
+
+void OpenGLRenderer::ExecuteRenderPasses()
+{
+    if (!mMultiPassEnabled || mRenderPasses.empty())
+        return;
+
+    // 收集所有渲染命令
+    std::vector<RenderCommand> commands;
+    // 这里应该从场景中收集渲染命令
+    // 为了简化，这里使用空命令列表
+
+    // 按依赖关系排序Pass
+    // 这里使用简单的排序，实际应该实现拓扑排序
+    std::sort(mRenderPasses.begin(), mRenderPasses.end(),
+        [](const std::shared_ptr<te::RenderPass>& a, const std::shared_ptr<te::RenderPass>& b) {
+            return static_cast<int>(a->GetConfig().type) < static_cast<int>(b->GetConfig().type);
+        });
+
+    // 执行所有Pass
+    for (const auto& pass : mRenderPasses)
+    {
+        if (!pass->IsEnabled())
+            continue;
+
+        // 设置输入纹理
+        for (const auto& input : pass->GetConfig().inputs)
+        {
+            auto sourcePass = GetRenderPass(input.sourcePass);
+            if (sourcePass)
+            {
+                auto outputTarget = sourcePass->GetOutput(input.sourceTarget);
+                if (outputTarget)
+                {
+                    pass->SetInput(input.name, outputTarget->GetTextureHandle());
+                }
+            }
+        }
+
+        // 执行Pass
+        pass->Execute(commands);
+    }
 } 
+
+void OpenGLRenderer::SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext)
+{
+    mpRenderContext = pRenderContext;
+}

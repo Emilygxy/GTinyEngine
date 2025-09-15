@@ -19,6 +19,8 @@ class IRenderer;
 class Camera_Event;
 class RenderAgent;
 class BasicGeometry;
+class RenderView;
+class RenderContext;
 
 class EventHelper
 {
@@ -87,6 +89,10 @@ private:
 	GLFWwindow* mWindow { nullptr };
 
 	std::unique_ptr<IRenderer> mpRenderer{ nullptr };
+
+	std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+	std::shared_ptr<RenderView> mpRenderView{ nullptr };
+
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};

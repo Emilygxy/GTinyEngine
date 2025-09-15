@@ -7,6 +7,7 @@
 #include <iostream>
 #include "shader.h"
 #include "ultis.h"
+#include "filesystem.h"
 
 namespace
 {
@@ -73,7 +74,8 @@ Skybox::Skybox(const std::vector<std::string>& faces)
 
     // 3. load shader
     //mShaderProgram = loadShader("skybox.vs", "skybox.fs");
-    mShader = std::make_shared<Shader>("resources/shaders/TinyRenderer/skybox.vs", "resources/shaders/TinyRenderer/skybox.fs");
+    mShader = std::make_shared<Shader>(FileSystem::getPath("resources/shaders/TinyRenderer/skybox.vs").c_str(), 
+                                      FileSystem::getPath("resources/shaders/TinyRenderer/skybox.fs").c_str());
 }
 
 Skybox::~Skybox()

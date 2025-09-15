@@ -57,13 +57,13 @@ public:
         // 设置相机
         mpCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
         mpCamera->SetAspectRatio(800.0f / 600.0f);
-        mpRenderer->SetCamera(mpCamera);
+        //mpRenderer->SetCamera(mpCamera);
 
         // 设置光照
         mpLight = std::make_shared<Light>();
         mpLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f));
         mpLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f));
-        mpRenderer->SetLight(mpLight);
+        //mpRenderer->SetLight(mpLight);
 
         // 创建几何体
         mpSphere = std::make_shared<Sphere>(1.0f, 32, 32);

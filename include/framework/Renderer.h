@@ -10,7 +10,14 @@
 class Camera;
 class Light;
 class Shader;
-class Skybox;
+class RenderContext;
+
+// Forward declarations for multi-pass rendering
+namespace te
+{
+    class RenderPass;
+    class MultiRenderTarget;
+}
 
 enum class RenderState
 {
@@ -63,8 +70,6 @@ public:
     
     // batch rendering
     virtual void DrawMeshes(const std::vector<RenderCommand>& commands) = 0;
-
-    virtual void DrawBackgroud() = 0;
     
     virtual void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) = 0;
     virtual void SetClearColor(float r, float g, float b, float a) = 0;
@@ -73,11 +78,14 @@ public:
     virtual const RenderStats& GetRenderStats() const = 0;
     virtual void ResetRenderStats() = 0;
     
-    // set global render params
-    virtual void SetCamera(const std::shared_ptr<Camera>& camera) = 0;
-    virtual std::shared_ptr<Camera> GetCamera() const = 0;
-    virtual void SetLight(const std::shared_ptr<Light>& light) = 0;
-    virtual std::shared_ptr<Light> GetLight() const = 0;
+    // multi-pass rendering support
+    virtual void SetMultiPassEnabled(bool enabled) = 0;
+    virtual bool IsMultiPassEnabled() const = 0;
+    virtual void AddRenderPass(const std::shared_ptr<te::RenderPass>& pass) = 0;
+    virtual void RemoveRenderPass(const std::string& name) = 0;
+    virtual std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const = 0;
+    virtual void ExecuteRenderPasses() = 0;
+    virtual void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) = 0;
 };
 
 enum class RendererBackend
@@ -113,8 +121,6 @@ public:
     
     void DrawMeshes(const std::vector<RenderCommand>& commands) override;
 
-    void DrawBackgroud() override;
-    
     void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
     void SetClearColor(float r, float g, float b, float a) override;
     void Clear(uint32_t flags) override;
@@ -122,14 +128,18 @@ public:
     const RenderStats& GetRenderStats() const override { return mStats; }
     void ResetRenderStats() override { mStats.Reset(); }
     
-    void SetCamera(const std::shared_ptr<Camera>& camera) override { mpCamera = camera; }
-    std::shared_ptr<Camera> GetCamera() const override 
-    {
-        return mpCamera;
+    // multi-pass rendering support
+    void SetMultiPassEnabled(bool enabled) override { mMultiPassEnabled = enabled; }
+    bool IsMultiPassEnabled() const override { 
+        return mMultiPassEnabled; 
     }
-    void SetLight(const std::shared_ptr<Light>& light) override { mpLight = light; }
-    std::shared_ptr<Light> GetLight() const override { return mpLight; }
+    void AddRenderPass(const std::shared_ptr<te::RenderPass>& pass) override;
+    void RemoveRenderPass(const std::string& name) override;
+    std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const override;
+    void ExecuteRenderPasses() override;
 
+    //
+    void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
 private:
     void SetupMeshBuffers(const std::vector<Vertex>& vertices, 
                          const std::vector<unsigned int>& indices,
@@ -138,9 +148,11 @@ private:
     void ApplyRenderState(RenderState state);
     
     RenderStats mStats;
-    std::shared_ptr<Camera> mpCamera;
-    std::shared_ptr<Light> mpLight;
-    std::shared_ptr<Skybox> mpSkybox{nullptr};
+    
+    // multi-pass rendering
+    bool mMultiPassEnabled{ false };
+    std::vector<std::shared_ptr<te::RenderPass>> mRenderPasses;
+    std::unordered_map<std::string, size_t> mRenderPassIndexMap;
     
     // OpenGL statu
     uint32_t mCurrentVAO = 0;
@@ -155,4 +167,6 @@ private:
         size_t vertexCount, indexCount;
     };
     std::unordered_map<size_t, MeshCache> mMeshCache;
+
+    std::shared_ptr<RenderContext> mpRenderContext;
 }; 
