@@ -78,8 +78,6 @@ std::optional<te::AaBB> BasicGeometry::GetAABB(bool update)
             toAabb(abab, mVertices.data(), vSize, sizeof(Vertex)/*GetVertexStride()*/ , /*GetPositionOffset()*/ 0 );
             mAabb = abab;
         }
-       /* if (m_pData->m_vertices)
-            gw::render::toAabb(*m_pData->m_aabb, m_pData->m_vertices->Get(), m_pData->m_numVertices, GetVertexStride(), GetPositionOffset());*/
     }
 
     return mAabb;

@@ -44,6 +44,11 @@ private:
 	std::weak_ptr<Camera_Event> mwpCameraEvent;
 };
 
+struct Ray {
+	glm::vec3 origin;
+	glm::vec3 direction;
+};
+
 // will be singleton class
 class RenderAgent
 {
@@ -74,15 +79,9 @@ private:
 	void RenderImGui();
 	
 	// Mouse picking functions
-	struct Ray {
-		glm::vec3 origin;
-		glm::vec3 direction;
-	};
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
 	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
-	bool RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
-	                          const glm::vec3& sphereCenter, float sphereRadius, float& t);
 	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };

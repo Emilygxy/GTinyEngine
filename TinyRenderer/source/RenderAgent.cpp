@@ -288,7 +288,7 @@ void RenderAgent::RenderImGui()
 }
 
 // Mouse picking implementation
-RenderAgent::Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
+Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
     auto camera = mpRenderer->GetCamera();
@@ -332,11 +332,11 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
 {
     // Ray-AABB intersection using slab method
     // This is a more general approach that works for any AABB
-    
+    //step 1: initialize
     float tMin = 0.0f;
     float tMax = std::numeric_limits<float>::max();
     
-    // Test intersection with each axis-aligned plane
+    // step 2: test intersection with each axis-aligned plane
     for (int i = 0; i < 3; ++i) {
         if (std::abs(rayDirection[i]) < 1e-6f) {
             // Ray is parallel to the plane
@@ -376,37 +376,6 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     }
     
     return true;
-}
-
-// Ray-Sphere intersection test (more accurate than AABB for spheres)
-bool RenderAgent::RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
-                                       const glm::vec3& sphereCenter, float sphereRadius, float& t)
-{
-    glm::vec3 oc = rayOrigin - sphereCenter;
-    float a = glm::dot(rayDirection, rayDirection);
-    float b = 2.0f * glm::dot(oc, rayDirection);
-    float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
-    
-    float discriminant = b * b - 4 * a * c;
-    
-    if (discriminant < 0) {
-        return false; // No intersection
-    }
-    
-    float sqrtDiscriminant = std::sqrt(discriminant);
-    float t1 = (-b - sqrtDiscriminant) / (2.0f * a);
-    float t2 = (-b + sqrtDiscriminant) / (2.0f * a);
-    
-    // Return the closest positive intersection
-    if (t1 > 0) {
-        t = t1;
-        return true;
-    } else if (t2 > 0) {
-        t = t2;
-        return true;
-    }
-    
-    return false; // Both intersections are behind the ray origin
 }
 
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
