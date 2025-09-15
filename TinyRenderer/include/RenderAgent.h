@@ -88,7 +88,7 @@ private:
 
 	GLFWwindow* mWindow { nullptr };
 
-	std::unique_ptr<IRenderer> mpRenderer{ nullptr };
+	std::shared_ptr<IRenderer> mpRenderer{ nullptr };
 
 	std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
 	std::shared_ptr<RenderView> mpRenderView{ nullptr };

@@ -4,6 +4,10 @@
 #include "Light.h"
 #include "RenderView.h"
 #include "skybox/Skybox.h"
+#include "materials/GeometryMaterial.h"
+#include "materials/LightingMaterial.h"
+#include "materials/BlinnPhongMaterial.h"
+#include "framework/FullscreenQuad.h"
 #include <iostream>
 #include <algorithm>
 #include <unordered_set>
@@ -217,11 +221,26 @@ namespace te
         }
     }
 
+    void RenderPass::ApplyRenderCommand(const std::vector<RenderCommand>& commands)
+    {
+        mCandidateCommands.clear();
+
+        for (auto cmd: commands)
+        {
+            if (cmd.renderpassflag & mRenderPassFlag)
+            {
+                mCandidateCommands.emplace_back(cmd);
+            }
+        }
+    }
+
     // GeometryPass Implementation
     GeometryPass::GeometryPass()
     {
         mConfig.name = "GeometryPass";
         mConfig.type = RenderPassType::Geometry;
+        mpOverMaterial = std::make_shared<te::GeometryMaterial>();
+        mRenderPassFlag = RenderPassFlag::Geometry;
     }
 
     void GeometryPass::OnInitialize()
@@ -241,6 +260,7 @@ namespace te
             return;
 
         OnPreExecute();
+        ApplyRenderCommand(commands);
 
         // 绑定FrameBuffer
         mFrameBuffer->Bind();
@@ -261,26 +281,75 @@ namespace te
             glClear(clearFlags);
         }
 
-        // 渲染所有几何体
-        for (const auto& command : commands)
+        auto pGeometryMat = std::dynamic_pointer_cast<te::GeometryMaterial>(mpOverMaterial);
+        // 渲染所有几何体到G-Buffer
+        for (const auto& command : mCandidateCommands)
         {
             if (!command.material || command.vertices.empty() || command.indices.empty())
                 continue;
 
-            // 应用材质
-            command.material->OnApply();
+            // 从原始材质中获取纹理信息并设置到几何体材质
+            if (auto blinnPhongMaterial = std::dynamic_pointer_cast<BlinnPhongMaterial>(command.material))
+            {
+                if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
+                {
+                    pGeometryMat->SetDiffuseTexture(texture);
+                    //// 绑定原始纹理到几何体材质
+                    //glActiveTexture(GL_TEXTURE0);
+                    //glBindTexture(GL_TEXTURE_2D, texture->GetHandle());
+                    //mpOverMaterial->GetShader()->setInt("u_diffuseTexture", 0);
+                }
+            }
+            
+            // 使用几何体材质
+            pGeometryMat->OnApply();
             
             // 设置变换矩阵
-            command.material->GetShader()->setMat4("model", command.transform);
+            pGeometryMat->GetShader()->setMat4("model", command.transform);
+            
+            // 设置相机矩阵
+            if (auto pCamera = mpRenderContext->GetAttachedCamera())
+            {
+                pGeometryMat->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+                pGeometryMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+            }
             
             // 更新材质uniform
-            command.material->UpdateUniform();
-            
-            // 绑定材质资源
-            command.material->OnBind();
+            pGeometryMat->UpdateUniform();
 
-            // 这里应该使用缓存的VAO进行绘制
-            // 为了简化，这里省略了VAO的创建和绑定
+            // 绑定材质资源
+            pGeometryMat->OnBind();
+
+            // 创建并绑定VAO
+            GLuint VAO, VBO, EBO;
+            glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
+            glGenBuffers(1, &EBO);
+
+            glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+
+            // 位置属性
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            // 法线属性
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+            // UV坐标属性
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+
+            // 绘制
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+
+            // 清理
+            glDeleteVertexArrays(1, &VAO);
+            glDeleteBuffers(1, &VBO);
+            glDeleteBuffers(1, &EBO);
         }
 
         // 解绑FrameBuffer
@@ -293,7 +362,7 @@ namespace te
     }
 
     // LightingPass Implementation
-    LightingPass::LightingPass()
+    BasePass::BasePass()
     {
         mConfig.name = "LightingPass";
         mConfig.type = RenderPassType::Lighting;
@@ -310,20 +379,22 @@ namespace te
         mConfig.outputs = {
             {"Lighting", "lighting", RenderTargetFormat::RGBA8}
         };
+
+        mRenderPassFlag = RenderPassFlag::BaseColor;
     }
 
-    void LightingPass::OnInitialize()
+    void BasePass::OnInitialize()
     {
-        // 创建光照材质
-        // mpLightingMaterial = std::make_shared<LightingMaterial>();
+        // 光照材质已在构造函数中创建
     }
 
-    void LightingPass::Execute(const std::vector<RenderCommand>& commands)
+    void BasePass::Execute(const std::vector<RenderCommand>& commands)
     {
         if (!IsEnabled() || !mFrameBuffer)
             return;
 
         OnPreExecute();
+        ApplyRenderCommand(commands);
 
         // 绑定FrameBuffer
         mFrameBuffer->Bind();
@@ -342,15 +413,66 @@ namespace te
         // 绑定输入纹理
         BindInputs();
 
-        // 渲染全屏四边形进行光照计算
-        if (mpLightingMaterial)
+        // 渲染所有几何体
+        for (const auto& command : mCandidateCommands)
         {
-            mpLightingMaterial->OnApply();
-            mpLightingMaterial->UpdateUniform();
-            mpLightingMaterial->OnBind();
-            
-            // 这里应该渲染全屏四边形
-            // 为了简化，这里省略了四边形的渲染
+            if (!command.material || command.vertices.empty() || command.indices.empty())
+                continue;
+
+            // 使用几何体材质
+            auto pMaterial = command.material;
+
+            //attach light
+            if (auto pLight = mpRenderContext->GetDefaultLight())
+            {
+                pMaterial->AttachedLight(pLight);
+            }
+
+            pMaterial->OnApply();
+
+            // 设置变换矩阵
+            pMaterial->GetShader()->setMat4("model", command.transform);
+
+            // 设置相机矩阵
+            if (auto pCamera = mpRenderContext->GetAttachedCamera())
+            {
+                pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+                pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+            }
+
+            // 更新材质uniform
+            pMaterial->UpdateUniform();
+
+            // 创建并绑定VAO
+            GLuint VAO, VBO, EBO;
+            glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
+            glGenBuffers(1, &EBO);
+
+            glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+
+            // 位置属性
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            // 法线属性
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+            // UV坐标属性
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+
+            // 绘制
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+
+            // 清理
+            glDeleteVertexArrays(1, &VAO);
+            glDeleteBuffers(1, &VBO);
+            glDeleteBuffers(1, &EBO);
         }
 
         // 解绑输入纹理
@@ -370,7 +492,8 @@ namespace te
     {
         mConfig.name = "PostProcessPass";
         mConfig.type = RenderPassType::PostProcess;
-        
+        mRenderPassFlag = RenderPassFlag::Blit;
+
         // 设置输入
         mConfig.inputs = {
             {"Color", "LightingPass", "lighting", 0, true}
@@ -393,6 +516,15 @@ namespace te
         };
         
         mQuadIndices = {0, 1, 2, 2, 3, 0};
+
+        RenderCommand fullScreenCommand;
+        fullScreenCommand.material = nullptr;
+        fullScreenCommand.vertices = mQuadVertices;
+        fullScreenCommand.indices = mQuadIndices;
+        fullScreenCommand.transform = glm::mat4(1.0f); //
+        fullScreenCommand.state = RenderMode::Opaque;
+        fullScreenCommand.hasUV = false;
+        mCandidateCommands.emplace_back(fullScreenCommand);
     }
 
     void PostProcessPass::Execute(const std::vector<RenderCommand>& commands)
@@ -425,12 +557,64 @@ namespace te
             if (!effect.enabled || !effect.material)
                 continue;
 
-            effect.material->OnApply();
-            effect.material->UpdateUniform();
-            effect.material->OnBind();
+            //effect.material->UpdateUniform();
+            //effect.material->OnBind();
             
             // 渲染全屏四边形
-            // 这里应该使用缓存的VAO进行绘制
+            for (const auto& command : mCandidateCommands)
+            {
+                if (!command.material || command.vertices.empty() || command.indices.empty())
+                    continue;
+
+                // 使用几何体材质
+                auto pMaterial = effect.material;
+
+                pMaterial->OnApply();
+
+                // 设置变换矩阵
+                pMaterial->GetShader()->setMat4("model", command.transform);
+
+                // 设置相机矩阵
+                if (auto pCamera = mpRenderContext->GetAttachedCamera())
+                {
+                    pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+                    pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+                }
+
+                // 更新材质uniform
+                pMaterial->UpdateUniform();
+
+                // 创建并绑定VAO
+                GLuint VAO, VBO, EBO;
+                glGenVertexArrays(1, &VAO);
+                glGenBuffers(1, &VBO);
+                glGenBuffers(1, &EBO);
+
+                glBindVertexArray(VAO);
+                glBindBuffer(GL_ARRAY_BUFFER, VBO);
+                glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+
+                // 位置属性
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+                // 法线属性
+                glEnableVertexAttribArray(1);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                // UV坐标属性
+                glEnableVertexAttribArray(2);
+                glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+
+                // 绘制
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+
+                // 清理
+                glDeleteVertexArrays(1, &VAO);
+                glDeleteBuffers(1, &VBO);
+                glDeleteBuffers(1, &EBO);
+            }
         }
 
         // 解绑输入纹理
@@ -471,6 +655,7 @@ namespace te
         mConfig.type = RenderPassType::Skybox;
         mConfig.enableDepthTest = true;
         mConfig.depthFunc = GL_LEQUAL; // 天空盒使用LEQUAL深度测试
+        mRenderPassFlag = RenderPassFlag::Background;
 
         if (!mpSkybox)
         {

@@ -9,6 +9,7 @@
 #include "mesh/Vertex.h"
 #include "materials/BaseMaterial.h"
 #include "framework/Renderer.h"
+#include "framework/RenderPassFlag.h"
 
 #include "filesystem.h"
 
@@ -24,10 +25,11 @@ namespace te
     enum class RenderPassType
     {
         Geometry,       // 几何Pass（GBuffer生成）
+        Skybox,         // 天空盒Pass
+        
         Lighting,       // 光照Pass
         PostProcess,    // 后处理Pass
         Shadow,         // 阴影Pass
-        Skybox,         // 天空盒Pass
         UI,             // UI Pass
         Custom          // 自定义Pass
     };
@@ -101,6 +103,15 @@ namespace te
         GLenum blendDst = GL_ONE_MINUS_SRC_ALPHA; // 目标混合因子
     };
 
+    // 渲染状态保存
+    struct RenderState
+    {
+        GLint viewport[4];
+        GLboolean depthTest;
+        GLboolean blend;
+        GLint blendSrc, blendDst;
+    };
+
     // 渲染Pass基类
     class RenderPass
     {
@@ -146,6 +157,7 @@ namespace te
         virtual void OnShutdown() {}
         virtual void OnPreExecute() {}
         virtual void OnPostExecute() {}
+        void ApplyRenderCommand(const std::vector<RenderCommand>& commands);
 
         // 辅助函数
         void SetupFrameBuffer();
@@ -156,17 +168,12 @@ namespace te
         std::shared_ptr<MultiRenderTarget> mFrameBuffer;
         std::unordered_map<std::string, GLuint> mInputTextures;
         std::unordered_map<std::string, std::shared_ptr<RenderTarget>> mOutputTargets;
-        
-        // 渲染状态保存
-        struct RenderState
-        {
-            GLint viewport[4];
-            GLboolean depthTest;
-            GLboolean blend;
-            GLint blendSrc, blendDst;
-        } mSavedState;
+        RenderState mSavedState;
 
         std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+        std::shared_ptr<MaterialBase> mpOverMaterial{ nullptr };
+        RenderPassFlag mRenderPassFlag{ RenderPassFlag::None };
+        std::vector<RenderCommand> mCandidateCommands;
     };
 
     // 几何Pass（GBuffer生成）
@@ -183,25 +190,18 @@ namespace te
     };
 
     // 光照Pass
-    class LightingPass : public RenderPass
+    class BasePass : public RenderPass
     {
     public:
-        LightingPass();
-        ~LightingPass() override = default;
+        BasePass();
+        ~BasePass() override = default;
 
         void Execute(const std::vector<RenderCommand>& commands) override;
-
-        // 设置光照参数
-        //void SetCamera(const std::shared_ptr<Camera>& camera) { mpCamera = camera; }
-        //void SetLights(const std::vector<std::shared_ptr<Light>>& lights) { mpLights = lights; }
 
     protected:
         void OnInitialize() override;
 
     private:
-        //std::shared_ptr<Camera> mpCamera;
-        //std::vector<std::shared_ptr<Light>> mpLights;
-        std::shared_ptr<MaterialBase> mpLightingMaterial;
     };
 
     // 后处理Pass

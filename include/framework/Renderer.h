@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include "mesh/Vertex.h"
 #include "materials/BaseMaterial.h"
+#include "framework/RenderPassFlag.h"
 
 class Camera;
 class Light;
@@ -19,7 +20,7 @@ namespace te
     class MultiRenderTarget;
 }
 
-enum class RenderState
+enum class RenderMode
 {
     Opaque,
     Transparent,
@@ -34,10 +35,11 @@ struct RenderCommand
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
     glm::mat4 transform;
-    RenderState state;
+    RenderMode state;
     bool hasUV;
+    RenderPassFlag renderpassflag;
     
-    RenderCommand() : transform(1.0f), state(RenderState::Opaque), hasUV(false) {}
+    RenderCommand() : transform(1.0f), state(RenderMode::Opaque), hasUV(false), renderpassflag(RenderPassFlag::None) {}
 };
 
 struct RenderStats
@@ -84,7 +86,7 @@ public:
     virtual void AddRenderPass(const std::shared_ptr<te::RenderPass>& pass) = 0;
     virtual void RemoveRenderPass(const std::string& name) = 0;
     virtual std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const = 0;
-    virtual void ExecuteRenderPasses() = 0;
+    virtual void ExecuteRenderPasses(const std::vector<RenderCommand>& commands = {}) = 0;
     virtual void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) = 0;
 };
 
@@ -98,7 +100,7 @@ enum class RendererBackend
 class RendererFactory
 {
 public:
-    static std::unique_ptr<IRenderer> CreateRenderer(RendererBackend backend);
+    static std::shared_ptr<IRenderer> CreateRenderer(RendererBackend backend);
 };
 
 class OpenGLRenderer : public IRenderer
@@ -136,7 +138,7 @@ public:
     void AddRenderPass(const std::shared_ptr<te::RenderPass>& pass) override;
     void RemoveRenderPass(const std::string& name) override;
     std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const override;
-    void ExecuteRenderPasses() override;
+    void ExecuteRenderPasses(const std::vector<RenderCommand>& commands = {}) override;
 
     //
     void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
@@ -145,7 +147,7 @@ private:
                          const std::vector<unsigned int>& indices,
                          uint32_t& vao, uint32_t& vbo, uint32_t& ebo);
     void CleanupMeshBuffers(uint32_t vao, uint32_t vbo, uint32_t ebo);
-    void ApplyRenderState(RenderState state);
+    void ApplyRenderState(RenderMode state);
     
     RenderStats mStats;
     
@@ -158,7 +160,7 @@ private:
     uint32_t mCurrentVAO = 0;
     uint32_t mCurrentVBO = 0;
     uint32_t mCurrentEBO = 0;
-    RenderState mCurrentState = RenderState::Opaque;
+    RenderMode mCurrentState = RenderMode::Opaque;
     
     // cache
     struct MeshCache
@@ -168,5 +170,5 @@ private:
     };
     std::unordered_map<size_t, MeshCache> mMeshCache;
 
-    std::shared_ptr<RenderContext> mpRenderContext;
+    std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
 }; 

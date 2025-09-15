@@ -162,7 +162,7 @@ private:
 
 private:
     GLFWwindow* mWindow = nullptr;
-    std::unique_ptr<IRenderer> mpRenderer;
+    std::shared_ptr<IRenderer> mpRenderer;
     std::shared_ptr<Camera> mpCamera;
     std::shared_ptr<Light> mpLight;
     std::shared_ptr<Sphere> mpSphere;

@@ -21,12 +21,12 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // Global variables
-std::unique_ptr<IRenderer> g_renderer;
-std::shared_ptr<RenderContext> g_RenderContext;
-std::shared_ptr<RenderView> g_RenderView;
-std::shared_ptr<Camera> g_camera;
-std::shared_ptr<Light> g_light;
-std::shared_ptr<Sphere> g_sphere;
+std::shared_ptr<IRenderer> g_renderer = nullptr;
+std::shared_ptr<RenderContext> g_RenderContext = nullptr;
+std::shared_ptr<RenderView> g_RenderView = nullptr;
+std::shared_ptr<Camera> g_camera = nullptr;
+std::shared_ptr<Light> g_light = nullptr;
+std::shared_ptr<Sphere> g_sphere = nullptr;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -58,14 +58,26 @@ void setupMultiPassRendering()
         true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
 
+    // 创建天空盒Pass
+    auto skyboxPass = std::make_shared<te::SkyboxPass>();
+    skyboxPass->Initialize(te::RenderPassConfig{
+        "SkyboxPass",
+        te::RenderPassType::Skybox,
+        te::RenderPassState::Enabled,
+        {}, // inputs
+        {}, // outputs
+        {}, // dependencies
+        false, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        }, g_RenderView, g_RenderContext);
+
     // 创建光照Pass
-    auto lightingPass = std::make_shared<te::LightingPass>();
-    lightingPass->Initialize(te::RenderPassConfig{
-        "LightingPass",
+    auto basePass = std::make_shared<te::BasePass>();
+    basePass->Initialize(te::RenderPassConfig{
+        "BasePass",
         te::RenderPassType::Lighting,
         te::RenderPassState::Enabled,
         {
-            {"Albedo", "GeometryPass", "albedo", 0, true},
+            {"Albedo", "SkyboxPass", "albedo", 0, true},
             {"Normal", "GeometryPass", "normal", 0, true},
             {"Position", "GeometryPass", "position", 0, true},
             {"Depth", "GeometryPass", "depth", 0, true}
@@ -78,10 +90,6 @@ void setupMultiPassRendering()
         }, // dependencies
         true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
-
-    // 设置光照Pass的相机和光源
-    //lightingPass->SetCamera(g_camera);
-    //lightingPass->SetLights({g_light});
 
     // 创建后处理Pass
     auto postProcessPass = std::make_shared<te::PostProcessPass>();
@@ -101,21 +109,11 @@ void setupMultiPassRendering()
         true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
 
-    // 创建天空盒Pass
-    auto skyboxPass = std::make_shared<te::SkyboxPass>();
-    skyboxPass->Initialize(te::RenderPassConfig{
-        "SkyboxPass",
-        te::RenderPassType::Skybox,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        {}, // outputs
-        {}, // dependencies
-        false, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-    }, g_RenderView, g_RenderContext);
+    
 
     // 添加Pass到渲染器
     g_renderer->AddRenderPass(geometryPass);
-    g_renderer->AddRenderPass(lightingPass);
+    g_renderer->AddRenderPass(basePass);
     g_renderer->AddRenderPass(postProcessPass);
     g_renderer->AddRenderPass(skyboxPass);
 
@@ -154,12 +152,22 @@ int main()
     }
 
     // 创建渲染器
+    std::cout << "Creating renderer..." << std::endl;
     g_renderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
-    if (!g_renderer || !g_renderer->Initialize())
+    if (!g_renderer)
+    {
+        std::cout << "Failed to create renderer" << std::endl;
+        return -1;
+    }
+    
+    std::cout << "Initializing renderer..." << std::endl;
+    if (!g_renderer->Initialize())
     {
         std::cout << "Failed to initialize renderer" << std::endl;
         return -1;
     }
+    
+    std::cout << "Renderer created and initialized successfully" << std::endl;
 
     // 创建RenderView和RenderContext
     g_RenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
@@ -173,6 +181,10 @@ int main()
     g_RenderContext->AttachCamera(g_camera);
 
     // 创建光源
+    if (!g_light)
+    {
+        g_light = std::make_shared<Light>();
+    }
     g_light = std::make_shared<Light>();
     g_light->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f));
     g_light->SetColor(glm::vec3(1.0f, 1.0f, 1.0f));
@@ -180,7 +192,10 @@ int main()
     g_RenderContext->PushAttachLight(g_light);
 
     // 创建几何体
-    g_sphere = std::make_shared<Sphere>();
+    if (!g_sphere)
+    {
+        g_sphere = std::make_shared<Sphere>();
+    }
     auto material = std::make_shared<BlinnPhongMaterial>();
     material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
     material->AttachedLight(g_light);
@@ -206,7 +221,21 @@ int main()
         // 执行多Pass渲染
         if (g_renderer->IsMultiPassEnabled())
         {
-            g_renderer->ExecuteRenderPasses();
+            // 创建渲染命令
+            std::vector<RenderCommand> commands;
+            RenderCommand sphereCommand;
+            sphereCommand.material = g_sphere->GetMaterial();
+            sphereCommand.vertices = g_sphere->GetVertices();
+            sphereCommand.indices = g_sphere->GetIndices();
+            sphereCommand.transform = g_sphere->GetWorldTransform();
+            sphereCommand.state = RenderMode::Opaque;
+            sphereCommand.hasUV = true;
+            sphereCommand.renderpassflag |= RenderPassFlag::BaseColor; // 设置为BaseColor Pass
+            sphereCommand.renderpassflag |= RenderPassFlag::Geometry;
+
+            commands.push_back(sphereCommand);
+            
+            g_renderer->ExecuteRenderPasses(commands);
         }
         else
         {

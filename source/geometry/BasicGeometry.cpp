@@ -8,16 +8,6 @@ BasicGeometry::~BasicGeometry() {
     }
 }
 
-void BasicGeometry::SetMaterial(const std::shared_ptr<MaterialBase>& material)
-{
-	mpMaterial = material;
-}
-
-std::shared_ptr<MaterialBase> BasicGeometry::GetMaterial()
-{
-	return mpMaterial;
-}
-
 void BasicGeometry::Draw() const
 {
     if (!initialized) return;
