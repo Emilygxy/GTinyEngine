@@ -11,9 +11,9 @@ BlinnPhongMaterial::~BlinnPhongMaterial()
 
 void BlinnPhongMaterial::UpdateUniform()
 {
-    // 调用父类的 UpdateUniform 方法
+    // invoke parent's UpdateUniform
     PhongMaterial::UpdateUniform();
     
-    // 设置 Blinn-Phong 切换 uniform
+    // set Blinn-Phong switch uniform
     GetShader()->setFloat("u_useBlinnPhong", mUseBlinnPhong ? 1.0f : 0.0f);
 } 

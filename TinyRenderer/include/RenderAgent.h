@@ -74,9 +74,15 @@ private:
 	void RenderImGui();
 	
 	// Mouse picking functions
-	glm::vec3 ScreenToWorldRay(float mouseX, float mouseY);
-	bool RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+	struct Ray {
+		glm::vec3 origin;
+		glm::vec3 direction;
+	};
+	Ray ScreenToWorldRay(float mouseX, float mouseY);
+	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
+	bool RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+	                          const glm::vec3& sphereCenter, float sphereRadius, float& t);
 	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
@@ -87,7 +93,6 @@ private:
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
 	
 	// Mouse picking state
-	bool mSphereSelected{ false };
-	glm::vec3 mSelectedSpherePosition{ -1.5f, 0.0f, 0.0f };
-	float mSelectedSphereRadius{ 1.0f };
+	bool mGeomSelected{ false };
+	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 };

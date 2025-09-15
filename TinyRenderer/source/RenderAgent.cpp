@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "Light.h"
 #include "mesh/AaBB.h"
+#include <cmath>
 
 // ImGui includes
 #include "imgui.h"
@@ -146,7 +147,8 @@ void RenderAgent::Render()
 {
     if (!mpGeometry)
     {
-        mpGeometry = std::make_shared<Sphere>();
+        mpGeometry = std::make_shared<Box>(2.0f, 2.0f, 2.0f);
+        //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
         
         // attach light to material
@@ -160,7 +162,7 @@ void RenderAgent::Render()
         }
         
         mpGeometry->SetMaterial(material);
-        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
+        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
     }
     // render loop
     // -----------
@@ -179,10 +181,9 @@ void RenderAgent::Render()
         // Begin Render Frame
         mpRenderer->BeginFrame();
 
-        // �����ӿں������ɫ
         mpRenderer->SetViewport(0, 0, 800, 600);
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // �����ɫ����Ȼ���
+        mpRenderer->Clear(0x3); // 
 
         mpRenderer->DrawBackgroud();
 
@@ -259,21 +260,20 @@ void RenderAgent::RenderImGui()
     // Create a simple window
     ImGui::Begin("Mouse Picking Demo");
     
-    ImGui::Text("Click on the sphere to select it!");
+    ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
     
-    if (mSphereSelected)
+    if (mGeomSelected)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Sphere Selected!");
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected! Hit by AABB, there may in delta errors.");
         ImGui::Text("Position: (%.2f, %.2f, %.2f)", 
-                   mSelectedSpherePosition.x, 
-                   mSelectedSpherePosition.y, 
-                   mSelectedSpherePosition.z);
-        ImGui::Text("Radius: %.2f", mSelectedSphereRadius);
+                   mSelectedGeomPosition.x, 
+                   mSelectedGeomPosition.y, 
+                   mSelectedGeomPosition.z);
     }
     else
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No sphere selected");
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No Geometry selected");
     }
     
     ImGui::Separator();
@@ -288,37 +288,47 @@ void RenderAgent::RenderImGui()
 }
 
 // Mouse picking implementation
-glm::vec3 RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
+RenderAgent::Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
     auto camera = mpRenderer->GetCamera();
-    if (!camera) return glm::vec3(0.0f);
+    if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
     
-    glm::mat4 view = camera->GetViewMatrix();
-    glm::mat4 projection = camera->GetProjectionMatrix();
+    glm::mat4 viewMatrix = camera->GetViewMatrix();
+    glm::mat4 projectionMatrix = camera->GetProjectionMatrix();
     
-    // Convert screen coordinates to normalized device coordinates
-    float x = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
-    float y = 1.0f - (2.0f * mouseY) / SCR_HEIGHT;
-    float z = 1.0f;
+    // Step 1: Convert screen coordinates to normalized device coordinates (NDC)
+    // Screen coordinates: (0,0) at top-left, (SCR_WIDTH, SCR_HEIGHT) at bottom-right
+    // NDC coordinates: (-1,-1) at bottom-left, (1,1) at top-right
+    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // Flip Y: screen Y=0 is top, NDC Y=1 is top
     
-    glm::vec3 ray_nds = glm::vec3(x, y, z);
+    // Step 2: Create two points in clip space (near and far planes)
+    glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
+    glm::vec4 rayClipFar(ndcX, ndcY, 1.0f, 1.0f);   // far plane Z=1
     
-    // Convert to homogeneous clip coordinates
-    glm::vec4 ray_clip = glm::vec4(ray_nds.x, ray_nds.y, -1.0f, 1.0f);
+    // Step 3: Transform from clip space to eye space (inverse projection)
+    glm::mat4 invProj = glm::inverse(projectionMatrix);
+    glm::vec4 rayEyeNear = invProj * rayClipNear;
+    glm::vec4 rayEyeFar = invProj * rayClipFar;
     
-    // Convert to eye coordinates
-    glm::vec4 ray_eye = glm::inverse(projection) * ray_clip;
-    ray_eye = glm::vec4(ray_eye.x, ray_eye.y, -1.0f, 0.0f);
+    // Step 4: Perspective divide
+    rayEyeNear /= rayEyeNear.w; 
+    rayEyeFar /= rayEyeFar.w;
     
-    // Convert to world coordinates
-    glm::vec3 ray_world = glm::vec3(glm::inverse(view) * ray_eye);
-    ray_world = glm::normalize(ray_world);
+    // Step 5: Transform from eye space to world space (inverse view)
+    glm::mat4 invView = glm::inverse(viewMatrix);
+    glm::vec3 worldNear = glm::vec3(invView * rayEyeNear);
+    glm::vec3 worldFar = glm::vec3(invView * rayEyeFar);
     
-    return ray_world;
+    // Step 6: Calculate ray origin and direction
+    glm::vec3 rayOrigin = camera->GetEye();  // Camera position in world space
+    glm::vec3 rayDirection = glm::normalize(worldFar - worldNear);
+    
+    return {rayOrigin, rayDirection};
 }
 
-bool RenderAgent::RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
+bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
 {
     // Ray-AABB intersection using slab method
     // This is a more general approach that works for any AABB
@@ -368,6 +378,37 @@ bool RenderAgent::RaySphereIntersection(const glm::vec3& rayOrigin, const glm::v
     return true;
 }
 
+// Ray-Sphere intersection test (more accurate than AABB for spheres)
+bool RenderAgent::RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+                                       const glm::vec3& sphereCenter, float sphereRadius, float& t)
+{
+    glm::vec3 oc = rayOrigin - sphereCenter;
+    float a = glm::dot(rayDirection, rayDirection);
+    float b = 2.0f * glm::dot(oc, rayDirection);
+    float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
+    
+    float discriminant = b * b - 4 * a * c;
+    
+    if (discriminant < 0) {
+        return false; // No intersection
+    }
+    
+    float sqrtDiscriminant = std::sqrt(discriminant);
+    float t1 = (-b - sqrtDiscriminant) / (2.0f * a);
+    float t2 = (-b + sqrtDiscriminant) / (2.0f * a);
+    
+    // Return the closest positive intersection
+    if (t1 > 0) {
+        t = t1;
+        return true;
+    } else if (t2 > 0) {
+        t = t2;
+        return true;
+    }
+    
+    return false; // Both intersections are behind the ray origin
+}
+
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
 {
     // Get camera position
@@ -375,26 +416,55 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     if (!camera) return;
     
     glm::vec3 cameraPos = camera->GetEye();
-    glm::vec3 rayDirection = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
+    auto re_ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
     
-    // Get sphere's AABB for intersection testing
+    // Debug output
+    std::cout << "Mouse click at: (" << xpos << ", " << ypos << ")" << std::endl;
+    std::cout << "Camera position: (" << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << ")" << std::endl;
+    std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
+    
+    // Get sphere information for intersection testing
     if (!mpGeometry) return;
     
-    auto aabbOpt = mpGeometry->GetWorldAABB(); // Update AABB
-    if (!aabbOpt.has_value()) {
+    // Get geometry's world transform to find center position
+    glm::mat4 worldTransform = mpGeometry->GetWorldTransform();
+    glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
+    
+    // Get sphere radius (assuming it's a Sphere object)
+    auto sphere = std::dynamic_pointer_cast<Sphere>(mpGeometry);
+    float sphereRadius = 1.0f; // Default radius
+    if (sphere) {
+        sphereRadius = sphere->GetRadius();
+    }
+    
+    // Debug sphere info
+    std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
+    
+    // 获取几何体的世界AABB（已经应用了世界变换）
+    auto worldAABB = mpGeometry->GetWorldAABB();
+    
+    if (!worldAABB.has_value()) {
         std::cout << "No AABB available for geometry" << std::endl;
         return;
     }
     
-    // Test intersection with sphere's AABB
+    // Debug AABB info
+    std::cout << "World AABB min: (" << worldAABB->min.x << ", " << worldAABB->min.y << ", " << worldAABB->min.z << ")" << std::endl;
+    std::cout << "World AABB max: (" << worldAABB->max.x << ", " << worldAABB->max.y << ", " << worldAABB->max.z << ")" << std::endl;
+    
+    // Test intersection with geometry's world AABB
+    // Both ray and AABB are in world space, so we can test directly
     float t;
-    if (RaySphereIntersection(cameraPos, rayDirection, aabbOpt.value(), t))
+    if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
     {
-        mSphereSelected = true;
-        std::cout << "Sphere hit! Distance: " << t << std::endl;
+        mGeomSelected = true;
+        //mSelectedSpherePosition = sphereCenter;
+        //mSelectedSphereRadius = sphereRadius;
+        mSelectedGeomPosition = geomCenter;
+        std::cout << "Geometry hit! Distance: " << t << std::endl;
     }
     else {
-        mSphereSelected = false;
+        mGeomSelected = false;
         std::cout << "No hit" << std::endl;
     }
 }
