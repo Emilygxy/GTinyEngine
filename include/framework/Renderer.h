@@ -75,6 +75,7 @@ public:
     
     // set global render params
     virtual void SetCamera(const std::shared_ptr<Camera>& camera) = 0;
+    virtual std::shared_ptr<Camera> GetCamera() const = 0;
     virtual void SetLight(const std::shared_ptr<Light>& light) = 0;
     virtual std::shared_ptr<Light> GetLight() const = 0;
 };
@@ -122,6 +123,10 @@ public:
     void ResetRenderStats() override { mStats.Reset(); }
     
     void SetCamera(const std::shared_ptr<Camera>& camera) override { mpCamera = camera; }
+    std::shared_ptr<Camera> GetCamera() const override 
+    {
+        return mpCamera;
+    }
     void SetLight(const std::shared_ptr<Light>& light) override { mpLight = light; }
     std::shared_ptr<Light> GetLight() const override { return mpLight; }
 

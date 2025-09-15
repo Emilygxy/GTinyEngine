@@ -2,6 +2,13 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <glm/glm.hpp>
+#include <memory>
+
+namespace te
+{
+	struct AaBB;
+}
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -62,6 +69,21 @@ public:
 	}
 private:
 	void SetupRenderer();
+	void InitImGui();
+	void ShutdownImGui();
+	void RenderImGui();
+	
+	// Mouse picking functions
+	struct Ray {
+		glm::vec3 origin;
+		glm::vec3 direction;
+	};
+	Ray ScreenToWorldRay(float mouseX, float mouseY);
+	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+	                          const te::AaBB& aabb, float& t);
+	bool RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+	                          const glm::vec3& sphereCenter, float sphereRadius, float& t);
+	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
 
@@ -69,4 +91,8 @@ private:
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
+	
+	// Mouse picking state
+	bool mGeomSelected{ false };
+	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 };

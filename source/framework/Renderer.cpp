@@ -10,7 +10,7 @@
 #include "filesystem.h"
 #include "skybox/Skybox.h"
 
-// 渲染器工厂实现
+// Render Factory Impl
 std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backend)
 {
     switch (backend)
@@ -18,17 +18,17 @@ std::unique_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backe
     case RendererBackend::OpenGL:
         return std::make_unique<OpenGLRenderer>();
     case RendererBackend::OpenGLES:
-        // TODO: 实现 OpenGLES 渲染器
+        // TODO: OpenGLES renderer Impl
         return nullptr;
     case RendererBackend::Vulkan:
-        // TODO: 实现 Vulkan 渲染器
+        // TODO: Vulkan renderer Impl
         return nullptr;
     default:
         return nullptr;
     }
 }
 
-// OpenGL 渲染器实现
+// OpenGL renderer Impl
 OpenGLRenderer::OpenGLRenderer()
 {
 }
