@@ -101,5 +101,9 @@ void Skybox::Draw(const glm::mat4& view, const glm::mat4& projection)
     glBindTexture(GL_TEXTURE_CUBE_MAP, mCubemapTexture);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
+    
+    // unbind shader, incase status error
+    glUseProgram(0);
+    
     glDepthFunc(GL_LESS);
 }
