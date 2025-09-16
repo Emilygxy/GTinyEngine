@@ -1,20 +1,27 @@
 #version 330 core
 out vec4 FragColor;
 
-uniform sampler2D u_backgroundMap;
-uniform sampler2D u_screenTexture;
+uniform sampler2D u_backgroundMap;  // SkyboxPass output
+uniform sampler2D u_screenTexture;  // BasePass output
 
 in vec2 TexCoords;
 
 void main()
 {
-    // Sample the background texture
+    // Sample the textures
     vec4 background = texture(u_backgroundMap, TexCoords);
-    
-    // Simply blit the input texture
     vec4 screen = texture(u_screenTexture, TexCoords);
-    vec4 finalColor = mix(background,screen,0.5);
-    //gamma correction
-    // finalColor = pow(finalColor, vec4(1.0/2.2));
-    FragColor = finalColor;
+    
+    // In deferred rendering, BasePass should contain the final lit scene
+    // If BasePass has content (alpha > 0), use it; otherwise use background
+    if (screen.a > 0.0)
+    {
+        // Use BasePass result (lit geometry)
+        FragColor = screen;
+    }
+    else
+    {
+        // Use SkyboxPass result (background)
+        FragColor = background;
+    }
 }

@@ -112,11 +112,10 @@ void PhongMaterial::UpdateUniform()
     mpShader->setVec4("u_Strengths", mIntensities);
     
     mpShader->setInt("u_diffuseTexture", 0);
-    mpShader->setInt("u_backgroundMap", 1);
-    mpShader->setInt("u_geomAlbedoMap", 2);
-    mpShader->setInt("u_geomNormalMap", 3);
-    mpShader->setInt("u_geomPositionMap", 4);
-    mpShader->setInt("u_geomDepthMap", 5);
+    mpShader->setInt("u_geomAlbedoMap", 1);
+    mpShader->setInt("u_geomNormalMap", 2);
+    mpShader->setInt("u_geomPositionMap", 3);
+    mpShader->setInt("u_geomDepthMap", 4);
 
     // Set lighting parameters
     if (auto pLight = mpAttachedLight.lock())

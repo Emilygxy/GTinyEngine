@@ -517,13 +517,12 @@ namespace te
 
         // Setup inputs
         mConfig.inputs = {
+            {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"BaseColor", "BasePass", "basecolor", 0, true}
         };
         
         // Setup outputs
-        mConfig.outputs = {
-            {"Final", "final", RenderTargetFormat::RGBA8}
-        };
+        // render to screen directly
     }
 
     void PostProcessPass::OnInitialize()

@@ -6,7 +6,6 @@ in vec3 Normal;
 in vec2 TexCoords;
 
 uniform sampler2D u_diffuseTexture; // texture sampler(optional)
-uniform sampler2D u_backgroundMap; // texture sampler(optional)
 uniform sampler2D u_geomAlbedoMap; // texture sampler(optional)
 uniform sampler2D u_geomNormalMap; // texture sampler(optional)
 uniform sampler2D u_geomPositionMap; // texture sampler(optional)
@@ -38,13 +37,20 @@ vec3 CalculatePhongColor()
     // 2. Calculate the diffuse lighting
     float diffuseStrength = u_Strengths.y;
 
-    vec3 norm = normalize(Normal);
-    vec3 fragPos = FragPos;
+    vec3 norm;
+    vec3 fragPos;
     if(isUseGeometryTarget())
     {
-        norm =texture(u_geomNormalMap, TexCoords).rgb;
-        norm = normalize(norm);
+        // Use geometry pass data
+        norm = texture(u_geomNormalMap, TexCoords).rgb;
+        norm = normalize(norm * 2.0 - 1.0); // Convert from [0,1] to [-1,1] range
         fragPos = texture(u_geomPositionMap, TexCoords).rgb;
+    }
+    else
+    {
+        // Use interpolated vertex data
+        norm = normalize(Normal);
+        fragPos = FragPos;
     }
     vec3 lightDir = normalize(u_lightPos - fragPos);
     float diff = max(dot(norm, lightDir), 0.0);
@@ -75,19 +81,9 @@ vec3 CalculatePhongColor()
 
 void main()
 {
-    vec3 background = texture(u_backgroundMap, TexCoords).rgb;
-    
-    float geomPos = texture(u_geomPositionMap, TexCoords).r;
-    
-    // if true, it means the pixel is outside the geometry target, so we use the background color
-    if (length(geomPos) < 0.001)
-    {
-        FragColor = vec4(background, 1.0);
-        return;
-    }
-    
     vec3 result = u_objectColor;
     
+    // Get albedo color
     vec3 geomAlbedo = texture(u_diffuseTexture, TexCoords).rgb;
     if(isUseGeometryTarget())
     {
@@ -95,13 +91,11 @@ void main()
     }
     result *= geomAlbedo;
 
+    // Calculate lighting
     vec3 lighting = CalculatePhongColor();
-    result *= lighting;
     
-    result += background * 0.1; 
-
-    // gamma correction
-    // result = pow(result, vec3(1.0/2.2));
+    // In deferred rendering, lighting should be applied to albedo
+    result *= lighting;
 
     FragColor = vec4(result, 1.0);
 }

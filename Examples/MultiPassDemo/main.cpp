@@ -53,7 +53,7 @@ void setupMultiPassRendering()
              {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
         }, // outputs
         {}, // dependencies
-        false, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // 不清理深度，只清理颜色
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // enable deptyh test,LEQUAL
         }, g_RenderView, g_RenderContext);
 
     // 创建几何Pass
@@ -80,7 +80,6 @@ void setupMultiPassRendering()
         te::RenderPassType::Base,
         te::RenderPassState::Enabled,
         {
-             {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"Albedo", "GeometryPass", "albedo", 0, true},
             {"Normal", "GeometryPass", "normal", 0, true},
             {"Position", "GeometryPass", "position", 0, true},
@@ -90,13 +89,12 @@ void setupMultiPassRendering()
             {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
         }, // outputs
         {
-            {"SkyboxPass", true, []() { return true; }},
             {"GeometryPass", true, []() { return true; }},
         }, // dependencies
-        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)  // enable depth test, clear color is (0,0,0,0) for combine with background
     }, g_RenderView, g_RenderContext);
 
-    // 创建后处理Pass
+    // PostProcessPass Pass
     auto postProcessPass = std::make_shared<te::PostProcessPass>();
     postProcessPass->Initialize(te::RenderPassConfig{
         "PostProcessPass",
@@ -105,8 +103,8 @@ void setupMultiPassRendering()
         {
             {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"BaseColor", "BasePass", "basecolor", 0, true}
-        }, // inputs
-        {}, // outputs - 直接渲染到屏幕
+        }, // inputs - BasePass now handles background fusion
+        {}, // outputs - render to screen directly
         {
             {"SkyboxPass", true, []() { return true; }},
             {"BasePass", true, []() { return true; }}
