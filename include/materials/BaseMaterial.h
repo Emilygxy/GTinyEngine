@@ -26,6 +26,8 @@ public:
 		return mpShader;
 	}
 
+	virtual void SetUseGeometryTarget(bool use) {}
+
 protected:
 	MaterialBase(const std::string& vs_path, const std::string& fs_path);
 
@@ -68,9 +70,13 @@ public:
 	std::shared_ptr<TextureBase> GetDiffuseTexture() const { return mpDiffuseTexture; }
 	bool HasTexture() const { return mbHasTexture; }
 
+	void SetUseGeometryTarget(bool use) override;
+protected:
+	glm::vec4 mUseEnables; // ƒ¨»œ π”√ Blinn-Phong
+
 private:
 	std::shared_ptr<TextureBase> mpDiffuseTexture{ nullptr };
 	bool mbHasTexture = false;
 	glm::vec4 mIntensities{ 1.0f,1.0f, 1.0f, 1.0f};// environment,diffuse,specular,shininess
-	bool useBlinnPhong = true;
+	//bool useBlinnPhong = true;
 };

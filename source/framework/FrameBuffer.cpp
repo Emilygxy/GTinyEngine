@@ -326,6 +326,9 @@ namespace te
             }
         }
         
+        // 更新绘制缓冲区设置
+        UpdateDrawBuffers();
+        
         SetViewport();
     }
 
@@ -382,6 +385,12 @@ namespace te
             {
                 mDrawBuffers.push_back(GL_COLOR_ATTACHMENT0 + i);
             }
+        }
+        
+        // 设置绘制缓冲区
+        if (!mDrawBuffers.empty())
+        {
+            glDrawBuffers(static_cast<GLsizei>(mDrawBuffers.size()), mDrawBuffers.data());
         }
     }
 

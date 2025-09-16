@@ -19,7 +19,7 @@ inline RenderPassFlag operator|(RenderPassFlag a, RenderPassFlag b)
 
 inline bool operator&(RenderPassFlag a, RenderPassFlag b)
 {
-    return (static_cast<int>(a) & static_cast<int>(b)) > 0;
+    return (static_cast<int>(a) & static_cast<int>(b)) != 0;
 }
 
 inline RenderPassFlag& operator|=(RenderPassFlag& a, RenderPassFlag b)

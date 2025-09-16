@@ -128,7 +128,7 @@ private:
         if (currentKeyState && !lastKeyState)
         {
             mUseBlinnPhong = !mUseBlinnPhong;
-            mpBlinnPhongMaterial->SetUseBlinnPhong(mUseBlinnPhong);
+            //mpBlinnPhongMaterial->SetUseBlinnPhong(mUseBlinnPhong);
             std::cout << "Switched to " << (mUseBlinnPhong ? "Blinn-Phong" : "Phong") << " shading" << std::endl;
         }
         lastKeyState = currentKeyState;

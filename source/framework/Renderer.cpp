@@ -322,6 +322,23 @@ void OpenGLRenderer::ExecuteRenderPasses(const std::vector<RenderCommand>& comma
 {
     if (!mMultiPassEnabled || mRenderPasses.empty())
         return;
+    // set inputs
+    for (const auto& pass : mRenderPasses)
+    {
+        // 设置输入纹理
+        for (const auto& input : pass->GetConfig().inputs)
+        {
+            auto sourcePass = GetRenderPass(input.sourcePass);
+            if (sourcePass)
+            {
+                auto outputTarget = sourcePass->GetOutput(input.sourceTarget);
+                if (outputTarget)
+                {
+                    pass->SetInput(input.sourceTarget, outputTarget->GetTextureHandle());
+                }
+            }
+        }
+    }
 
     // 按依赖关系排序Pass
     // 这里使用简单的排序，实际应该实现拓扑排序
@@ -335,20 +352,6 @@ void OpenGLRenderer::ExecuteRenderPasses(const std::vector<RenderCommand>& comma
     {
         if (!pass->IsEnabled())
             continue;
-
-        // 设置输入纹理
-        for (const auto& input : pass->GetConfig().inputs)
-        {
-            auto sourcePass = GetRenderPass(input.sourcePass);
-            if (sourcePass)
-            {
-                auto outputTarget = sourcePass->GetOutput(input.sourceTarget);
-                if (outputTarget)
-                {
-                    pass->SetInput(input.name, outputTarget->GetTextureHandle());
-                }
-            }
-        }
 
         // 执行Pass
         pass->Execute(commands);

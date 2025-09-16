@@ -52,7 +52,7 @@ void setupMultiPassRendering()
              {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
         }, // outputs
         {}, // dependencies
-        false, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        false, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // 不清理深度，只清理颜色
         }, g_RenderView, g_RenderContext);
 
     // 创建几何Pass
@@ -118,12 +118,12 @@ void setupMultiPassRendering()
     // 添加Pass到渲染器
     g_renderer->AddRenderPass(geometryPass);
     g_renderer->AddRenderPass(basePass);
-    g_renderer->AddRenderPass(postProcessPass);
+    //g_renderer->AddRenderPass(postProcessPass);
     g_renderer->AddRenderPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);
-    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+    //te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // 启用多Pass渲染
     g_renderer->SetMultiPassEnabled(true);
@@ -238,13 +238,12 @@ int main()
             sphereCommand.transform = g_sphere->GetWorldTransform();
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
-            sphereCommand.renderpassflag |= RenderPassFlag::BaseColor; // 设置为BaseColor Pass
-            sphereCommand.renderpassflag |= RenderPassFlag::Geometry;
+            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
 
             commands.push_back(sphereCommand);
             
-            //g_renderer->ExecuteRenderPasses(commands);
-            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            g_renderer->ExecuteRenderPasses(commands);
+            //te::RenderPassManager::GetInstance().ExecuteAll(commands);
         }
         else
         {

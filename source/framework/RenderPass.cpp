@@ -149,7 +149,19 @@ namespace te
             glDisable(GL_BLEND);
         }
     }
+    
+    bool RenderPass::FindDependency(const std::string& passname)
+    {
+        for (auto dependency: mConfig.dependencies)
+        {
+            if (dependency.passName == passname)
+            {
+                return true;
+            }
+        }
 
+        return false;
+    }
     void RenderPass::SetupFrameBuffer()
     {
         if (mConfig.outputs.empty())
@@ -169,7 +181,7 @@ namespace te
         for (const auto& output : mConfig.outputs)
         {
             RenderTargetDesc desc;
-            desc.name = output.name;
+            desc.name = output.targetName;
             desc.width = width;
             desc.height = height;
             desc.format = output.format;
@@ -191,17 +203,17 @@ namespace te
 
             if (mFrameBuffer->AddRenderTarget(desc))
             {
-                mOutputTargets[output.name] = mFrameBuffer->GetRenderTarget(output.name);
+                mOutputTargets[output.targetName] = mFrameBuffer->GetRenderTarget(output.targetName);
             }
         }
     }
 
     void RenderPass::BindInputs()
     {
-        int textureUnit = 0;
+        int textureUnit = 1; // 0-for diffusemap
         for (const auto& input : mConfig.inputs)
         {
-            auto it = mInputTextures.find(input.name);
+            auto it = mInputTextures.find(input.sourceTarget);
             if (it != mInputTextures.end())
             {
                 glActiveTexture(GL_TEXTURE0 + textureUnit);
@@ -224,14 +236,20 @@ namespace te
     void RenderPass::ApplyRenderCommand(const std::vector<RenderCommand>& commands)
     {
         mCandidateCommands.clear();
+        
+        std::cout << "ApplyRenderCommand for " << mConfig.name << " (flag: " << static_cast<int>(mRenderPassFlag) << ")" << std::endl;
 
         for (auto cmd: commands)
         {
+            std::cout << "  Command flag: " << static_cast<int>(cmd.renderpassflag) << ", match: " << (cmd.renderpassflag & mRenderPassFlag) << std::endl;
             if (cmd.renderpassflag & mRenderPassFlag)
             {
                 mCandidateCommands.emplace_back(cmd);
+                std::cout << "  Added command to " << mConfig.name << std::endl;
             }
         }
+        
+        std::cout << "  Total candidate commands for " << mConfig.name << ": " << mCandidateCommands.size() << std::endl;
     }
 
     // GeometryPass Implementation
@@ -422,6 +440,10 @@ namespace te
 
             // 使用几何体材质
             auto pMaterial = command.material;
+            if (FindDependency("GeometryPass"))
+            {
+                pMaterial->SetUseGeometryTarget(true);
+            }
 
             //attach light
             if (auto pLight = mpRenderContext->GetDefaultLight())
@@ -758,6 +780,8 @@ namespace te
 
     void RenderPassManager::ExecuteAll(const std::vector<RenderCommand>& commands)
     {
+        std::cout << "RenderPassManager::ExecuteAll called with " << commands.size() << " commands" << std::endl;
+        
         // 按依赖关系排序
         SortPassesByDependencies();
 
@@ -765,11 +789,19 @@ namespace te
         for (const auto& pass : mPasses)
         {
             if (!pass->IsEnabled())
+            {
+                std::cout << "Pass " << pass->GetConfig().name << " is disabled, skipping" << std::endl;
                 continue;
+            }
 
             // 检查依赖
             if (!pass->CheckDependencies(mPasses))
+            {
+                std::cout << "Pass " << pass->GetConfig().name << " dependencies not met, skipping" << std::endl;
                 continue;
+            }
+
+            std::cout << "Executing pass: " << pass->GetConfig().name << std::endl;
 
             // 设置输入纹理
             for (const auto& input : pass->GetConfig().inputs)
@@ -780,8 +812,17 @@ namespace te
                     auto outputTarget = sourcePass->GetOutput(input.sourceTarget);
                     if (outputTarget)
                     {
-                        pass->SetInput(input.name, outputTarget->GetTextureHandle());
+                        pass->SetInput(input.sourceTarget, outputTarget->GetTextureHandle());
+                        std::cout << "  Set input " << input.sourceTarget << " from " << input.sourcePass << ":" << input.sourceTarget << std::endl;
                     }
+                    else
+                    {
+                        std::cout << "  Failed to get output " << input.sourceTarget << " from " << input.sourcePass << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cout << "  Source pass " << input.sourcePass << " not found" << std::endl;
                 }
             }
 

@@ -151,6 +151,8 @@ namespace te
         void ApplyRenderSettings();
         void RestoreRenderSettings();
 
+        bool FindDependency(const std::string& passname);
+
     protected:
         // 子类可重写的虚函数
         virtual void OnInitialize() {}

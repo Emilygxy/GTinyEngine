@@ -81,6 +81,7 @@ PhongMaterial::PhongMaterial(const std::string& vs_path, const std::string& fs_p
 	: MaterialBase(vs_path, fs_path)
     , mpDiffuseTexture(std::make_shared<Texture2D>())
 {
+    mUseEnables = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 PhongMaterial::~PhongMaterial()
@@ -108,8 +109,13 @@ void PhongMaterial::UpdateUniform()
     }
     
     mpShader->setVec3("u_objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
-    mpShader->setInt("u_diffuseTexture", 0);
     mpShader->setVec4("u_Strengths", mIntensities);
+    
+    mpShader->setInt("u_diffuseTexture", 0);
+    mpShader->setInt("u_backgroundMap", 1);
+    mpShader->setInt("u_geomAlbedoMap", 2);
+    mpShader->setInt("u_geomNormalMap", 3);
+    mpShader->setInt("u_geomDepthMap", 4);
 
     // Set lighting parameters
     if (auto pLight = mpAttachedLight.lock())
@@ -117,10 +123,8 @@ void PhongMaterial::UpdateUniform()
         mpShader->setVec3("u_lightColor", pLight->GetColor());
         mpShader->setVec3("u_lightPos", pLight->GetPosition());
     }
-    if (useBlinnPhong)
-    {
-        mpShader->setFloat("u_UseBlinnPhong", useBlinnPhong ? 1.0f : 0.0f);
-    }
+
+    mpShader->setVec4("u_useBlinn_Geometry", mUseEnables);
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
@@ -133,4 +137,9 @@ void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
 
     mpDiffuseTexture->SetTexturePaths({ path });
     mbHasTexture = true;
+}
+
+void PhongMaterial::SetUseGeometryTarget(bool use)
+{
+    mUseEnables[1] = use ? 1.0f : 0.0f;
 }

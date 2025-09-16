@@ -29,6 +29,7 @@ enum class RenderMode
     Lines
 };
 
+// with renderobject
 struct RenderCommand
 {
     std::shared_ptr<MaterialBase> material;

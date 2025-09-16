@@ -48,7 +48,7 @@ namespace te
         RenderTargetDesc() = default;
         RenderTargetDesc(const std::string& n, RenderTargetType t, RenderTargetFormat f, 
                         uint32_t w, uint32_t h)
-            : name(n), type(t), format(f), width(w), height(w) {}
+            : name(n), type(t), format(f), width(w), height(h) {}
     };
 
     // 渲染目标
