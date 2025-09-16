@@ -13,6 +13,7 @@
 #include "Light.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/BlitMaterial.h"
 #include "RenderView.h"
 #include "framework/RenderContext.h"
 
@@ -102,28 +103,30 @@ void setupMultiPassRendering()
         te::RenderPassType::PostProcess,
         te::RenderPassState::Enabled,
         {
+            {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"BaseColor", "BasePass", "basecolor", 0, true}
         }, // inputs
+        {}, // outputs - 直接渲染到屏幕
         {
-            {"Final", "final", te::RenderTargetFormat::RGBA8}
-        }, // outputs
-        {
+            {"SkyboxPass", true, []() { return true; }},
             {"BasePass", true, []() { return true; }}
         }, // dependencies
-        false, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)  // 启用颜色清除
     }, g_RenderView, g_RenderContext);
 
-    
+    postProcessPass->AddEffect("Blit",std::make_shared<BlitMaterial>());
 
     // 添加Pass到渲染器
     g_renderer->AddRenderPass(geometryPass);
     g_renderer->AddRenderPass(basePass);
-    //g_renderer->AddRenderPass(postProcessPass);
+    g_renderer->AddRenderPass(postProcessPass);
     g_renderer->AddRenderPass(skyboxPass);
+    
+    // 添加Pass到RenderPassManager（用于依赖关系管理）
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);
-    //te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // 启用多Pass渲染
     g_renderer->SetMultiPassEnabled(true);
@@ -242,8 +245,9 @@ int main()
 
             commands.push_back(sphereCommand);
             
-            g_renderer->ExecuteRenderPasses(commands);
-            //te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
+            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            //g_renderer->ExecuteRenderPasses(commands);
         }
         else
         {

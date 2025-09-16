@@ -163,7 +163,7 @@ namespace te
 
         // Helper functions
         void SetupFrameBuffer();
-        void BindInputs();
+        virtual void BindInputs();
         void UnbindInputs();
 
         RenderPassConfig mConfig;
@@ -223,6 +223,7 @@ namespace te
 
     protected:
         void OnInitialize() override;
+        void BindInputs() override;
 
     private:
         struct PostProcessEffect

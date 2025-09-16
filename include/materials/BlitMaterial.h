@@ -5,7 +5,7 @@
 class BlitMaterial : public MaterialBase
 {
 public:
-	BlitMaterial(const std::string& vs_path = "resources/shaders/common/common.vs", const std::string& fs_path = "resources/shaders/common/blit.fs");
+	BlitMaterial(const std::string& vs_path = "resources/shaders/common/postprocess.vs", const std::string& fs_path = "resources/shaders/common/blit.fs");
 	~BlitMaterial();
 
 	void SetTexturePath(const std::string& path);

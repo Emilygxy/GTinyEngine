@@ -35,8 +35,9 @@ void BlitMaterial::UpdateUniform()
         mpShader->setMat4("projection", pCamera->GetProjectionMatrix());
     }
 
-    // Set lighting parameters
-    mpShader->setInt("u_screenTexture", 0); //uniform location?
+    // Set texture parameters
+    mpShader->setInt("u_backgroundMap", 0); // Background texture
+    mpShader->setInt("u_screenTexture", 1); // BaseColor from BasePass
 }
 
 void BlitMaterial::SetTexturePath(const std::string& path)

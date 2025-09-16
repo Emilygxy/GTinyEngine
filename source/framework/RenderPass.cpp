@@ -544,19 +544,37 @@ namespace te
         fullScreenCommand.indices = mQuadIndices;
         fullScreenCommand.transform = glm::mat4(1.0f); //
         fullScreenCommand.state = RenderMode::Opaque;
-        fullScreenCommand.hasUV = false;
+        fullScreenCommand.hasUV = true;  // 
         mCandidateCommands.emplace_back(fullScreenCommand);
+    }
+
+    void PostProcessPass::BindInputs()
+    {
+        int textureUnit = 0; // 0-for diffusemap
+        for (const auto& input : mConfig.inputs)
+        {
+            auto it = mInputTextures.find(input.sourceTarget);
+            if (it != mInputTextures.end())
+            {
+                glActiveTexture(GL_TEXTURE0 + textureUnit);
+                glBindTexture(GL_TEXTURE_2D, it->second);
+                textureUnit++;
+            }
+        }
     }
 
     void PostProcessPass::Execute(const std::vector<RenderCommand>& commands)
     {
-        if (!IsEnabled() || !mFrameBuffer)
+        if (!IsEnabled())
             return;
 
         OnPreExecute();
 
-        // Bind FrameBuffer
-        mFrameBuffer->Bind();
+        // Bind FrameBuffer (only if we have outputs)
+        if (mFrameBuffer)
+        {
+            mFrameBuffer->Bind();
+        }
         
         // Apply render settings
         ApplyRenderSettings();
@@ -578,33 +596,23 @@ namespace te
             if (!effect.enabled || !effect.material)
                 continue;
 
-            //effect.material->UpdateUniform();
-            //effect.material->OnBind();
+            // Use the effect material
+            auto pMaterial = effect.material;
+            pMaterial->OnApply();
+
+            // Update material uniforms
+            pMaterial->UpdateUniform();
+
+            // Bind material resources
+            pMaterial->OnBind();
             
             // Render fullscreen quad
             for (const auto& command : mCandidateCommands)
             {
-                if (!command.material || command.vertices.empty() || command.indices.empty())
+                if (command.vertices.empty() || command.indices.empty())
                     continue;
 
-                // Use geometry material
-                auto pMaterial = effect.material;
-
-                pMaterial->OnApply();
-
-                // Set transformation matrix
-                pMaterial->GetShader()->setMat4("model", command.transform);
-
-                // Set camera matrices
-                if (auto pCamera = mpRenderContext->GetAttachedCamera())
-                {
-                    pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
-                    pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
-                }
-
-                // Update material uniforms
-                pMaterial->UpdateUniform();
-
+                // postprocess material should not transform vertices, so we use the identity matrix
                 // Create and bind VAO
                 GLuint VAO, VBO, EBO;
                 glGenVertexArrays(1, &VAO);
@@ -641,8 +649,11 @@ namespace te
         // Unbind input textures
         UnbindInputs();
 
-        // Unbind FrameBuffer
-        mFrameBuffer->Unbind();
+        // Unbind FrameBuffer (only if we have outputs)
+        if (mFrameBuffer)
+        {
+            mFrameBuffer->Unbind();
+        }
         
         // Restore render settings
         RestoreRenderSettings();
