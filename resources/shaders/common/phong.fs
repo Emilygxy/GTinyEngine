@@ -75,9 +75,19 @@ vec3 CalculatePhongColor()
 
 void main()
 {
-    // sample texture if there is a texture sampler
+    vec3 background = texture(u_backgroundMap, TexCoords).rgb;
+    
+    float geomPos = texture(u_geomPositionMap, TexCoords).r;
+    
+    // if true, it means the pixel is outside the geometry target, so we use the background color
+    if (length(geomPos) < 0.001)
+    {
+        FragColor = vec4(background, 1.0);
+        return;
+    }
+    
     vec3 result = u_objectColor;
-    result *= texture(u_backgroundMap, TexCoords).rgb;
+    
     vec3 geomAlbedo = texture(u_diffuseTexture, TexCoords).rgb;
     if(isUseGeometryTarget())
     {
@@ -85,7 +95,11 @@ void main()
     }
     result *= geomAlbedo;
 
-    result *= CalculatePhongColor();
+    vec3 lighting = CalculatePhongColor();
+    result *= lighting;
+    
+    result += background * 0.1; 
+
     // gamma correction
     // result = pow(result, vec3(1.0/2.2));
 

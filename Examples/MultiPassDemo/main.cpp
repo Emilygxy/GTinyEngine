@@ -92,7 +92,7 @@ void setupMultiPassRendering()
             {"SkyboxPass", true, []() { return true; }},
             {"GeometryPass", true, []() { return true; }},
         }, // dependencies
-        false, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
 
     // 创建后处理Pass

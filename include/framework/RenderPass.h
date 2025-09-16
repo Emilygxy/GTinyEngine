@@ -21,89 +21,89 @@ class RenderContext;
 
 namespace te
 {
-    // 渲染Pass类型
+    // Render Pass Types
     enum class RenderPassType
     {
-        Geometry,       // 几何Pass（GBuffer生成）
-        Skybox,         // 天空盒Pass
+        Geometry,       // Geometry Pass (G-Buffer generation)
+        Skybox,         // Skybox Pass
         
-        Base,       // 光照Pass
-        PostProcess,    // 后处理Pass
-        Shadow,         // 阴影Pass
+        Base,       // Lighting Pass
+        PostProcess,    // Post-processing Pass
+        Shadow,         // Shadow Pass
         UI,             // UI Pass
-        Custom          // 自定义Pass
+        Custom          // Custom Pass
     };
 
-    // 渲染Pass状态
+    // Render Pass States
     enum class RenderPassState
     {
-        Disabled,       // 禁用
-        Enabled,        // 启用
-        Conditional     // 条件启用
+        Disabled,       // Disabled
+        Enabled,        // Enabled
+        Conditional     // Conditionally enabled
     };
 
-    // 渲染Pass依赖
+    // Render Pass Dependency
     struct RenderPassDependency
     {
-        std::string passName;        // 依赖的Pass名称
-        bool required = true;        // 是否必需
-        std::function<bool()> condition; // 条件函数
+        std::string passName;        // Name of the dependent Pass
+        bool required = true;        // Whether required
+        std::function<bool()> condition; // Condition function
     };
 
-    // 渲染Pass输入
+    // Render Pass Input
     struct RenderPassInput
     {
-        std::string name;                    // 输入名称
-        std::string sourcePass;              // 来源Pass
-        std::string sourceTarget;            // 来源目标
-        GLuint textureHandle = 0;            // 纹理句柄
-        bool required = true;                // 是否必需
+        std::string name;                    // Input name
+        std::string sourcePass;              // Source Pass
+        std::string sourceTarget;            // Source target
+        GLuint textureHandle = 0;            // Texture handle
+        bool required = true;                // Whether required
     };
 
-    // 渲染Pass输出
+    // Render Pass Output
     struct RenderPassOutput
     {
-        std::string name;                    // 输出名称
-        std::string targetName;              // 目标名称
-        RenderTargetFormat format;           // 格式
-        bool clearOnStart = true;            // 开始时是否清除
+        std::string name;                    // Output name
+        std::string targetName;              // Target name
+        RenderTargetFormat format;           // Format
+        bool clearOnStart = true;            // Whether to clear at start
     };
 
-    // 渲染Pass配置
+    // Render Pass Configuration
     struct RenderPassConfig
     {
-        std::string name;                    // Pass名称
-        RenderPassType type;                 // Pass类型
-        RenderPassState state = RenderPassState::Enabled; // 状态
+        std::string name;                    // Pass name
+        RenderPassType type;                 // Pass type
+        RenderPassState state = RenderPassState::Enabled; // State
         
-        // 输入输出
-        std::vector<RenderPassInput> inputs;     // 输入列表
-        std::vector<RenderPassOutput> outputs;   // 输出列表
+        // Input/Output
+        std::vector<RenderPassInput> inputs;     // Input list
+        std::vector<RenderPassOutput> outputs;   // Output list
         
-        // 依赖关系
-        std::vector<RenderPassDependency> dependencies; // 依赖列表
+        // Dependencies
+        std::vector<RenderPassDependency> dependencies; // Dependency list
         
-        // 渲染设置
-        bool clearColor = true;              // 清除颜色
-        bool clearDepth = true;              // 清除深度
-        bool clearStencil = false;           // 清除模板
-        glm::vec4 clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f); // 清除颜色值
+        // Render settings
+        bool clearColor = true;              // Clear color
+        bool clearDepth = true;              // Clear depth
+        bool clearStencil = false;           // Clear stencil
+        glm::vec4 clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f); // Clear color value
         
-        // 视口设置
-        bool useCustomViewport = false;      // 使用自定义视口
-        glm::ivec4 viewport = glm::ivec4(0, 0, 0, 0); // 视口
+        // Viewport settings
+        bool useCustomViewport = false;      // Use custom viewport
+        glm::ivec4 viewport = glm::ivec4(0, 0, 0, 0); // Viewport
         
-        // 深度测试
-        bool enableDepthTest = true;         // 启用深度测试
-        GLenum depthFunc = GL_LESS;          // 深度函数
+        // Depth testing
+        bool enableDepthTest = true;         // Enable depth test
+        GLenum depthFunc = GL_LESS;          // Depth function
         
-        // 混合设置
-        bool enableBlend = false;            // 启用混合
-        GLenum blendSrc = GL_SRC_ALPHA;      // 源混合因子
-        GLenum blendDst = GL_ONE_MINUS_SRC_ALPHA; // 目标混合因子
+        // Blending settings
+        bool enableBlend = false;            // Enable blending
+        GLenum blendSrc = GL_SRC_ALPHA;      // Source blend factor
+        GLenum blendDst = GL_ONE_MINUS_SRC_ALPHA; // Destination blend factor
     };
 
-    // 渲染状态保存
+    // Render State Storage
     struct RenderState
     {
         GLint viewport[4];
@@ -112,56 +112,56 @@ namespace te
         GLint blendSrc, blendDst;
     };
 
-    // 渲染Pass基类
+    // Render Pass Base Class
     class RenderPass
     {
     public:
         RenderPass();
         virtual ~RenderPass() = default;
 
-        // 初始化/清理
+        // Initialization/Cleanup
         virtual bool Initialize(const RenderPassConfig& config, const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext);
         virtual void Shutdown();
 
-        // 执行Pass
+        // Execute Pass
         virtual void Execute(const std::vector<RenderCommand>& commands) = 0;
         virtual void Execute() { Execute({}); }
 
-        // 配置管理
+        // Configuration Management
         const RenderPassConfig& GetConfig() const { return mConfig; }
         void SetConfig(const RenderPassConfig& config) { mConfig = config; }
 
-        // 状态管理
+        // State Management
         RenderPassState GetState() const { return mConfig.state; }
         void SetState(RenderPassState state) { mConfig.state = state; }
         bool IsEnabled() const { return mConfig.state == RenderPassState::Enabled; }
 
-        // 依赖检查
+        // Dependency Check
         bool CheckDependencies(const std::vector<std::shared_ptr<RenderPass>>& allPasses) const;
 
-        // 输入输出管理
+        // Input/Output Management
         void SetInput(const std::string& name, GLuint textureHandle);
         GLuint GetInput(const std::string& name) const;
         std::shared_ptr<RenderTarget> GetOutput(const std::string& name) const;
 
-        // FrameBuffer管理
+        // FrameBuffer Management
         std::shared_ptr<MultiRenderTarget> GetFrameBuffer() const { return mFrameBuffer; }
 
-        // 渲染设置
+        // Render Settings
         void ApplyRenderSettings();
         void RestoreRenderSettings();
 
         bool FindDependency(const std::string& passname);
 
     protected:
-        // 子类可重写的虚函数
+        // Virtual functions that can be overridden by subclasses
         virtual void OnInitialize() {}
         virtual void OnShutdown() {}
         virtual void OnPreExecute() {}
         virtual void OnPostExecute() {}
         void ApplyRenderCommand(const std::vector<RenderCommand>& commands);
 
-        // 辅助函数
+        // Helper functions
         void SetupFrameBuffer();
         void BindInputs();
         void UnbindInputs();
@@ -179,7 +179,7 @@ namespace te
         std::vector<RenderCommand> mCandidateCommands;
     };
 
-    // 几何Pass（GBuffer生成）
+    // Geometry Pass (G-Buffer generation)
     class GeometryPass : public RenderPass
     {
     public:
@@ -192,7 +192,7 @@ namespace te
         void OnInitialize() override;
     };
 
-    // 光照Pass
+    // Lighting Pass
     class BasePass : public RenderPass
     {
     public:
@@ -207,7 +207,7 @@ namespace te
     private:
     };
 
-    // 后处理Pass
+    // Post-processing Pass
     class PostProcessPass : public RenderPass
     {
     public:
@@ -216,7 +216,7 @@ namespace te
 
         void Execute(const std::vector<RenderCommand>& commands) override;
 
-        // 添加后处理效果
+        // Add post-processing effects
         void AddEffect(const std::string& name, const std::shared_ptr<MaterialBase>& material);
         void RemoveEffect(const std::string& name);
         void SetEffectEnabled(const std::string& name, bool enabled);
@@ -236,7 +236,7 @@ namespace te
         std::vector<unsigned int> mQuadIndices;
     };
 
-    // 天空盒Pass
+    // Skybox Pass
     class SkyboxPass : public RenderPass
     {
     public:
@@ -252,25 +252,25 @@ namespace te
         std::shared_ptr<Skybox> mpSkybox;
     };
 
-    // 渲染Pass管理器
+    // Render Pass Manager
     class RenderPassManager
     {
     public:
         static RenderPassManager& GetInstance();
 
-        // Pass管理
+        // Pass Management
         bool AddPass(const std::shared_ptr<RenderPass>& pass);
         void RemovePass(const std::string& name);
         std::shared_ptr<RenderPass> GetPass(const std::string& name) const;
 
-        // 执行所有Pass
+        // Execute All Passes
         void ExecuteAll(const std::vector<RenderCommand>& commands);
         void ExecuteAll() { ExecuteAll({}); }
 
-        // 依赖排序
+        // Dependency Sorting
         void SortPassesByDependencies();
 
-        // 清理
+        // Cleanup
         void Clear();
 
     private:

@@ -21,10 +21,10 @@ namespace te
     {
         mConfig = config;
         mpAttachView = pView;
-        // 设置FrameBuffer
+        // Setup FrameBuffer
         SetupFrameBuffer();
         
-        // 调用子类初始化
+        // Call subclass initialization
         OnInitialize();
         
         mpRenderContext = pContext;
@@ -51,7 +51,7 @@ namespace te
         {
             if (!dep.required) continue;
             
-            // 查找依赖的Pass
+            // Find dependent Pass
             auto it = std::find_if(allPasses.begin(), allPasses.end(),
                 [&dep](const std::shared_ptr<RenderPass>& pass) {
                     return pass->GetConfig().name == dep.passName;
@@ -63,7 +63,7 @@ namespace te
                 return false;
             }
             
-            // 检查条件
+            // Check condition
             if (dep.condition && !dep.condition())
             {
                 return false;
@@ -92,14 +92,14 @@ namespace te
 
     void RenderPass::ApplyRenderSettings()
     {
-        // 保存当前状态
+        // Save current state
         glGetIntegerv(GL_VIEWPORT, mSavedState.viewport);
         mSavedState.depthTest = glIsEnabled(GL_DEPTH_TEST);
         mSavedState.blend = glIsEnabled(GL_BLEND);
         glGetIntegerv(GL_BLEND_SRC_ALPHA, &mSavedState.blendSrc);
         glGetIntegerv(GL_BLEND_DST_ALPHA, &mSavedState.blendDst);
 
-        // 应用Pass设置
+        // Apply Pass settings
         if (mConfig.useCustomViewport)
         {
             glViewport(mConfig.viewport.x, mConfig.viewport.y, 
@@ -129,7 +129,7 @@ namespace te
 
     void RenderPass::RestoreRenderSettings()
     {
-        // 恢复状态
+        // Restore state
         glViewport(mSavedState.viewport[0], mSavedState.viewport[1], 
                   mSavedState.viewport[2], mSavedState.viewport[3]);
         
@@ -166,8 +166,8 @@ namespace te
         if (mConfig.outputs.empty())
             return;
 
-        // 获取第一个输出的尺寸
-        uint32_t width = mpAttachView->Width(), height = mpAttachView->Height(); // 默认尺寸，应该从配置或全局设置获取
+        // Get the size of the first output
+        uint32_t width = mpAttachView->Width(), height = mpAttachView->Height(); // Default size, should be obtained from configuration or global settings
         
         mFrameBuffer = std::make_shared<MultiRenderTarget>();
         if (!mFrameBuffer->Initialize(width, height))
@@ -176,7 +176,7 @@ namespace te
             return;
         }
 
-        // 添加输出目标
+        // Add output targets
         for (const auto& output : mConfig.outputs)
         {
             RenderTargetDesc desc;
@@ -185,7 +185,7 @@ namespace te
             desc.height = height;
             desc.format = output.format;
             
-            // 根据格式确定类型
+            // Determine type based on format
             switch (output.format)
             {
             case RenderTargetFormat::Depth24:
@@ -224,7 +224,7 @@ namespace te
 
     void RenderPass::UnbindInputs()
     {
-        // 解绑纹理
+        // Unbind textures
         for (size_t i = 0; i < mConfig.inputs.size(); ++i)
         {
             glActiveTexture(GL_TEXTURE0 + i);
@@ -262,7 +262,7 @@ namespace te
 
     void GeometryPass::OnInitialize()
     {
-        // 设置输出
+        // Setup outputs
         mConfig.outputs = {
             {"Albedo", "albedo", RenderTargetFormat::RGBA8},
             {"Normal", "normal", RenderTargetFormat::RGB16F},
@@ -279,13 +279,13 @@ namespace te
         OnPreExecute();
         ApplyRenderCommand(commands);
 
-        // 绑定FrameBuffer
+        // Bind FrameBuffer
         mFrameBuffer->Bind();
         
-        // 应用渲染设置
+        // Apply render settings
         ApplyRenderSettings();
 
-        // 清除缓冲区
+        // Clear buffers
         GLbitfield clearFlags = 0;
         if (mConfig.clearColor) clearFlags |= GL_COLOR_BUFFER_BIT;
         if (mConfig.clearDepth) clearFlags |= GL_DEPTH_BUFFER_BIT;
@@ -299,45 +299,45 @@ namespace te
         }
 
         auto pGeometryMat = std::dynamic_pointer_cast<te::GeometryMaterial>(mpOverMaterial);
-        // 渲染所有几何体到G-Buffer
+        // Render all geometry to G-Buffer
         for (const auto& command : mCandidateCommands)
         {
             if (!command.material || command.vertices.empty() || command.indices.empty())
                 continue;
 
-            // 从原始材质中获取纹理信息并设置到几何体材质
+            // Get texture information from original material and set to geometry material
             if (auto blinnPhongMaterial = std::dynamic_pointer_cast<BlinnPhongMaterial>(command.material))
             {
                 if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
                 {
                     pGeometryMat->SetDiffuseTexture(texture);
-                    //// 绑定原始纹理到几何体材质
+                    //// Bind original texture to geometry material
                     //glActiveTexture(GL_TEXTURE0);
                     //glBindTexture(GL_TEXTURE_2D, texture->GetHandle());
                     //mpOverMaterial->GetShader()->setInt("u_diffuseTexture", 0);
                 }
             }
             
-            // 使用几何体材质
+            // Use geometry material
             pGeometryMat->OnApply();
             
-            // 设置变换矩阵
+            // Set transformation matrix
             pGeometryMat->GetShader()->setMat4("model", command.transform);
             
-            // 设置相机矩阵
+            // Set camera matrices
             if (auto pCamera = mpRenderContext->GetAttachedCamera())
             {
                 pGeometryMat->GetShader()->setMat4("view", pCamera->GetViewMatrix());
                 pGeometryMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
             }
             
-            // 更新材质uniform
+            // Update material uniforms
             pGeometryMat->UpdateUniform();
 
-            // 绑定材质资源
+            // Bind material resources
             pGeometryMat->OnBind();
 
-            // 创建并绑定VAO
+            // Create and bind VAO
             GLuint VAO, VBO, EBO;
             glGenVertexArrays(1, &VAO);
             glGenBuffers(1, &VBO);
@@ -350,29 +350,29 @@ namespace te
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
 
-            // 位置属性
+            // Position attribute
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            // 法线属性
+            // Normal attribute
             glEnableVertexAttribArray(1);
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-            // UV坐标属性
+            // UV coordinate attribute
             glEnableVertexAttribArray(2);
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
-            // 绘制
+            // Draw
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
 
-            // 清理
+            // Cleanup
             glDeleteVertexArrays(1, &VAO);
             glDeleteBuffers(1, &VBO);
             glDeleteBuffers(1, &EBO);
         }
 
-        // 解绑FrameBuffer
+        // Unbind FrameBuffer
         mFrameBuffer->Unbind();
         
-        // 恢复渲染设置
+        // Restore render settings
         RestoreRenderSettings();
 
         OnPostExecute();
@@ -384,7 +384,7 @@ namespace te
         mConfig.name = "BasePass";
         mConfig.type = RenderPassType::Base;
         
-        // 设置输入
+        // Setup inputs
         mConfig.inputs = {
             {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"Albedo", "GeometryPass", "albedo", 0, true},
@@ -393,7 +393,7 @@ namespace te
             {"Depth", "GeometryPass", "depth", 0, true}
         };
         
-        // 设置输出
+        // Setup outputs
         mConfig.outputs = {
             {"BaseColor", "basecolor", RenderTargetFormat::RGBA8}
         };
@@ -413,13 +413,13 @@ namespace te
         OnPreExecute();
         ApplyRenderCommand(commands);
 
-        // 绑定FrameBuffer
+        // Bind FrameBuffer
         mFrameBuffer->Bind();
         
-        // 应用渲染设置
+        // Apply render settings
         ApplyRenderSettings();
 
-        // 清除缓冲区
+        // Clear buffers
         if (mConfig.clearColor)
         {
             glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
@@ -427,16 +427,16 @@ namespace te
             glClear(GL_COLOR_BUFFER_BIT);
         }
 
-        // 绑定输入纹理
+        // Bind input textures
         BindInputs();
 
-        // 渲染所有几何体
+        // Render all geometry
         for (const auto& command : mCandidateCommands)
         {
             if (!command.material || command.vertices.empty() || command.indices.empty())
                 continue;
 
-            // 使用几何体材质
+            // Use geometry material
             auto pMaterial = command.material;
             if (FindDependency("GeometryPass"))
             {
@@ -451,20 +451,20 @@ namespace te
 
             pMaterial->OnApply();
 
-            // 设置变换矩阵
+            // Set transformation matrix
             pMaterial->GetShader()->setMat4("model", command.transform);
 
-            // 设置相机矩阵
+            // Set camera matrices
             if (auto pCamera = mpRenderContext->GetAttachedCamera())
             {
                 pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
                 pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
             }
 
-            // 更新材质uniform
+            // Update material uniforms
             pMaterial->UpdateUniform();
 
-            // 创建并绑定VAO
+            // Create and bind VAO
             GLuint VAO, VBO, EBO;
             glGenVertexArrays(1, &VAO);
             glGenBuffers(1, &VBO);
@@ -477,32 +477,32 @@ namespace te
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
 
-            // 位置属性
+            // Position attribute
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            // 法线属性
+            // Normal attribute
             glEnableVertexAttribArray(1);
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-            // UV坐标属性
+            // UV coordinate attribute
             glEnableVertexAttribArray(2);
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
-            // 绘制
+            // Draw
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
 
-            // 清理
+            // Cleanup
             glDeleteVertexArrays(1, &VAO);
             glDeleteBuffers(1, &VBO);
             glDeleteBuffers(1, &EBO);
         }
 
-        // 解绑输入纹理
+        // Unbind input textures
         UnbindInputs();
 
-        // 解绑FrameBuffer
+        // Unbind FrameBuffer
         mFrameBuffer->Unbind();
         
-        // 恢复渲染设置
+        // Restore render settings
         RestoreRenderSettings();
 
         OnPostExecute();
@@ -515,12 +515,12 @@ namespace te
         mConfig.type = RenderPassType::PostProcess;
         mRenderPassFlag = RenderPassFlag::Blit;
 
-        // 设置输入
+        // Setup inputs
         mConfig.inputs = {
             {"BaseColor", "BasePass", "basecolor", 0, true}
         };
         
-        // 设置输出
+        // Setup outputs
         mConfig.outputs = {
             {"Final", "final", RenderTargetFormat::RGBA8}
         };
@@ -528,7 +528,7 @@ namespace te
 
     void PostProcessPass::OnInitialize()
     {
-        // 创建全屏四边形
+        // Create fullscreen quad
         mQuadVertices = {
             {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
             {{ 1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
@@ -555,13 +555,13 @@ namespace te
 
         OnPreExecute();
 
-        // 绑定FrameBuffer
+        // Bind FrameBuffer
         mFrameBuffer->Bind();
         
-        // 应用渲染设置
+        // Apply render settings
         ApplyRenderSettings();
 
-        // 清除缓冲区
+        // Clear buffers
         if (mConfig.clearColor)
         {
             glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
@@ -569,10 +569,10 @@ namespace te
             glClear(GL_COLOR_BUFFER_BIT);
         }
 
-        // 绑定输入纹理
+        // Bind input textures
         BindInputs();
 
-        // 应用所有启用的后处理效果
+        // Apply all enabled post-processing effects
         for (const auto& [name, effect] : mEffects)
         {
             if (!effect.enabled || !effect.material)
@@ -581,31 +581,31 @@ namespace te
             //effect.material->UpdateUniform();
             //effect.material->OnBind();
             
-            // 渲染全屏四边形
+            // Render fullscreen quad
             for (const auto& command : mCandidateCommands)
             {
                 if (!command.material || command.vertices.empty() || command.indices.empty())
                     continue;
 
-                // 使用几何体材质
+                // Use geometry material
                 auto pMaterial = effect.material;
 
                 pMaterial->OnApply();
 
-                // 设置变换矩阵
+                // Set transformation matrix
                 pMaterial->GetShader()->setMat4("model", command.transform);
 
-                // 设置相机矩阵
+                // Set camera matrices
                 if (auto pCamera = mpRenderContext->GetAttachedCamera())
                 {
                     pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
                     pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
                 }
 
-                // 更新材质uniform
+                // Update material uniforms
                 pMaterial->UpdateUniform();
 
-                // 创建并绑定VAO
+                // Create and bind VAO
                 GLuint VAO, VBO, EBO;
                 glGenVertexArrays(1, &VAO);
                 glGenBuffers(1, &VBO);
@@ -618,33 +618,33 @@ namespace te
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
 
-                // 位置属性
+                // Position attribute
                 glEnableVertexAttribArray(0);
                 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-                // 法线属性
+                // Normal attribute
                 glEnableVertexAttribArray(1);
                 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-                // UV坐标属性
+                // UV coordinate attribute
                 glEnableVertexAttribArray(2);
                 glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
-                // 绘制
+                // Draw
                 glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
 
-                // 清理
+                // Cleanup
                 glDeleteVertexArrays(1, &VAO);
                 glDeleteBuffers(1, &VBO);
                 glDeleteBuffers(1, &EBO);
             }
         }
 
-        // 解绑输入纹理
+        // Unbind input textures
         UnbindInputs();
 
-        // 解绑FrameBuffer
+        // Unbind FrameBuffer
         mFrameBuffer->Unbind();
         
-        // 恢复渲染设置
+        // Restore render settings
         RestoreRenderSettings();
 
         OnPostExecute();
@@ -704,16 +704,16 @@ namespace te
 
         OnPreExecute();
 
-        // 绑定FrameBuffer（如果存在）
+        // Bind FrameBuffer（如果存在）
         if (mFrameBuffer)
         {
             mFrameBuffer->Bind();
         }
         
-        // 应用渲染设置
+        // Apply render settings
         ApplyRenderSettings();
 
-        // 清除缓冲区
+        // Clear buffers
         if (mConfig.clearColor)
         {
             glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
@@ -721,19 +721,19 @@ namespace te
             glClear(GL_COLOR_BUFFER_BIT);
         }
 
-        // 渲染天空盒
+        // render skybox
         if (auto pAttachCamera = mpRenderContext->GetAttachedCamera())
         {
             mpSkybox->Draw(pAttachCamera->GetViewMatrix(), pAttachCamera->GetProjectionMatrix());
         }
 
-        // 解绑FrameBuffer
+        // Unbind FrameBuffer
         if (mFrameBuffer)
         {
             mFrameBuffer->Unbind();
         }
 
-        // 恢复渲染设置
+        // Restore render settings
         RestoreRenderSettings();
 
         OnPostExecute();
@@ -753,14 +753,14 @@ namespace te
 
         const std::string& name = pass->GetConfig().name;
         
-        // 检查是否已存在
+        // check if pass with same name already exists
         if (mPassIndexMap.find(name) != mPassIndexMap.end())
         {
             std::cout << "RenderPass with name '" << name << "' already exists" << std::endl;
             return false;
         }
 
-        // 添加到列表
+        // add to list
         size_t index = mPasses.size();
         mPasses.push_back(pass);
         mPassIndexMap[name] = index;
@@ -778,7 +778,6 @@ namespace te
         mPasses.erase(mPasses.begin() + index);
         mPassIndexMap.erase(it);
 
-        // 重新构建索引映射
         mPassIndexMap.clear();
         for (size_t i = 0; i < mPasses.size(); ++i)
         {
@@ -799,10 +798,9 @@ namespace te
     {
         std::cout << "RenderPassManager::ExecuteAll called with " << commands.size() << " commands" << std::endl;
         
-        // 按依赖关系排序
+        // sort passes by dependencies
         SortPassesByDependencies();
 
-        // 执行所有启用的Pass
         for (const auto& pass : mPasses)
         {
             if (!pass->IsEnabled())
@@ -811,7 +809,6 @@ namespace te
                 continue;
             }
 
-            // 检查依赖
             if (!pass->CheckDependencies(mPasses))
             {
                 std::cout << "Pass " << pass->GetConfig().name << " dependencies not met, skipping" << std::endl;
@@ -820,7 +817,7 @@ namespace te
 
             std::cout << "Executing pass: " << pass->GetConfig().name << std::endl;
 
-            // 设置输入纹理
+            // Setup inputs texture
             for (const auto& input : pass->GetConfig().inputs)
             {
                 auto sourcePass = GetPass(input.sourcePass);
@@ -843,14 +840,14 @@ namespace te
                 }
             }
 
-            // 执行Pass
+            //  Execute Pass
             pass->Execute(commands);
         }
     }
 
     void RenderPassManager::SortPassesByDependencies()
     {
-        // 简单的拓扑排序实现
+        // simple topological sort implementation
         std::vector<std::shared_ptr<RenderPass>> sortedPasses;
         std::unordered_set<std::string> processedPasses;
         
@@ -862,11 +859,11 @@ namespace te
             {
                 const std::string& passName = pass->GetConfig().name;
                 
-                // 如果已经处理过，跳过
+                // if already processed, skip
                 if (processedPasses.find(passName) != processedPasses.end())
                     continue;
                 
-                // 检查所有依赖是否已处理
+                // check if all dependencies have been processed
                 bool canProcess = true;
                 for (const auto& dep : pass->GetConfig().dependencies)
                 {
@@ -895,7 +892,7 @@ namespace te
         
         mPasses = std::move(sortedPasses);
         
-        // 重新构建索引映射
+        // rebuild index map
         mPassIndexMap.clear();
         for (size_t i = 0; i < mPasses.size(); ++i)
         {
