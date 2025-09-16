@@ -41,6 +41,20 @@ void processInput(GLFWwindow* window)
 
 void setupMultiPassRendering()
 {
+    // 创建天空盒Pass
+    auto skyboxPass = std::make_shared<te::SkyboxPass>();
+    skyboxPass->Initialize(te::RenderPassConfig{
+        "SkyboxPass",
+        te::RenderPassType::Skybox,
+        te::RenderPassState::Enabled,
+        {}, // inputs
+        {
+             {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
+        }, // outputs
+        {}, // dependencies
+        false, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        }, g_RenderView, g_RenderContext);
+
     // 创建几何Pass
     auto geometryPass = std::make_shared<te::GeometryPass>();
     geometryPass->Initialize(te::RenderPassConfig{
@@ -58,35 +72,25 @@ void setupMultiPassRendering()
         true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
 
-    // 创建天空盒Pass
-    auto skyboxPass = std::make_shared<te::SkyboxPass>();
-    skyboxPass->Initialize(te::RenderPassConfig{
-        "SkyboxPass",
-        te::RenderPassType::Skybox,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        {}, // outputs
-        {}, // dependencies
-        false, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-        }, g_RenderView, g_RenderContext);
-
     // 创建光照Pass
     auto basePass = std::make_shared<te::BasePass>();
     basePass->Initialize(te::RenderPassConfig{
         "BasePass",
-        te::RenderPassType::Lighting,
+        te::RenderPassType::Base,
         te::RenderPassState::Enabled,
         {
-            {"Albedo", "SkyboxPass", "albedo", 0, true},
+             {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
+            {"Albedo", "GeometryPass", "albedo", 0, true},
             {"Normal", "GeometryPass", "normal", 0, true},
             {"Position", "GeometryPass", "position", 0, true},
             {"Depth", "GeometryPass", "depth", 0, true}
         }, // inputs
         {
-            {"Lighting", "lighting", te::RenderTargetFormat::RGBA8}
+            {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
         }, // outputs
         {
-            {"GeometryPass", true, []() { return true; }}
+            {"SkyboxPass", true, []() { return true; }},
+            {"GeometryPass", true, []() { return true; }},
         }, // dependencies
         true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
@@ -98,13 +102,13 @@ void setupMultiPassRendering()
         te::RenderPassType::PostProcess,
         te::RenderPassState::Enabled,
         {
-            {"Color", "LightingPass", "lighting", 0, true}
+            {"BaseColor", "BasePass", "basecolor", 0, true}
         }, // inputs
         {
             {"Final", "final", te::RenderTargetFormat::RGBA8}
         }, // outputs
         {
-            {"LightingPass", true, []() { return true; }}
+            {"BasePass", true, []() { return true; }}
         }, // dependencies
         true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
     }, g_RenderView, g_RenderContext);
@@ -116,6 +120,10 @@ void setupMultiPassRendering()
     g_renderer->AddRenderPass(basePass);
     g_renderer->AddRenderPass(postProcessPass);
     g_renderer->AddRenderPass(skyboxPass);
+    te::RenderPassManager::GetInstance().AddPass(skyboxPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // 启用多Pass渲染
     g_renderer->SetMultiPassEnabled(true);
@@ -235,7 +243,8 @@ int main()
 
             commands.push_back(sphereCommand);
             
-            g_renderer->ExecuteRenderPasses(commands);
+            //g_renderer->ExecuteRenderPasses(commands);
+            te::RenderPassManager::GetInstance().ExecuteAll(commands);
         }
         else
         {

@@ -21,7 +21,7 @@ namespace te
     bool RenderPass::Initialize(const RenderPassConfig& config, const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext)
     {
         mConfig = config;
-        
+        mpAttachView = pView;
         // 设置FrameBuffer
         SetupFrameBuffer();
         
@@ -156,7 +156,7 @@ namespace te
             return;
 
         // 获取第一个输出的尺寸
-        uint32_t width = 800, height = 600; // 默认尺寸，应该从配置或全局设置获取
+        uint32_t width = mpAttachView->Width(), height = mpAttachView->Height(); // 默认尺寸，应该从配置或全局设置获取
         
         mFrameBuffer = std::make_shared<MultiRenderTarget>();
         if (!mFrameBuffer->Initialize(width, height))
@@ -364,11 +364,12 @@ namespace te
     // LightingPass Implementation
     BasePass::BasePass()
     {
-        mConfig.name = "LightingPass";
-        mConfig.type = RenderPassType::Lighting;
+        mConfig.name = "BasePass";
+        mConfig.type = RenderPassType::Base;
         
         // 设置输入
         mConfig.inputs = {
+            {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"Albedo", "GeometryPass", "albedo", 0, true},
             {"Normal", "GeometryPass", "normal", 0, true},
             {"Position", "GeometryPass", "position", 0, true},
@@ -377,7 +378,7 @@ namespace te
         
         // 设置输出
         mConfig.outputs = {
-            {"Lighting", "lighting", RenderTargetFormat::RGBA8}
+            {"BaseColor", "basecolor", RenderTargetFormat::RGBA8}
         };
 
         mRenderPassFlag = RenderPassFlag::BaseColor;
@@ -496,7 +497,7 @@ namespace te
 
         // 设置输入
         mConfig.inputs = {
-            {"Color", "LightingPass", "lighting", 0, true}
+            {"BaseColor", "BasePass", "basecolor", 0, true}
         };
         
         // 设置输出

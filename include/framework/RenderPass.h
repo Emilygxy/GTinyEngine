@@ -27,7 +27,7 @@ namespace te
         Geometry,       // 几何Pass（GBuffer生成）
         Skybox,         // 天空盒Pass
         
-        Lighting,       // 光照Pass
+        Base,       // 光照Pass
         PostProcess,    // 后处理Pass
         Shadow,         // 阴影Pass
         UI,             // UI Pass
@@ -171,6 +171,7 @@ namespace te
         RenderState mSavedState;
 
         std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+        std::shared_ptr<RenderView> mpAttachView{ nullptr };
         std::shared_ptr<MaterialBase> mpOverMaterial{ nullptr };
         RenderPassFlag mRenderPassFlag{ RenderPassFlag::None };
         std::vector<RenderCommand> mCandidateCommands;
