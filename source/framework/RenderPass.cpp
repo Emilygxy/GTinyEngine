@@ -440,7 +440,7 @@ namespace te
             auto pMaterial = command.material;
             if (FindDependency("GeometryPass"))
             {
-                pMaterial->SetUseGeometryTarget(true);
+                pMaterial->SetUseGeometryTarget(false); // GeometryTarget not use in base pass but for fullscreen pass!!
             }
 
             //attach light
