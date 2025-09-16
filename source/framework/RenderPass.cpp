@@ -5,7 +5,6 @@
 #include "RenderView.h"
 #include "skybox/Skybox.h"
 #include "materials/GeometryMaterial.h"
-#include "materials/LightingMaterial.h"
 #include "materials/BlinnPhongMaterial.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
@@ -404,7 +403,6 @@ namespace te
 
     void BasePass::OnInitialize()
     {
-        // 光照材质已在构造函数中创建
     }
 
     void BasePass::Execute(const std::vector<RenderCommand>& commands)
@@ -697,7 +695,6 @@ namespace te
 
     void SkyboxPass::OnInitialize()
     {
-        // 天空盒Pass通常不需要FrameBuffer，直接渲染到当前缓冲区
     }
 
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
@@ -707,13 +704,33 @@ namespace te
 
         OnPreExecute();
 
+        // 绑定FrameBuffer（如果存在）
+        if (mFrameBuffer)
+        {
+            mFrameBuffer->Bind();
+        }
+        
         // 应用渲染设置
         ApplyRenderSettings();
+
+        // 清除缓冲区
+        if (mConfig.clearColor)
+        {
+            glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
+                        mConfig.clearColorValue.b, mConfig.clearColorValue.a);
+            glClear(GL_COLOR_BUFFER_BIT);
+        }
 
         // 渲染天空盒
         if (auto pAttachCamera = mpRenderContext->GetAttachedCamera())
         {
             mpSkybox->Draw(pAttachCamera->GetViewMatrix(), pAttachCamera->GetProjectionMatrix());
+        }
+
+        // 解绑FrameBuffer
+        if (mFrameBuffer)
+        {
+            mFrameBuffer->Unbind();
         }
 
         // 恢复渲染设置
