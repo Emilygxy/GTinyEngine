@@ -724,6 +724,7 @@ namespace te
     SkyboxPass::SkyboxPass()
     {
         mpOverMaterial = std::make_shared<SkyboxMaterial>();
+        mRenderPassFlag = RenderPassFlag::Background;
     }
 
     void SkyboxPass::OnInitialize()
@@ -812,7 +813,7 @@ namespace te
 
         OnPreExecute();
 
-        // Bind FrameBuffer（如果存在）
+        // Bind FrameBuffer
         if (mFrameBuffer)
         {
             mFrameBuffer->Bind();
@@ -832,11 +833,11 @@ namespace te
         auto pSkyboxMat = std::dynamic_pointer_cast<SkyboxMaterial>(mpOverMaterial);
         for (const auto& command : mCandidateCommands)
         {
-            if (!command.material || command.vertices.empty() || command.indices.empty())
+            if (command.vertices.empty() || command.indices.empty())
                 continue;
 
             // Use skybox material
-            pSkyboxMat->OnApply();
+            pSkyboxMat->OnApply(); // bind cubemap to GL_TEXTURE7
 
             // Set camera matrices
             if (auto pCamera = mpRenderContext->GetAttachedCamera())
@@ -846,11 +847,11 @@ namespace te
                 pSkyboxMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
             }
 
-            // Update material uniforms
-            pSkyboxMat->UpdateUniform();
-
-            // Bind material resources
+            // Bind material resources first
             pSkyboxMat->OnBind();
+
+            // Update material uniforms after binding
+            pSkyboxMat->UpdateUniform(); // set u_skyboxMap = 7
 
             //
             // Create and bind VAO
@@ -866,15 +867,10 @@ namespace te
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
 
-            // Position attribute
+            // Position attribute (also used as texture coordinates for skybox)
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            // Normal attribute (skybox doesn't need normals, but we keep it for compatibility)
-            /*glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));*/
-            // UV coordinate attribute
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+            // Skybox doesn't need normal or UV attributes, position is used as texture coordinates
 
             // Draw
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
@@ -889,6 +885,7 @@ namespace te
         if (mFrameBuffer)
         {
             mFrameBuffer->Unbind();
+            pSkyboxMat->UnBind();
         }
 
         // Restore render settings

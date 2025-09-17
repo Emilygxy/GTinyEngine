@@ -15,6 +15,7 @@ public:
 	virtual ~MaterialBase() = default;
 	virtual void OnPerFrameUpdate() = 0;
 	virtual void OnBind() = 0;
+	virtual void UnBind() {}
 	virtual void UpdateUniform() = 0;
 
 	void OnApply();

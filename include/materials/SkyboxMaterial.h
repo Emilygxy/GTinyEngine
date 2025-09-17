@@ -11,6 +11,7 @@ public:
 	void OnBind() override;
 	void OnPerFrameUpdate() override;
 	void UpdateUniform() override;
+	void UnBind() override;
 
 private:
 	unsigned int mCubemapTexture{0};

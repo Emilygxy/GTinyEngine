@@ -19,13 +19,20 @@ SkyboxMaterial::SkyboxMaterial(const std::string& vs_path, const std::string& fs
 }
 SkyboxMaterial::~SkyboxMaterial()
 {
+    glDeleteTextures(1, &mCubemapTexture);
 }
 
 void SkyboxMaterial::OnBind()
 {
-    // bind texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, mCubemapTexture);
+    // bind cubemap texture to texture unit 7 to avoid conflicts with other passes
+    glActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, mCubemapTexture);
+}
+
+void SkyboxMaterial::UnBind()
+{
+    glActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 }
 
 void SkyboxMaterial::OnPerFrameUpdate()
@@ -35,7 +42,7 @@ void SkyboxMaterial::OnPerFrameUpdate()
 
 void SkyboxMaterial::UpdateUniform()
 {
-    // Set texture parameters
-    mpShader->setInt("u_skyboxMap", 0); // Background texture
+    // Set texture parameters - use texture unit 7
+    mpShader->setInt("u_skyboxMap", 7); // Background texture
 }
 
