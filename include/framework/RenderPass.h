@@ -120,7 +120,7 @@ namespace te
         virtual ~RenderPass() = default;
 
         // Initialization/Cleanup
-        virtual bool Initialize(const RenderPassConfig& config, const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext);
+        virtual bool Initialize(const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext);
         virtual void Shutdown();
 
         // Execute Pass
@@ -155,7 +155,7 @@ namespace te
 
     protected:
         // Virtual functions that can be overridden by subclasses
-        virtual void OnInitialize() {}
+        virtual void OnInitialize() = 0; // need to config your pass
         virtual void OnShutdown() {}
         virtual void OnPreExecute() {}
         virtual void OnPostExecute() {}

@@ -44,73 +44,19 @@ void setupMultiPassRendering()
 {
     // 创建天空盒Pass
     auto skyboxPass = std::make_shared<te::SkyboxPass>();
-    skyboxPass->Initialize(te::RenderPassConfig{
-        "SkyboxPass",
-        te::RenderPassType::Skybox,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        {
-             {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
-        }, // outputs
-        {}, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // enable deptyh test,LEQUAL
-        }, g_RenderView, g_RenderContext);
+    skyboxPass->Initialize(g_RenderView, g_RenderContext);
 
     // 创建几何Pass
     auto geometryPass = std::make_shared<te::GeometryPass>();
-    geometryPass->Initialize(te::RenderPassConfig{
-        "GeometryPass",
-        te::RenderPassType::Geometry,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        {
-            {"Albedo", "albedo", te::RenderTargetFormat::RGBA8},
-            {"Normal", "normal", te::RenderTargetFormat::RGB16F},
-            {"Position", "position", te::RenderTargetFormat::RGB16F},
-            {"Depth", "depth", te::RenderTargetFormat::Depth24}
-        }, // outputs
-        {}, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-    }, g_RenderView, g_RenderContext);
+    geometryPass->Initialize(g_RenderView, g_RenderContext);
 
     // 创建光照Pass
     auto basePass = std::make_shared<te::BasePass>();
-    basePass->Initialize(te::RenderPassConfig{
-        "BasePass",
-        te::RenderPassType::Base,
-        te::RenderPassState::Enabled,
-        {
-            {"Albedo", "GeometryPass", "albedo", 0, true},
-            {"Normal", "GeometryPass", "normal", 0, true},
-            {"Position", "GeometryPass", "position", 0, true},
-            {"Depth", "GeometryPass", "depth", 0, true}
-        }, // inputs
-        {
-            {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
-        }, // outputs
-        {
-            {"GeometryPass", true, []() { return true; }},
-        }, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)  // enable depth test, clear color is (0,0,0,0) for combine with background
-    }, g_RenderView, g_RenderContext);
+    basePass->Initialize(g_RenderView, g_RenderContext);
 
     // PostProcessPass Pass
     auto postProcessPass = std::make_shared<te::PostProcessPass>();
-    postProcessPass->Initialize(te::RenderPassConfig{
-        "PostProcessPass",
-        te::RenderPassType::PostProcess,
-        te::RenderPassState::Enabled,
-        {
-            {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
-            {"BaseColor", "BasePass", "basecolor", 0, true}
-        }, // inputs - BasePass now handles background fusion
-        {}, // outputs - render to screen directly
-        {
-            {"SkyboxPass", true, []() { return true; }},
-            {"BasePass", true, []() { return true; }}
-        }, // dependencies
-        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)  // 启用颜色清除
-    }, g_RenderView, g_RenderContext);
+    postProcessPass->Initialize(g_RenderView, g_RenderContext);
 
     postProcessPass->AddEffect("Blit",std::make_shared<BlitMaterial>());
 

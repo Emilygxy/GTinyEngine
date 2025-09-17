@@ -17,15 +17,15 @@ namespace te
     // RenderPass Implementation
     RenderPass::RenderPass() = default;
 
-    bool RenderPass::Initialize(const RenderPassConfig& config, const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext)
+    bool RenderPass::Initialize(const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext)
     {
-        mConfig = config;
         mpAttachView = pView;
-        // Setup FrameBuffer
-        SetupFrameBuffer();
-        
+
         // Call subclass initialization
         OnInitialize();
+
+        // Setup FrameBuffer
+        SetupFrameBuffer();
         
         mpRenderContext = pContext;
 
@@ -262,12 +262,19 @@ namespace te
 
     void GeometryPass::OnInitialize()
     {
-        // Setup outputs
-        mConfig.outputs = {
-            {"Albedo", "albedo", RenderTargetFormat::RGBA8},
-            {"Normal", "normal", RenderTargetFormat::RGB16F},
-            {"Position", "position", RenderTargetFormat::RGB16F},
-            {"Depth", "depth", RenderTargetFormat::Depth24}
+        mConfig = te::RenderPassConfig{
+        "GeometryPass",
+        te::RenderPassType::Geometry,
+        te::RenderPassState::Enabled,
+        {}, // inputs
+        {
+            {"Albedo", "albedo", te::RenderTargetFormat::RGBA8},
+            {"Normal", "normal", te::RenderTargetFormat::RGB16F},
+            {"Position", "position", te::RenderTargetFormat::RGB16F},
+            {"Depth", "depth", te::RenderTargetFormat::Depth24}
+        }, // outputs
+        {}, // dependencies
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
         };
     }
 
@@ -403,6 +410,24 @@ namespace te
 
     void BasePass::OnInitialize()
     {
+        mConfig = te::RenderPassConfig{
+        "BasePass",
+        te::RenderPassType::Base,
+        te::RenderPassState::Enabled,
+        {
+            {"Albedo", "GeometryPass", "albedo", 0, true},
+            {"Normal", "GeometryPass", "normal", 0, true},
+            {"Position", "GeometryPass", "position", 0, true},
+            {"Depth", "GeometryPass", "depth", 0, true}
+        }, // inputs
+        {
+            {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
+        }, // outputs
+        {
+            {"GeometryPass", true, []() { return true; }},
+        }, // dependencies
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)  // enable depth test, clear color is (0,0,0,0) for combine with background
+        };
     }
 
     void BasePass::Execute(const std::vector<RenderCommand>& commands)
@@ -527,6 +552,22 @@ namespace te
 
     void PostProcessPass::OnInitialize()
     {
+        mConfig = te::RenderPassConfig{
+        "PostProcessPass",
+        te::RenderPassType::PostProcess,
+        te::RenderPassState::Enabled,
+        {
+            {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
+            {"BaseColor", "BasePass", "basecolor", 0, true}
+        }, // inputs - BasePass now handles background fusion
+        {}, // outputs - render to screen directly
+        {
+            {"SkyboxPass", true, []() { return true; }},
+            {"BasePass", true, []() { return true; }}
+        }, // dependencies
+        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)  // 启用颜色清除
+        };
+
         // Create fullscreen quad
         mQuadVertices = {
             {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
@@ -685,7 +726,7 @@ namespace te
         mConfig.name = "SkyboxPass";
         mConfig.type = RenderPassType::Skybox;
         mConfig.enableDepthTest = true;
-        mConfig.depthFunc = GL_LEQUAL; // 天空盒使用LEQUAL深度测试
+        mConfig.depthFunc = GL_LEQUAL; // skybox use LEQUAL for depth test
         mRenderPassFlag = RenderPassFlag::Background;
 
         if (!mpSkybox)
@@ -705,6 +746,17 @@ namespace te
 
     void SkyboxPass::OnInitialize()
     {
+        mConfig = te::RenderPassConfig{
+        "SkyboxPass",
+        te::RenderPassType::Skybox,
+        te::RenderPassState::Enabled,
+        {}, // inputs
+        { 
+            {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
+        }, // outputs
+        {}, // dependencies
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // enable deptyh test,LEQUAL
+        };
     }
 
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
