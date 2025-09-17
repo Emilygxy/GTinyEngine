@@ -723,12 +723,6 @@ namespace te
     // SkyboxPass Implementation
     SkyboxPass::SkyboxPass()
     {
-        mConfig.name = "SkyboxPass";
-        mConfig.type = RenderPassType::Skybox;
-        mConfig.enableDepthTest = true;
-        mConfig.depthFunc = GL_LEQUAL; // skybox use LEQUAL for depth test
-        mRenderPassFlag = RenderPassFlag::Background;
-
         if (!mpSkybox)
         {
             std::vector<std::string> faces

@@ -3,6 +3,7 @@
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/BlitMaterial.h"
 #include "Camera.h"
 #include "Light.h"
 #include "mesh/AaBB.h"
@@ -19,6 +20,7 @@
 
 #include "RenderView.h"
 #include "framework/RenderContext.h"
+#include "framework/RenderPass.h"
 
 namespace
 {
@@ -157,20 +159,21 @@ void RenderAgent::Render()
         mpGeometry = std::make_shared<Box>(2.0f, 2.0f, 2.0f);
         //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
-        
+        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
         // attach light to material
-        if (mpRenderer)
+       /* if (mpRenderer)
         {
             auto light = mpRenderContext->GetDefaultLight();
             if (light)
             {
                 material->AttachedLight(light);
             }
-        }
+        }*/
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
     }
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -188,17 +191,45 @@ void RenderAgent::Render()
         // Begin Render Frame
         mpRenderer->BeginFrame();
 
-        mpRenderer->SetViewport(0, 0, 800, 600);
+        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         mpRenderer->Clear(0x3); // 
 
+        if (mpRenderer->IsMultiPassEnabled())
+        {
+            // 创建渲染命令
+            std::vector<RenderCommand> commands;
+            RenderCommand sphereCommand;
+            sphereCommand.material = mpGeometry->GetMaterial();
+            sphereCommand.vertices = mpGeometry->GetVertices();
+            sphereCommand.indices = mpGeometry->GetIndices();
+            sphereCommand.transform = mpGeometry->GetWorldTransform();
+            sphereCommand.state = RenderMode::Opaque;
+            sphereCommand.hasUV = true;
+            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+
+            commands.push_back(sphereCommand);
+
+            // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
+            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            //g_renderer->ExecuteRenderPasses(commands);
+        }
+        else
+        {
+            // 传统单Pass渲染
+            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                mpGeometry->GetIndices(),
+                mpGeometry->GetMaterial(),
+                mpGeometry->GetWorldTransform());
+        }
+
         //mpRenderer->DrawBackgroud();
 
-        // DrawMesh
-        mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-            mpGeometry->GetIndices(),
-            mpGeometry->GetMaterial(),
-            mpGeometry->GetWorldTransform());
+        //// DrawMesh
+        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+        //    mpGeometry->GetIndices(),
+        //    mpGeometry->GetMaterial(),
+        //    mpGeometry->GetWorldTransform());
 
         // Render ImGui
         RenderImGui();
@@ -229,7 +260,40 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
+
+    SetupMultiPassRendering();
 }
+
+void RenderAgent::SetupMultiPassRendering()
+{
+    // 创建天空盒Pass
+    auto skyboxPass = std::make_shared<te::SkyboxPass>();
+    skyboxPass->Initialize(mpRenderView, mpRenderContext);
+
+    // 创建几何Pass
+    auto geometryPass = std::make_shared<te::GeometryPass>();
+    geometryPass->Initialize(mpRenderView, mpRenderContext);
+
+    // 创建光照Pass
+    auto basePass = std::make_shared<te::BasePass>();
+    basePass->Initialize(mpRenderView, mpRenderContext);
+
+    // PostProcessPass Pass
+    auto postProcessPass = std::make_shared<te::PostProcessPass>();
+    postProcessPass->Initialize(mpRenderView, mpRenderContext);
+
+    postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
+
+    // 添加Pass到RenderPassManager（用于依赖关系管理）
+    te::RenderPassManager::GetInstance().AddPass(skyboxPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+
+    // 启用多Pass渲染
+    mpRenderer->SetMultiPassEnabled(true);
+}
+
 
 // ImGui implementation
 void RenderAgent::InitImGui()

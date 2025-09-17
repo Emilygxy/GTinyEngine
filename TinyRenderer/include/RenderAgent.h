@@ -76,6 +76,7 @@ public:
 	}
 private:
 	void SetupRenderer();
+	void SetupMultiPassRendering();
 	void InitImGui();
 	void ShutdownImGui();
 	void RenderImGui();
