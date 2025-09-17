@@ -60,12 +60,6 @@ void setupMultiPassRendering()
 
     postProcessPass->AddEffect("Blit",std::make_shared<BlitMaterial>());
 
-    // 添加Pass到渲染器
-    g_renderer->AddRenderPass(geometryPass);
-    g_renderer->AddRenderPass(basePass);
-    g_renderer->AddRenderPass(postProcessPass);
-    g_renderer->AddRenderPass(skyboxPass);
-    
     // 添加Pass到RenderPassManager（用于依赖关系管理）
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
@@ -132,7 +126,6 @@ int main()
     // 创建相机
     g_camera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     g_camera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
-    //g_renderer->SetCamera(g_camera);
     g_RenderContext->AttachCamera(g_camera);
 
     // 创建光源
@@ -143,7 +136,6 @@ int main()
     g_light = std::make_shared<Light>();
     g_light->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f));
     g_light->SetColor(glm::vec3(1.0f, 1.0f, 1.0f));
-    //g_renderer->SetLight(g_light);
     g_RenderContext->PushAttachLight(g_light);
 
     // 创建几何体
@@ -153,8 +145,6 @@ int main()
     }
     auto material = std::make_shared<BlinnPhongMaterial>();
     material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
-    material->AttachedLight(g_light);
-    //material->AttachedLight(g_light);
     g_sphere->SetMaterial(material);
 
     // 设置多Pass渲染

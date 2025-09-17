@@ -160,15 +160,6 @@ void RenderAgent::Render()
         //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
         material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
-        // attach light to material
-       /* if (mpRenderer)
-        {
-            auto light = mpRenderContext->GetDefaultLight();
-            if (light)
-            {
-                material->AttachedLight(light);
-            }
-        }*/
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
@@ -212,7 +203,6 @@ void RenderAgent::Render()
 
             // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
             te::RenderPassManager::GetInstance().ExecuteAll(commands);
-            //g_renderer->ExecuteRenderPasses(commands);
         }
         else
         {

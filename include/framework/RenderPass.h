@@ -250,7 +250,8 @@ namespace te
         void OnInitialize() override;
 
     private:
-        std::shared_ptr<Skybox> mpSkybox;
+        std::vector<Vertex> mSkyboxVertices;
+        std::vector<unsigned int> mSkyboxIndices;
     };
 
     // Render Pass Manager

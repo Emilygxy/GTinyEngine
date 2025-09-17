@@ -3,9 +3,9 @@
 #include "Camera.h"
 #include "Light.h"
 #include "RenderView.h"
-#include "skybox/Skybox.h"
 #include "materials/GeometryMaterial.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/SkyboxMaterial.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
 #include <algorithm>
@@ -723,19 +723,7 @@ namespace te
     // SkyboxPass Implementation
     SkyboxPass::SkyboxPass()
     {
-        if (!mpSkybox)
-        {
-            std::vector<std::string> faces
-            {
-                "resources/textures/skybox/right.jpg",
-                "resources/textures/skybox/left.jpg",
-                "resources/textures/skybox/top.jpg",
-                "resources/textures/skybox/bottom.jpg",
-                "resources/textures/skybox/front.jpg",
-                "resources/textures/skybox/back.jpg"
-            };
-            mpSkybox = std::make_shared<Skybox>(faces);
-        }
+        mpOverMaterial = std::make_shared<SkyboxMaterial>();
     }
 
     void SkyboxPass::OnInitialize()
@@ -749,13 +737,77 @@ namespace te
             {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
         }, // outputs
         {}, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // enable deptyh test,LEQUAL
+        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f) // enable deptyh test,LEQUAL
         };
+
+        // Create skybox cube vertices with proper Vertex structure
+        mSkyboxVertices = {
+            // Front face
+            {{-1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 0
+            {{ 1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},  // 1
+            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},  // 2
+            {{-1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},  // 3
+            
+            // Back face
+            {{ 1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}}, // 4
+            {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f}}, // 5
+            {{-1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f}}, // 6
+            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f}}, // 7
+            
+            // Left face
+            {{-1.0f, -1.0f, -1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 8
+            {{-1.0f, -1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}}, // 9
+            {{-1.0f,  1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}}, // 10
+            {{-1.0f,  1.0f, -1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}}, // 11
+            
+            // Right face
+            {{ 1.0f, -1.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},  // 12
+            {{ 1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},  // 13
+            {{ 1.0f,  1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},  // 14
+            {{ 1.0f,  1.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},  // 15
+            
+            // Top face
+            {{-1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},  // 16
+            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 17
+            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},  // 18
+            {{-1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},  // 19
+            
+            // Bottom face
+            {{-1.0f, -1.0f, -1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}}, // 20
+            {{ 1.0f, -1.0f, -1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f}}, // 21
+            {{ 1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f}}, // 22
+            {{-1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f}}  // 23
+        };
+
+        // Create indices for the skybox cube (2 triangles per face, 6 faces = 12 triangles = 36 indices)
+        mSkyboxIndices = {
+            // Front face
+            0, 1, 2,  2, 3, 0,
+            // Back face
+            4, 5, 6,  6, 7, 4,
+            // Left face
+            8, 9, 10, 10, 11, 8,
+            // Right face
+            12, 13, 14, 14, 15, 12,
+            // Top face
+            16, 17, 18, 18, 19, 16,
+            // Bottom face
+            20, 21, 22, 22, 23, 20
+        };
+
+        RenderCommand skycubeCommand;
+        skycubeCommand.material = mpOverMaterial;
+        skycubeCommand.vertices = mSkyboxVertices;
+        skycubeCommand.indices = mSkyboxIndices;
+        skycubeCommand.transform = glm::mat4(1.0f); //
+        skycubeCommand.state = RenderMode::Opaque;
+        skycubeCommand.hasUV = true;  // 
+        mCandidateCommands.emplace_back(skycubeCommand);
     }
 
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
     {
-        if (!IsEnabled() || !mpSkybox)
+        if (!IsEnabled())
             return;
 
         OnPreExecute();
@@ -777,10 +829,60 @@ namespace te
             glClear(GL_COLOR_BUFFER_BIT);
         }
 
-        // render skybox
-        if (auto pAttachCamera = mpRenderContext->GetAttachedCamera())
+        auto pSkyboxMat = std::dynamic_pointer_cast<SkyboxMaterial>(mpOverMaterial);
+        for (const auto& command : mCandidateCommands)
         {
-            mpSkybox->Draw(pAttachCamera->GetViewMatrix(), pAttachCamera->GetProjectionMatrix());
+            if (!command.material || command.vertices.empty() || command.indices.empty())
+                continue;
+
+            // Use skybox material
+            pSkyboxMat->OnApply();
+
+            // Set camera matrices
+            if (auto pCamera = mpRenderContext->GetAttachedCamera())
+            {
+                glm::mat4 viewNoTrans = glm::mat4(glm::mat3(pCamera->GetViewMatrix()));
+                pSkyboxMat->GetShader()->setMat4("view", viewNoTrans);
+                pSkyboxMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+            }
+
+            // Update material uniforms
+            pSkyboxMat->UpdateUniform();
+
+            // Bind material resources
+            pSkyboxMat->OnBind();
+
+            //
+            // Create and bind VAO
+            GLuint VAO, VBO, EBO;
+            glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
+            glGenBuffers(1, &EBO);
+
+            glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+
+            // Position attribute
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            // Normal attribute (skybox doesn't need normals, but we keep it for compatibility)
+            /*glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));*/
+            // UV coordinate attribute
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+
+            // Draw
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+
+            // Cleanup
+            glDeleteVertexArrays(1, &VAO);
+            glDeleteBuffers(1, &VBO);
+            glDeleteBuffers(1, &EBO);
         }
 
         // Unbind FrameBuffer
