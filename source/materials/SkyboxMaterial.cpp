@@ -27,7 +27,15 @@ void SkyboxMaterial::SetDiffuseTexturePath(const std::vector<std::string>& paths
         return;
     }
 
+    std::cout << "SkyboxMaterial::SetDiffuseTexturePath - Setting " << paths.size() << " texture paths" << std::endl;
     mpCubemapTexture->SetTexturePaths(paths);
+    
+    // Debug: Check if texture was created successfully
+    if (mpCubemapTexture->GetHandle() == 0) {
+        std::cout << "ERROR: SkyboxMaterial failed to create cubemap texture!" << std::endl;
+    } else {
+        std::cout << "SkyboxMaterial successfully created cubemap texture with ID: " << mpCubemapTexture->GetHandle() << std::endl;
+    }
 }
 SkyboxMaterial::~SkyboxMaterial()
 {

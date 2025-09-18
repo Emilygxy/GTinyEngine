@@ -275,9 +275,9 @@ void RenderAgent::SetupMultiPassRendering()
     postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
 
     // 添加Pass到RenderPassManager（用于依赖关系管理）
-    //te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
-    //te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
     te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // 启用多Pass渲染
