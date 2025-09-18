@@ -64,6 +64,7 @@ public:
 	~PhongMaterial();
 
 	void OnBind() override;
+	void UnBind() override;
 	void OnPerFrameUpdate() override {}
 	void UpdateUniform() override;
 

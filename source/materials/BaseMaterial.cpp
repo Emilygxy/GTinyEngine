@@ -92,9 +92,28 @@ void PhongMaterial::OnBind()
 {
     // bind texture
     if (mbHasTexture) {
+        if (mpDiffuseTexture->GetHandle() == 0) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - mpDiffuseTexture is 0!" << std::endl;
+            return;
+        }
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle()); //uniform location?
+        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle());
+
+        GLint boundTexture;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+        if (boundTexture != mpDiffuseTexture->GetHandle()) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - Failed to bind texture! Expected: " << mpDiffuseTexture->GetHandle() << ", Got: " << boundTexture << std::endl;
+        }
+        else {
+            std::cout << "PhongMaterial::OnBind() - Successfully bound texture " << mpDiffuseTexture->GetHandle() << " to GL_TEXTURE0" << std::endl;
+        }
     }
+}
+
+void PhongMaterial::UnBind()
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void PhongMaterial::UpdateUniform()

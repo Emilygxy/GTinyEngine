@@ -275,9 +275,9 @@ void RenderAgent::SetupMultiPassRendering()
     postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
 
     // 添加Pass到RenderPassManager（用于依赖关系管理）
+    //te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
-    te::RenderPassManager::GetInstance().AddPass(geometryPass);
-    te::RenderPassManager::GetInstance().AddPass(basePass);
+    //te::RenderPassManager::GetInstance().AddPass(basePass);
     te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // 启用多Pass渲染
@@ -470,7 +470,6 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     // Debug sphere info
     std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
     
-    // 获取几何体的世界AABB（已经应用了世界变换）
     auto worldAABB = mpGeometry->GetWorldAABB();
     
     if (!worldAABB.has_value()) {

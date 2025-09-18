@@ -164,7 +164,7 @@ namespace te
         // Helper functions
         void SetupFrameBuffer();
         virtual void BindInputs();
-        void UnbindInputs();
+        virtual void UnbindInputs();
 
         RenderPassConfig mConfig;
         std::shared_ptr<MultiRenderTarget> mFrameBuffer;
@@ -224,6 +224,8 @@ namespace te
     protected:
         void OnInitialize() override;
         void BindInputs() override;
+        void UnbindInputs() override;
+
 
     private:
         struct PostProcessEffect
@@ -248,6 +250,7 @@ namespace te
 
     protected:
         void OnInitialize() override;
+        void UnbindInputs() override;
 
     private:
         std::vector<Vertex> mSkyboxVertices;

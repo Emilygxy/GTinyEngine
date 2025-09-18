@@ -217,6 +217,16 @@ namespace te
             {
                 glActiveTexture(GL_TEXTURE0 + textureUnit);
                 glBindTexture(GL_TEXTURE_2D, it->second);
+
+                GLint boundTexture;
+                glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+                if (boundTexture != it->second) {
+                    std::cout << "ERROR: Material::OnBind() - Failed to bind texture! Expected: " << it->second << ", Got: " << boundTexture << std::endl;
+                }
+                else {
+                    std::cout << "Material::OnBind() - Successfully bound texture " << it->second << " to GL_TEXTURE" << textureUnit << std::endl;
+                }
+
                 textureUnit++;
             }
         }
@@ -229,6 +239,13 @@ namespace te
         {
             glActiveTexture(GL_TEXTURE0 + i);
             glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        for (const auto& command : mCandidateCommands)
+        {
+            if (!command.material)
+                continue;
+            command.material->UnBind();
         }
     }
 
@@ -486,6 +503,9 @@ namespace te
                 pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
             }
 
+            // Bind material resources first
+            pMaterial->OnBind();
+
             // Update material uniforms
             pMaterial->UpdateUniform();
 
@@ -519,6 +539,8 @@ namespace te
             glDeleteVertexArrays(1, &VAO);
             glDeleteBuffers(1, &VBO);
             glDeleteBuffers(1, &EBO);
+
+            pMaterial->UnBind();
         }
 
         // Unbind input textures
@@ -598,8 +620,29 @@ namespace te
             {
                 glActiveTexture(GL_TEXTURE0 + textureUnit);
                 glBindTexture(GL_TEXTURE_2D, it->second);
+
+                GLint boundTexture;
+                glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+                if (boundTexture != it->second) {
+                    std::cout << "ERROR: PPS Effect::OnBind() - Failed to bind texture! Expected: " << it->second << ", Got: " << boundTexture << std::endl;
+                }
+                else {
+                    std::cout << "PPS Effect::OnBind() - Successfully bound texture " << it->second << " to GL_TEXTURE" << textureUnit << std::endl;
+                }
                 textureUnit++;
             }
+        }
+    }
+
+    void PostProcessPass::UnbindInputs()
+    {
+        te::RenderPass::UnbindInputs();
+        for (const auto& [name, effect] : mEffects)
+        {
+            if (!effect.enabled && !effect.material)
+                continue;
+
+            effect.material->UnBind();
         }
     }
 
@@ -806,6 +849,14 @@ namespace te
         mCandidateCommands.emplace_back(skycubeCommand);
     }
 
+    void SkyboxPass::UnbindInputs()
+    {
+        if (mpOverMaterial)
+        {
+            mpOverMaterial->UnBind();
+        }
+    }
+
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
     {
         if (!IsEnabled())
@@ -881,11 +932,12 @@ namespace te
             glDeleteBuffers(1, &EBO);
         }
 
+        UnbindInputs();
+
         // Unbind FrameBuffer
         if (mFrameBuffer)
         {
             mFrameBuffer->Unbind();
-            pSkyboxMat->UnBind();
         }
 
         // Restore render settings
