@@ -159,7 +159,7 @@ namespace te
         virtual void OnShutdown() {}
         virtual void OnPreExecute() {}
         virtual void OnPostExecute() {}
-        void ApplyRenderCommand(const std::vector<RenderCommand>& commands);
+        virtual void ApplyRenderCommand(const std::vector<RenderCommand>& commands);
 
         // Helper functions
         void SetupFrameBuffer();
@@ -251,6 +251,7 @@ namespace te
     protected:
         void OnInitialize() override;
         void UnbindInputs() override;
+        void ApplyRenderCommand(const std::vector<RenderCommand>& commands) override;
 
     private:
         std::vector<Vertex> mSkyboxVertices;

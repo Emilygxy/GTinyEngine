@@ -20,7 +20,7 @@ namespace te
     bool RenderPass::Initialize(const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext)
     {
         mpAttachView = pView;
-
+        
         // Call subclass initialization
         OnInitialize();
 
@@ -709,8 +709,8 @@ namespace te
                 continue;
 
             // Use the effect material
-            auto pMaterial = effect.material;
-            pMaterial->OnApply();
+                auto pMaterial = effect.material;
+                pMaterial->OnApply();
 
             // Update material uniforms
             pMaterial->UpdateUniform();
@@ -764,7 +764,7 @@ namespace te
         // Unbind FrameBuffer (only if we have outputs)
         if (mFrameBuffer)
         {
-            mFrameBuffer->Unbind();
+        mFrameBuffer->Unbind();
         }
         
         // Restore render settings
@@ -830,39 +830,39 @@ namespace te
         mSkyboxVertices = {
             // Front face
             {{-1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 0
-            {{ 1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},  // 1
-            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},  // 2
-            {{-1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},  // 3
+            {{ 1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 1
+            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 2
+            {{-1.0f,  1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 3
             
             // Back face
             {{ 1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}}, // 4
-            {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f}}, // 5
-            {{-1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f}}, // 6
-            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f}}, // 7
+            {{-1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}}, // 5
+            {{-1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}}, // 6
+            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}}, // 7
             
             // Left face
             {{-1.0f, -1.0f, -1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 8
-            {{-1.0f, -1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}}, // 9
-            {{-1.0f,  1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}}, // 10
-            {{-1.0f,  1.0f, -1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}}, // 11
+            {{-1.0f, -1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 9
+            {{-1.0f,  1.0f,  1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 10
+            {{-1.0f,  1.0f, -1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}}, // 11
             
             // Right face
             {{ 1.0f, -1.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},  // 12
-            {{ 1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},  // 13
-            {{ 1.0f,  1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},  // 14
-            {{ 1.0f,  1.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},  // 15
+            {{ 1.0f, -1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},  // 13
+            {{ 1.0f,  1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},  // 14
+            {{ 1.0f,  1.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},  // 15
             
             // Top face
             {{-1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},  // 16
-            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},  // 17
-            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},  // 18
-            {{-1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},  // 19
+            {{ 1.0f,  1.0f,  1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},  // 17
+            {{ 1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},  // 18
+            {{-1.0f,  1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},  // 19
             
             // Bottom face
             {{-1.0f, -1.0f, -1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}}, // 20
-            {{ 1.0f, -1.0f, -1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f}}, // 21
-            {{ 1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f}}, // 22
-            {{-1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f}}  // 23
+            {{ 1.0f, -1.0f, -1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}}, // 21
+            {{ 1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}}, // 22
+            {{-1.0f, -1.0f,  1.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}}  // 23
         };
 
         // Create indices for the skybox cube (2 triangles per face, 6 faces = 12 triangles = 36 indices)
@@ -880,15 +880,6 @@ namespace te
             // Bottom face
             20, 21, 22, 22, 23, 20
         };
-
-        RenderCommand skycubeCommand;
-        skycubeCommand.material = mpOverMaterial;
-        skycubeCommand.vertices = mSkyboxVertices;
-        skycubeCommand.indices = mSkyboxIndices;
-        skycubeCommand.transform = glm::mat4(1.0f); //
-        skycubeCommand.state = RenderMode::Opaque;
-        skycubeCommand.hasUV = true;  // 
-        mCandidateCommands.emplace_back(skycubeCommand);
     }
 
     void SkyboxPass::UnbindInputs()
@@ -899,6 +890,20 @@ namespace te
         }
     }
 
+    void SkyboxPass::ApplyRenderCommand(const std::vector<RenderCommand>& commands)
+    {
+        RenderPass::ApplyRenderCommand(commands);
+
+        RenderCommand skycubeCommand;
+        skycubeCommand.material = mpOverMaterial;
+        skycubeCommand.vertices = mSkyboxVertices;
+        skycubeCommand.indices = mSkyboxIndices;
+        skycubeCommand.transform = glm::mat4(1.0f); //
+        skycubeCommand.state = RenderMode::Opaque;
+        skycubeCommand.hasUV = false;  // 
+        mCandidateCommands.emplace_back(skycubeCommand);
+    }
+    
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
     {
         std::cout << "SkyboxPass::Execute called" << std::endl;
@@ -909,6 +914,7 @@ namespace te
         }
 
         OnPreExecute();
+        ApplyRenderCommand(commands);
 
         // Bind FrameBuffer
         if (mFrameBuffer)
@@ -973,10 +979,17 @@ namespace te
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
 
-            // Position attribute (also used as texture coordinates for skybox)
+            // Position attribute
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
             // Skybox doesn't need normal or UV attributes, position is used as texture coordinates
+            // Normal attribute
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+            // UV coordinate attribute
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
             // Draw
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
