@@ -279,20 +279,28 @@ namespace te
 
     void GeometryPass::OnInitialize()
     {
-        mConfig = te::RenderPassConfig{
-        "GeometryPass",
-        te::RenderPassType::Geometry,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        {
+        mConfig.name = "GeometryPass";
+        mConfig.type = te::RenderPassType::Geometry;
+        mConfig.state = te::RenderPassState::Enabled;
+        mConfig.inputs = {}; // inputs
+        mConfig.outputs = {
             {"Albedo", "albedo", te::RenderTargetFormat::RGBA8},
             {"Normal", "normal", te::RenderTargetFormat::RGB16F},
             {"Position", "position", te::RenderTargetFormat::RGB16F},
             {"Depth", "depth", te::RenderTargetFormat::Depth24}
-        }, // outputs
-        {}, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-        };
+        }; // outputs
+        mConfig.dependencies = {}; // dependencies
+        mConfig.clearColor = true;
+        mConfig.clearDepth = true;
+        mConfig.clearStencil = false;
+        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        mConfig.useCustomViewport = false;
+        mConfig.viewport = glm::ivec4(0, 0, 0, 0);
+        mConfig.enableDepthTest = true;
+        mConfig.depthFunc = GL_LESS;
+        mConfig.enableBlend = false;
+        mConfig.blendSrc = GL_SRC_ALPHA;
+        mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
     }
 
     void GeometryPass::Execute(const std::vector<RenderCommand>& commands)
@@ -427,24 +435,32 @@ namespace te
 
     void BasePass::OnInitialize()
     {
-        mConfig = te::RenderPassConfig{
-        "BasePass",
-        te::RenderPassType::Base,
-        te::RenderPassState::Enabled,
-        {
+        mConfig.name = "BasePass";
+        mConfig.type = te::RenderPassType::Base;
+        mConfig.state = te::RenderPassState::Enabled;
+        mConfig.inputs = {
             {"Albedo", "GeometryPass", "albedo", 0, true},
             {"Normal", "GeometryPass", "normal", 0, true},
             {"Position", "GeometryPass", "position", 0, true},
             {"Depth", "GeometryPass", "depth", 0, true}
-        }, // inputs
-        {
+        }; // inputs
+        mConfig.outputs = {
             {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
-        }, // outputs
-        {
+        }; // outputs
+        mConfig.dependencies = {
             {"GeometryPass", true, []() { return true; }},
-        }, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)  // enable depth test, clear color is (0,0,0,0) for combine with background
-        };
+        }; // dependencies
+        mConfig.clearColor = true;
+        mConfig.clearDepth = true;
+        mConfig.clearStencil = false;
+        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);  // enable depth test, clear color is (0,0,0,0) for combine with background
+        mConfig.useCustomViewport = false;
+        mConfig.viewport = glm::ivec4(0, 0, 0, 0);
+        mConfig.enableDepthTest = true;
+        mConfig.depthFunc = GL_LESS;
+        mConfig.enableBlend = false;
+        mConfig.blendSrc = GL_SRC_ALPHA;
+        mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
     }
 
     void BasePass::Execute(const std::vector<RenderCommand>& commands)
@@ -574,21 +590,34 @@ namespace te
 
     void PostProcessPass::OnInitialize()
     {
-        mConfig = te::RenderPassConfig{
-        "PostProcessPass",
-        te::RenderPassType::PostProcess,
-        te::RenderPassState::Enabled,
-        {
+        mConfig.name = "PostProcessPass";
+        mConfig.type = te::RenderPassType::PostProcess;
+        mConfig.state = te::RenderPassState::Enabled;
+        mConfig.inputs = {
             {"BackgroundColor", "SkyboxPass", "backgroundcolor", 0, true},
             {"BaseColor", "BasePass", "basecolor", 0, true}
-        }, // inputs - BasePass now handles background fusion
-        {}, // outputs - render to screen directly
-        {
+        }; // inputs - BasePass now handles background fusion
+        mConfig.outputs = {}; // outputs - render to screen directly
+        mConfig.dependencies = {
             {"SkyboxPass", true, []() { return true; }},
             {"BasePass", true, []() { return true; }}
-        }, // dependencies
-        true, false, false, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)  // 启用颜色清除
-        };
+        }; // dependencies
+        mConfig.clearColor = true;
+        mConfig.clearDepth = false;
+        mConfig.clearStencil = false;
+        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  // 启用颜色清除
+        mConfig.useCustomViewport = true;
+        if (mpAttachView) {
+            mConfig.viewport = glm::ivec4(0, 0, mpAttachView->Width(), mpAttachView->Height());
+        }
+        else {
+            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // 默认尺寸
+        }
+        mConfig.enableDepthTest = true;
+        mConfig.depthFunc = GL_LESS;
+        mConfig.enableBlend = false;
+        mConfig.blendSrc = GL_SRC_ALPHA;
+        mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
 
         // Create fullscreen quad
         mQuadVertices = {
@@ -772,17 +801,30 @@ namespace te
 
     void SkyboxPass::OnInitialize()
     {
-        mConfig = te::RenderPassConfig{
-        "SkyboxPass",
-        te::RenderPassType::Skybox,
-        te::RenderPassState::Enabled,
-        {}, // inputs
-        { 
+        mConfig.name = "SkyboxPass";
+        mConfig.type = te::RenderPassType::Skybox;
+        mConfig.state = te::RenderPassState::Enabled;
+        mConfig.inputs = {}; // inputs
+        mConfig.outputs = { 
             {"BackgroundColor", "backgroundcolor", te::RenderTargetFormat::RGBA8},
-        }, // outputs
-        {}, // dependencies
-        true, true, false, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f) // enable deptyh test,LEQUAL
-        };
+        }; // outputs
+        mConfig.dependencies = {}; // dependencies
+        mConfig.clearColor = true;
+        mConfig.clearDepth = true;
+        mConfig.clearStencil = false;
+        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        mConfig.useCustomViewport = true;  // 启用自定义viewport
+        // 使用RenderView的尺寸设置viewport
+        if (mpAttachView) {
+            mConfig.viewport = glm::ivec4(0, 0, mpAttachView->Width(), mpAttachView->Height());
+        } else {
+            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // 默认尺寸
+        }
+        mConfig.enableDepthTest = true;
+        mConfig.depthFunc = GL_LEQUAL; // enable depth test with LEQUAL
+        mConfig.enableBlend = false;
+        mConfig.blendSrc = GL_SRC_ALPHA;
+        mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
 
         // Create skybox cube vertices with proper Vertex structure
         mSkyboxVertices = {
@@ -859,8 +901,12 @@ namespace te
 
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
     {
+        std::cout << "SkyboxPass::Execute called" << std::endl;
         if (!IsEnabled())
+        {
+            std::cout << "SkyboxPass is disabled" << std::endl;
             return;
+        }
 
         OnPreExecute();
 
@@ -881,11 +927,20 @@ namespace te
             glClear(GL_COLOR_BUFFER_BIT);
         }
 
+        // make sure skybox is always rendered at the farthest distance
+        // disable depth writing, so other geometries can correctly occlude the skybox
+        glDepthMask(GL_FALSE);
+
         auto pSkyboxMat = std::dynamic_pointer_cast<SkyboxMaterial>(mpOverMaterial);
+        std::cout << "SkyboxPass: mCandidateCommands size: " << mCandidateCommands.size() << std::endl;
         for (const auto& command : mCandidateCommands)
         {
             if (command.vertices.empty() || command.indices.empty())
+            {
+                std::cout << "SkyboxPass: Skipping command with empty vertices/indices" << std::endl;
                 continue;
+            }
+            std::cout << "SkyboxPass: Rendering skybox with " << command.vertices.size() << " vertices, " << command.indices.size() << " indices" << std::endl;
 
             // Use skybox material
             pSkyboxMat->OnApply(); // bind cubemap to GL_TEXTURE7
@@ -933,6 +988,9 @@ namespace te
         }
 
         UnbindInputs();
+
+        // restore depth writing
+        glDepthMask(GL_TRUE);
 
         // Unbind FrameBuffer
         if (mFrameBuffer)
