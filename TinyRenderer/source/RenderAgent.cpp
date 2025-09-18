@@ -184,7 +184,7 @@ void RenderAgent::Render()
 
         mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // 
+        mpRenderer->Clear(0x3); // clear color/clear depth
 
         if (mpRenderer->IsMultiPassEnabled())
         {
@@ -277,9 +277,9 @@ void RenderAgent::SetupMultiPassRendering()
     // add Pass to RenderPassManager（for dependency management）
     // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
-    // te::RenderPassManager::GetInstance().AddPass(geometryPass);
-    // te::RenderPassManager::GetInstance().AddPass(basePass);
-    // te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
     // enable multi-pass rendering
     mpRenderer->SetMultiPassEnabled(true);

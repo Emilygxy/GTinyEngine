@@ -813,12 +813,12 @@ namespace te
         mConfig.clearDepth = true;
         mConfig.clearStencil = false;
         mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        mConfig.useCustomViewport = true;  // 启用自定义viewport
-        // 使用RenderView的尺寸设置viewport
+        mConfig.useCustomViewport = true;  // enable custom viewport
+        // use RenderView's size to set viewport
         if (mpAttachView) {
             mConfig.viewport = glm::ivec4(0, 0, mpAttachView->Width(), mpAttachView->Height());
         } else {
-            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // 默认尺寸
+            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // default size
         }
         mConfig.enableDepthTest = true;
         mConfig.depthFunc = GL_LEQUAL; // enable depth test with LEQUAL
@@ -826,7 +826,7 @@ namespace te
         mConfig.blendSrc = GL_SRC_ALPHA;
         mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
 
-        // Create skybox cube vertices with proper Vertex structure
+        // Create skybox cube vertices with proper Vertex structure( ccw vertices)
         mSkyboxVertices = {
             // Front face
             {{-1.0f, -1.0f,  1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},  // 0
@@ -936,6 +936,13 @@ namespace te
         // make sure skybox is always rendered at the farthest distance
         // disable depth writing, so other geometries can correctly occlude the skybox
         glDepthMask(GL_FALSE);
+        
+        // skybox needs double-sided rendering, disable face culling
+        // save current face culling state
+        GLboolean cullFaceEnabled = glIsEnabled(GL_CULL_FACE);
+        
+        // disable face culling to implement double-sided rendering
+        glDisable(GL_CULL_FACE);
 
         auto pSkyboxMat = std::dynamic_pointer_cast<SkyboxMaterial>(mpOverMaterial);
         std::cout << "SkyboxPass: mCandidateCommands size: " << mCandidateCommands.size() << std::endl;
@@ -1001,6 +1008,11 @@ namespace te
         }
 
         UnbindInputs();
+
+        // restore face culling state
+        if (cullFaceEnabled) {
+            glEnable(GL_CULL_FACE);
+        }
 
         // restore depth writing
         glDepthMask(GL_TRUE);
