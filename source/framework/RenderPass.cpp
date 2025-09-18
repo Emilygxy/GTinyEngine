@@ -961,7 +961,7 @@ namespace te
             // Set camera matrices
             if (auto pCamera = mpRenderContext->GetAttachedCamera())
             {
-                glm::mat4 viewNoTrans = glm::mat4(glm::mat3(pCamera->GetViewMatrix()));
+                glm::mat4 viewNoTrans = glm::mat4(glm::mat3(pCamera->GetViewMatrix())); // remove translation from view matrix
                 pSkyboxMat->GetShader()->setMat4("view", viewNoTrans);
                 pSkyboxMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
             }
@@ -970,7 +970,7 @@ namespace te
             pSkyboxMat->OnBind();
 
             // Update material uniforms after binding
-            pSkyboxMat->UpdateUniform(); // set u_skyboxMap = 7
+            pSkyboxMat->UpdateUniform(); // set u_skyboxMap = 0
 
             //
             // Create and bind VAO
