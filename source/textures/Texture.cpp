@@ -2,10 +2,8 @@
 #include <GLFW/glfw3.h>
 #include "ultis.h"
 
-GLuint TextureBase::sPassIdSeed = 0u;
-
 TextureBase::TextureBase()
-	:mHandle(sPassIdSeed++)
+	:mHandle(kInvalidHandle)
 {
 }
 

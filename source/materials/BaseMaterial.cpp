@@ -4,10 +4,11 @@
 #include "glad/glad.h"
 #include "Camera.h"
 #include "Light.h"
+#include "filesystem.h"
 
 MaterialBase::MaterialBase(const std::string& vs_path, const std::string& fs_path)
 {
-	mpShader = std::make_shared<Shader>(vs_path.c_str(), fs_path.c_str());
+	mpShader = std::make_shared<Shader>(FileSystem::getPath(vs_path).c_str(), FileSystem::getPath(fs_path).c_str());
 }
 
 void MaterialBase::AttachedCamera(const std::shared_ptr<Camera>& pcamera)
@@ -80,6 +81,7 @@ PhongMaterial::PhongMaterial(const std::string& vs_path, const std::string& fs_p
 	: MaterialBase(vs_path, fs_path)
     , mpDiffuseTexture(std::make_shared<Texture2D>())
 {
+    mUseEnables = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 PhongMaterial::~PhongMaterial()
@@ -90,9 +92,28 @@ void PhongMaterial::OnBind()
 {
     // bind texture
     if (mbHasTexture) {
+        if (mpDiffuseTexture->GetHandle() == 0) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - mpDiffuseTexture is 0!" << std::endl;
+            return;
+        }
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle()); //uniform location?
+        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle());
+
+        GLint boundTexture;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+        if (boundTexture != mpDiffuseTexture->GetHandle()) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - Failed to bind texture! Expected: " << mpDiffuseTexture->GetHandle() << ", Got: " << boundTexture << std::endl;
+        }
+        else {
+            std::cout << "PhongMaterial::OnBind() - Successfully bound texture " << mpDiffuseTexture->GetHandle() << " to GL_TEXTURE0" << std::endl;
+        }
     }
+}
+
+void PhongMaterial::UnBind()
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void PhongMaterial::UpdateUniform()
@@ -107,8 +128,13 @@ void PhongMaterial::UpdateUniform()
     }
     
     mpShader->setVec3("u_objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
-    mpShader->setInt("u_diffuseTexture", 0);
     mpShader->setVec4("u_Strengths", mIntensities);
+    
+    mpShader->setInt("u_diffuseTexture", 0);
+    mpShader->setInt("u_geomAlbedoMap", 1);
+    mpShader->setInt("u_geomNormalMap", 2);
+    mpShader->setInt("u_geomPositionMap", 3);
+    mpShader->setInt("u_geomDepthMap", 4);
 
     // Set lighting parameters
     if (auto pLight = mpAttachedLight.lock())
@@ -116,10 +142,8 @@ void PhongMaterial::UpdateUniform()
         mpShader->setVec3("u_lightColor", pLight->GetColor());
         mpShader->setVec3("u_lightPos", pLight->GetPosition());
     }
-    if (useBlinnPhong)
-    {
-        mpShader->setFloat("u_UseBlinnPhong", useBlinnPhong ? 1.0f : 0.0f);
-    }
+
+    mpShader->setVec4("u_useBlinn_Geometry", mUseEnables);
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
@@ -132,4 +156,9 @@ void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
 
     mpDiffuseTexture->SetTexturePaths({ path });
     mbHasTexture = true;
+}
+
+void PhongMaterial::SetUseGeometryTarget(bool use)
+{
+    mUseEnables[1] = use ? 1.0f : 0.0f;
 }

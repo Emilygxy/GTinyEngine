@@ -8,16 +8,6 @@ BasicGeometry::~BasicGeometry() {
     }
 }
 
-void BasicGeometry::SetMaterial(const std::shared_ptr<MaterialBase>& material)
-{
-	mpMaterial = material;
-}
-
-std::shared_ptr<MaterialBase> BasicGeometry::GetMaterial()
-{
-	return mpMaterial;
-}
-
 void BasicGeometry::Draw() const
 {
     if (!initialized) return;
@@ -78,8 +68,6 @@ std::optional<te::AaBB> BasicGeometry::GetAABB(bool update)
             toAabb(abab, mVertices.data(), vSize, sizeof(Vertex)/*GetVertexStride()*/ , /*GetPositionOffset()*/ 0 );
             mAabb = abab;
         }
-       /* if (m_pData->m_vertices)
-            gw::render::toAabb(*m_pData->m_aabb, m_pData->m_vertices->Get(), m_pData->m_numVertices, GetVertexStride(), GetPositionOffset());*/
     }
 
     return mAabb;

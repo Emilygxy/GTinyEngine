@@ -7,6 +7,7 @@
 #include <iostream>
 #include "shader.h"
 #include "ultis.h"
+#include "filesystem.h"
 
 namespace
 {
@@ -73,7 +74,8 @@ Skybox::Skybox(const std::vector<std::string>& faces)
 
     // 3. load shader
     //mShaderProgram = loadShader("skybox.vs", "skybox.fs");
-    mShader = std::make_shared<Shader>("resources/shaders/TinyRenderer/skybox.vs", "resources/shaders/TinyRenderer/skybox.fs");
+    mShader = std::make_shared<Shader>(FileSystem::getPath("resources/shaders/TinyRenderer/skybox.vs").c_str(), 
+                                      FileSystem::getPath("resources/shaders/TinyRenderer/skybox.fs").c_str());
 }
 
 Skybox::~Skybox()
@@ -95,9 +97,17 @@ void Skybox::Draw(const glm::mat4& view, const glm::mat4& projection)
     glUniformMatrix4fv(glGetUniformLocation(mShader->GetID(), "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
     glBindVertexArray(mVAO);
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE7);
     glBindTexture(GL_TEXTURE_CUBE_MAP, mCubemapTexture);
+    
+    // Set the skybox texture uniform
+    glUniform1i(glGetUniformLocation(mShader->GetID(), "u_skyboxMap"), 7);
+    
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
+    
+    // unbind shader, incase status error
+    glUseProgram(0);
+    
     glDepthFunc(GL_LESS);
 }

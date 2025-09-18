@@ -38,7 +38,6 @@ protected:
 
 	std::vector<std::string> mTexturePaths;
 private:
-	static GLuint sPassIdSeed;
 };
 
 class Texture2D : public TextureBase

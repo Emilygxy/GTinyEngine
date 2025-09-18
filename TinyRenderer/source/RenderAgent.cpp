@@ -3,6 +3,7 @@
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/BlitMaterial.h"
 #include "Camera.h"
 #include "Light.h"
 #include "mesh/AaBB.h"
@@ -16,6 +17,10 @@
 // Additional includes for AABB and math
 #include <limits>
 #include <algorithm>
+
+#include "RenderView.h"
+#include "framework/RenderContext.h"
+#include "framework/RenderPass.h"
 
 namespace
 {
@@ -130,17 +135,21 @@ void RenderAgent::SetupRenderer()
         std::cout << "Failed to initialize renderer" << std::endl;
     }
 
+    mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
+    mpRenderContext = std::make_shared<RenderContext>();
+    mpRenderer->SetRenderContext(mpRenderContext);
+
     //init camera
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
     mpCameraEvent = std::make_shared<Camera_Event>(pCamera);
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
-    mpRenderer->SetCamera(pCamera);
+    mpRenderContext->AttachCamera(pCamera);
     //init light
     auto pLight = std::make_shared<Light>();
     pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
     pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
-    mpRenderer->SetLight(pLight);
+    mpRenderContext->PushAttachLight(pLight);
 }
 
 void RenderAgent::Render()
@@ -150,20 +159,12 @@ void RenderAgent::Render()
         mpGeometry = std::make_shared<Box>(2.0f, 2.0f, 2.0f);
         //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
-        
-        // attach light to material
-        if (mpRenderer)
-        {
-            auto light = mpRenderer->GetLight();
-            if (light)
-            {
-                material->AttachedLight(light);
-            }
-        }
+        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
     }
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -181,17 +182,44 @@ void RenderAgent::Render()
         // Begin Render Frame
         mpRenderer->BeginFrame();
 
-        mpRenderer->SetViewport(0, 0, 800, 600);
+        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
         mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // 
+        mpRenderer->Clear(0x3); // clear color/clear depth
 
-        mpRenderer->DrawBackgroud();
+        if (mpRenderer->IsMultiPassEnabled())
+        {
+            // 创建渲染命令
+            std::vector<RenderCommand> commands;
+            RenderCommand sphereCommand;
+            sphereCommand.material = mpGeometry->GetMaterial();
+            sphereCommand.vertices = mpGeometry->GetVertices();
+            sphereCommand.indices = mpGeometry->GetIndices();
+            sphereCommand.transform = mpGeometry->GetWorldTransform();
+            sphereCommand.state = RenderMode::Opaque;
+            sphereCommand.hasUV = true;
+            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
 
-        // DrawMesh
-        mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-            mpGeometry->GetIndices(),
-            mpGeometry->GetMaterial(),
-            mpGeometry->GetWorldTransform());
+            commands.push_back(sphereCommand);
+
+            // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
+            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+        }
+        else
+        {
+            // 传统单Pass渲染
+            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                mpGeometry->GetIndices(),
+                mpGeometry->GetMaterial(),
+                mpGeometry->GetWorldTransform());
+        }
+
+        //mpRenderer->DrawBackgroud();
+
+        //// DrawMesh
+        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+        //    mpGeometry->GetIndices(),
+        //    mpGeometry->GetMaterial(),
+        //    mpGeometry->GetWorldTransform());
 
         // Render ImGui
         RenderImGui();
@@ -222,7 +250,41 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
+
+    SetupMultiPassRendering();
 }
+
+void RenderAgent::SetupMultiPassRendering()
+{
+    // 创建天空盒Pass
+    auto skyboxPass = std::make_shared<te::SkyboxPass>();
+    skyboxPass->Initialize(mpRenderView, mpRenderContext);
+
+    // 创建几何Pass
+    auto geometryPass = std::make_shared<te::GeometryPass>();
+    geometryPass->Initialize(mpRenderView, mpRenderContext);
+
+    // 创建光照Pass
+    auto basePass = std::make_shared<te::BasePass>();
+    basePass->Initialize(mpRenderView, mpRenderContext);
+
+    // PostProcessPass Pass
+    auto postProcessPass = std::make_shared<te::PostProcessPass>();
+    postProcessPass->Initialize(mpRenderView, mpRenderContext);
+
+    postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
+
+    // add Pass to RenderPassManager（for dependency management）
+    // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
+    te::RenderPassManager::GetInstance().AddPass(skyboxPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+
+    // enable multi-pass rendering
+    mpRenderer->SetMultiPassEnabled(true);
+}
+
 
 // ImGui implementation
 void RenderAgent::InitImGui()
@@ -288,10 +350,10 @@ void RenderAgent::RenderImGui()
 }
 
 // Mouse picking implementation
-RenderAgent::Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
+Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
-    auto camera = mpRenderer->GetCamera();
+    auto camera = mpRenderContext->GetAttachedCamera();
     if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
     
     glm::mat4 viewMatrix = camera->GetViewMatrix();
@@ -332,11 +394,11 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
 {
     // Ray-AABB intersection using slab method
     // This is a more general approach that works for any AABB
-    
+    //step 1: initialize
     float tMin = 0.0f;
     float tMax = std::numeric_limits<float>::max();
     
-    // Test intersection with each axis-aligned plane
+    // step 2: test intersection with each axis-aligned plane
     for (int i = 0; i < 3; ++i) {
         if (std::abs(rayDirection[i]) < 1e-6f) {
             // Ray is parallel to the plane
@@ -378,41 +440,10 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     return true;
 }
 
-// Ray-Sphere intersection test (more accurate than AABB for spheres)
-bool RenderAgent::RaySphereIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
-                                       const glm::vec3& sphereCenter, float sphereRadius, float& t)
-{
-    glm::vec3 oc = rayOrigin - sphereCenter;
-    float a = glm::dot(rayDirection, rayDirection);
-    float b = 2.0f * glm::dot(oc, rayDirection);
-    float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
-    
-    float discriminant = b * b - 4 * a * c;
-    
-    if (discriminant < 0) {
-        return false; // No intersection
-    }
-    
-    float sqrtDiscriminant = std::sqrt(discriminant);
-    float t1 = (-b - sqrtDiscriminant) / (2.0f * a);
-    float t2 = (-b + sqrtDiscriminant) / (2.0f * a);
-    
-    // Return the closest positive intersection
-    if (t1 > 0) {
-        t = t1;
-        return true;
-    } else if (t2 > 0) {
-        t = t2;
-        return true;
-    }
-    
-    return false; // Both intersections are behind the ray origin
-}
-
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
 {
     // Get camera position
-    auto camera = mpRenderer->GetCamera();
+    auto camera = mpRenderContext->GetAttachedCamera();
     if (!camera) return;
     
     glm::vec3 cameraPos = camera->GetEye();
@@ -440,7 +471,6 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     // Debug sphere info
     std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
     
-    // 获取几何体的世界AABB（已经应用了世界变换）
     auto worldAABB = mpGeometry->GetWorldAABB();
     
     if (!worldAABB.has_value()) {
