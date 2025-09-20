@@ -605,13 +605,13 @@ namespace te
         mConfig.clearColor = true;
         mConfig.clearDepth = false;
         mConfig.clearStencil = false;
-        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  // 启用颜色清除
+        mConfig.clearColorValue = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);  // enable color clear
         mConfig.useCustomViewport = true;
         if (mpAttachView) {
             mConfig.viewport = glm::ivec4(0, 0, mpAttachView->Width(), mpAttachView->Height());
         }
         else {
-            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // 默认尺寸
+            mConfig.viewport = glm::ivec4(0, 0, 800, 600);  // default size
         }
         mConfig.enableDepthTest = true;
         mConfig.depthFunc = GL_LESS;

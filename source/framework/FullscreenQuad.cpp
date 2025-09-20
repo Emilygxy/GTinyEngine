@@ -4,7 +4,7 @@ namespace te
 {
     FullscreenQuad::FullscreenQuad()
     {
-        // 全屏四边形的顶点数据
+        // fullscreen quad vertices
         float quadVertices[] = {
             // positions   // texCoords
             -1.0f,  1.0f,  0.0f, 1.0f,

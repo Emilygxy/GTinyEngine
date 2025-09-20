@@ -50,20 +50,20 @@ bool OpenGLRenderer::Initialize()
 {
     std::cout << "OpenGLRenderer::Initialize called" << std::endl;
     
-    // OpenGL 已经在其他地方初始化，这里只需要设置一些默认状态
+    // OpenGL already initialized, here only need to set some default states
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);  // 设置深度函数
+    glDepthFunc(GL_LESS);  // set depth function
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
     
-    // 设置默认清除颜色
+    // set default clear color
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     
-    // 设置点大小（用于 Points 渲染状态）
+    // set point size (for Points render state)
     glPointSize(1.0f);
     
-    // 设置线宽（用于 Lines 和 Wireframe 渲染状态）
+    // set line width (for Lines and Wireframe render state)
     glLineWidth(1.0f);
     
     mStats.Reset();
@@ -74,7 +74,7 @@ bool OpenGLRenderer::Initialize()
 
 void OpenGLRenderer::Shutdown()
 {
-    // 清理缓存的网格数据
+    // clean up cached mesh data
     for (auto& [hash, cache] : mMeshCache)
     {
         CleanupMeshBuffers(cache.vao, cache.vbo, cache.ebo);
@@ -92,7 +92,7 @@ void OpenGLRenderer::BeginFrame()
 
 void OpenGLRenderer::EndFrame()
 {
-    // 可以在这里添加帧结束时的清理工作
+    // can add cleanup work here
 }
 
 void OpenGLRenderer::DrawMesh(const RenderCommand& command)
@@ -108,16 +108,16 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
    if (!material || vertices.empty() || indices.empty() || (!mpRenderContext))
        return;
 
-   // 应用渲染状态
+   // apply render state
    ApplyRenderState(RenderMode::Opaque);
 
-   // 设置材质
+   // set material
    material->OnApply();
    
-   // 设置变换矩阵
+   // set transform matrix
    material->GetShader()->setMat4("model", transform);
    
-   // 设置相机和光照参数
+   // set camera and light parameters
    if (auto pCamera = mpRenderContext->GetAttachedCamera())
    {
        material->GetShader()->setMat4("view", pCamera->GetViewMatrix());
@@ -130,17 +130,17 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
        material->GetShader()->setVec3("u_lightColor", pLight->GetColor());
    }
    
-   // 更新材质 uniform
+   // update material uniform
    material->UpdateUniform();
    
-   // 绑定材质资源
+   // bind material resources
    material->OnBind();
 
-   // 计算网格哈希用于缓存
+   // calculate mesh hash for caching
    size_t meshHash = std::hash<std::string>{}(std::string((char*)vertices.data(), vertices.size() * sizeof(Vertex))) ^
                     std::hash<std::string>{}(std::string((char*)indices.data(), indices.size() * sizeof(unsigned int)));
 
-   // 查找或创建缓存的网格数据
+   // find or create cached mesh data
    auto it = mMeshCache.find(meshHash);
    if (it == mMeshCache.end())
    {
@@ -152,12 +152,12 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
        it = mMeshCache.find(meshHash);
    }
 
-   // 绑定 VAO 并绘制
+   // bind VAO and draw
    glBindVertexArray(it->second.vao);
    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(it->second.indexCount), GL_UNSIGNED_INT, 0);
    glBindVertexArray(0);
 
-   // 更新统计信息
+   // update stats
    mStats.drawCalls++;
    mStats.triangles += indices.size() / 3;
    mStats.vertices += vertices.size();
@@ -208,15 +208,15 @@ void OpenGLRenderer::SetupMeshBuffers(const std::vector<Vertex>& vertices,
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 
-    // 位置属性
+    // position attribute
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
 
-    // 法线属性
+    // normal attribute
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 
-    // UV 坐标属性
+    // UV attribute
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
@@ -250,14 +250,14 @@ void OpenGLRenderer::ApplyRenderState(RenderMode state)
     case RenderMode::Points:
         glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
         glEnable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);  // 点渲染通常不需要面剔除
-        glPointSize(2.0f);        // 设置点大小，使其更可见
+        glDisable(GL_CULL_FACE);  // point rendering usually doesn't need face culling
+        glPointSize(2.0f);        // set point size,使其更可见
         break;
     case RenderMode::Lines:
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         glEnable(GL_DEPTH_TEST);
-        glDisable(GL_CULL_FACE);  // 线渲染通常不需要面剔除
-        glLineWidth(1.0f);        // 设置线宽
+        glDisable(GL_CULL_FACE);  // line rendering usually doesn't need face culling
+        glLineWidth(1.0f);        // set line width
         break;
     case RenderMode::Transparent:
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -278,14 +278,14 @@ void OpenGLRenderer::AddRenderPass(const std::shared_ptr<te::RenderPass>& pass)
 
     const std::string& name = pass->GetConfig().name;
     
-    // 检查是否已存在
+    // check if already exists
     if (mRenderPassIndexMap.find(name) != mRenderPassIndexMap.end())
     {
         std::cout << "RenderPass with name '" << name << "' already exists" << std::endl;
         return;
     }
 
-    // 添加到列表
+    // add to list
     size_t index = mRenderPasses.size();
     mRenderPasses.push_back(pass);
     mRenderPassIndexMap[name] = index;
@@ -301,7 +301,7 @@ void OpenGLRenderer::RemoveRenderPass(const std::string& name)
     mRenderPasses.erase(mRenderPasses.begin() + index);
     mRenderPassIndexMap.erase(it);
 
-    // 重新构建索引映射
+    // rebuild index mapping
     mRenderPassIndexMap.clear();
     for (size_t i = 0; i < mRenderPasses.size(); ++i)
     {
@@ -325,7 +325,7 @@ void OpenGLRenderer::ExecuteRenderPasses(const std::vector<RenderCommand>& comma
     // set inputs
     for (const auto& pass : mRenderPasses)
     {
-        // 设置输入纹理
+        // set input textures
         for (const auto& input : pass->GetConfig().inputs)
         {
             auto sourcePass = GetRenderPass(input.sourcePass);
@@ -340,20 +340,20 @@ void OpenGLRenderer::ExecuteRenderPasses(const std::vector<RenderCommand>& comma
         }
     }
 
-    // 按依赖关系排序Pass
-    // 这里使用简单的排序，实际应该实现拓扑排序
+    // sort Pass by dependency
+    // here use simple sort, should implement topological sort in the future
     std::sort(mRenderPasses.begin(), mRenderPasses.end(),
         [](const std::shared_ptr<te::RenderPass>& a, const std::shared_ptr<te::RenderPass>& b) {
             return static_cast<int>(a->GetConfig().type) < static_cast<int>(b->GetConfig().type);
         });
 
-    // 执行所有Pass
+    // execute all Pass
     for (const auto& pass : mRenderPasses)
     {
         if (!pass->IsEnabled())
             continue;
 
-        // 执行Pass
+        // execute Pass
         pass->Execute(commands);
     }
 } 
