@@ -8,7 +8,7 @@
 
 MaterialBase::MaterialBase(const std::string& vs_path, const std::string& fs_path)
 {
-	mpShader = std::make_shared<Shader>(FileSystem::getPath(vs_path).c_str(), FileSystem::getPath(fs_path).c_str());
+	mpShader = std::make_shared<Shader>(vs_path.c_str(), fs_path.c_str());
 }
 
 void MaterialBase::AttachedCamera(const std::shared_ptr<Camera>& pcamera)
