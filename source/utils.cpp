@@ -12,7 +12,7 @@ unsigned int loadTexture(char const* path, bool generateMipMap)
     unsigned int textureID;
     glGenTextures(1, &textureID);
 
-    // 设置像素对齐，解决非4字节对齐的图像加载问题
+    // set pixel alignment, solve the problem of non-4 byte alignment image loading
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     int width, height, nrComponents;
@@ -63,7 +63,7 @@ unsigned int loadCubemap(const std::vector<std::string>& faces)
 
     glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
-    // 设置像素对齐，解决非4字节对齐的图像加载问题
+    // set pixel alignment, solve the problem of non-4 byte alignment image loading
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     int width, height, nrChannels;

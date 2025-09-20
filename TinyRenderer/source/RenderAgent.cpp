@@ -188,7 +188,7 @@ void RenderAgent::Render()
 
         if (mpRenderer->IsMultiPassEnabled())
         {
-            // 创建渲染命令
+            // create render command
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = mpGeometry->GetMaterial();
@@ -201,12 +201,12 @@ void RenderAgent::Render()
 
             commands.push_back(sphereCommand);
 
-            // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
+            // use RenderPassManager to execute Pass（with correct dependency management）
             te::RenderPassManager::GetInstance().ExecuteAll(commands);
         }
         else
         {
-            // 传统单Pass渲染
+            // traditional single Pass rendering
             mpRenderer->DrawMesh(mpGeometry->GetVertices(),
                 mpGeometry->GetIndices(),
                 mpGeometry->GetMaterial(),
@@ -256,15 +256,15 @@ void RenderAgent::PreRender()
 
 void RenderAgent::SetupMultiPassRendering()
 {
-    // 创建天空盒Pass
+    // create skybox Pass
     auto skyboxPass = std::make_shared<te::SkyboxPass>();
     skyboxPass->Initialize(mpRenderView, mpRenderContext);
 
-    // 创建几何Pass
+    // create geometry Pass
     auto geometryPass = std::make_shared<te::GeometryPass>();
     geometryPass->Initialize(mpRenderView, mpRenderContext);
 
-    // 创建光照Pass
+    // create lighting Pass
     auto basePass = std::make_shared<te::BasePass>();
     basePass->Initialize(mpRenderView, mpRenderContext);
 

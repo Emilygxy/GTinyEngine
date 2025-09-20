@@ -58,7 +58,7 @@ namespace te
 
         glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, mDesc.width, mDesc.height, 0, format, dataType, nullptr);
 
-        // 设置纹理参数
+        // set texture parameters
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mDesc.wrapMode);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, mDesc.wrapMode);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mDesc.filterMode);
@@ -77,7 +77,7 @@ namespace te
         glGenFramebuffers(1, &mFramebufferHandle);
         glBindFramebuffer(GL_FRAMEBUFFER, mFramebufferHandle);
 
-        // 绑定纹理到帧缓冲区
+        // bind texture to framebuffer
         if (mDesc.type == RenderTargetType::Color || 
             mDesc.type == RenderTargetType::ColorDepth ||
             mDesc.type == RenderTargetType::ColorDepthStencil)
@@ -234,14 +234,14 @@ namespace te
             return false;
         }
 
-        // 检查名称是否已存在
+        // check if name already exists
         if (mTargetIndexMap.find(desc.name) != mTargetIndexMap.end())
         {
             std::cout << "RenderTarget with name '" << desc.name << "' already exists" << std::endl;
             return false;
         }
 
-        // 创建渲染目标
+        // create render target
         auto renderTarget = std::make_shared<RenderTarget>();
         if (!renderTarget->Initialize(desc))
         {
@@ -249,12 +249,12 @@ namespace te
             return false;
         }
 
-        // 添加到列表
+        // add to list
         size_t index = mRenderTargets.size();
         mRenderTargets.push_back(renderTarget);
         mTargetIndexMap[desc.name] = index;
 
-        // 更新绘制缓冲区
+        // update draw buffers
         UpdateDrawBuffers();
 
         return true;
@@ -270,7 +270,7 @@ namespace te
         mRenderTargets.erase(mRenderTargets.begin() + index);
         mTargetIndexMap.erase(it);
 
-        // 重新构建索引映射
+        // rebuild index mapping
         mTargetIndexMap.clear();
         for (size_t i = 0; i < mRenderTargets.size(); ++i)
         {
@@ -303,7 +303,7 @@ namespace te
         
         glBindFramebuffer(GL_FRAMEBUFFER, mFramebufferHandle);
         
-        // 绑定所有渲染目标
+        // bind all render targets
         for (size_t i = 0; i < mRenderTargets.size(); ++i)
         {
             const auto& target = mRenderTargets[i];
@@ -326,7 +326,7 @@ namespace te
             }
         }
         
-        // 更新绘制缓冲区设置
+        // update draw buffers
         UpdateDrawBuffers();
         
         SetViewport();
@@ -387,7 +387,7 @@ namespace te
             }
         }
         
-        // 设置绘制缓冲区
+        // set draw buffers
         if (!mDrawBuffers.empty())
         {
             glDrawBuffers(static_cast<GLsizei>(mDrawBuffers.size()), mDrawBuffers.data());

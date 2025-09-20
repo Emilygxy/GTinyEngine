@@ -38,7 +38,7 @@ namespace te
 
     void GeometryMaterial::OnPerFrameUpdate()
     {
-        // 几何体Pass不需要每帧更新
+        // geometry pass doesn't need to update every frame
     }
 
     void GeometryMaterial::UpdateUniform()

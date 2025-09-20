@@ -157,46 +157,46 @@ void Box::CreateBox()
     mVertices.clear();
     mIndices.clear();
     
-    // 计算半尺寸
+    // calculate half size
     float w = m_Width * 0.5f;
     float h = m_Height * 0.5f;
     float d = m_Depth * 0.5f;
     
-    // 定义8个顶点（相对于中心点）
+    // define 8 vertices (relative to center point)
     std::vector<glm::vec3> positions = {
-        // 前面 (Z+)
-        glm::vec3(-w, -h,  d) + m_Pos,  // 0: 左下
-        glm::vec3( w, -h,  d) + m_Pos,  // 1: 右下
-        glm::vec3( w,  h,  d) + m_Pos,  // 2: 右上
-        glm::vec3(-w,  h,  d) + m_Pos,  // 3: 左上
+        // front (Z+)
+        glm::vec3(-w, -h,  d) + m_Pos,  // 0: left bottom
+        glm::vec3( w, -h,  d) + m_Pos,  // 1: right bottom
+        glm::vec3( w,  h,  d) + m_Pos,  // 2: right top
+        glm::vec3(-w,  h,  d) + m_Pos,  // 3: left top
         
-        // 后面 (Z-)
-        glm::vec3(-w, -h, -d) + m_Pos,  // 4: 左下
-        glm::vec3( w, -h, -d) + m_Pos,  // 5: 右下
-        glm::vec3( w,  h, -d) + m_Pos,  // 6: 右上
-        glm::vec3(-w,  h, -d) + m_Pos   // 7: 左上
+        // back (Z-)
+        glm::vec3(-w, -h, -d) + m_Pos,  // 4: left bottom
+        glm::vec3( w, -h, -d) + m_Pos,  // 5: right bottom
+        glm::vec3( w,  h, -d) + m_Pos,  // 6: right top
+        glm::vec3(-w,  h, -d) + m_Pos   // 7: left top
     };
     
-    // 定义法向量
+    // define normals
     std::vector<glm::vec3> normals = {
-        glm::vec3( 0,  0,  1),  // 前面
-        glm::vec3( 0,  0, -1),  // 后面
-        glm::vec3( 1,  0,  0),  // 右面
-        glm::vec3(-1,  0,  0),  // 左面
-        glm::vec3( 0,  1,  0),  // 上面
-        glm::vec3( 0, -1,  0)   // 下面
+        glm::vec3( 0,  0,  1),  // front
+        glm::vec3( 0,  0, -1),  // back
+        glm::vec3( 1,  0,  0),  // right
+        glm::vec3(-1,  0,  0),  // left
+        glm::vec3( 0,  1,  0),  // top
+        glm::vec3( 0, -1,  0)   // bottom
     };
     
-    // 定义纹理坐标
+    // define texture coordinates
     std::vector<glm::vec2> texCoords = {
-        glm::vec2(0.0f, 0.0f),  // 左下
-        glm::vec2(1.0f, 0.0f),  // 右下
-        glm::vec2(1.0f, 1.0f),  // 右上
-        glm::vec2(0.0f, 1.0f)   // 左上
+        glm::vec2(0.0f, 0.0f),  // left bottom
+        glm::vec2(1.0f, 0.0f),  // right bottom
+        glm::vec2(1.0f, 1.0f),  // right top
+        glm::vec2(0.0f, 1.0f)   // left top
     };
     
-    // 创建顶点数据
-    // 前面 (0, 1, 2, 3)
+    // create vertices data
+    // front (0, 1, 2, 3)
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
         vertex.position = positions[i];
@@ -205,16 +205,16 @@ void Box::CreateBox()
         mVertices.push_back(vertex);
     }
     
-    // 后面 (4, 5, 6, 7) - 注意顶点顺序要逆时针
+    // back (4, 5, 6, 7) - note that the vertex order should be counter-clockwise
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
-        vertex.position = positions[7 - i];  // 逆序
+        vertex.position = positions[7 - i];  // reverse
         vertex.normal = normals[1];
         vertex.texCoords = texCoords[i];
         mVertices.push_back(vertex);
     }
     
-    // 右面 (1, 5, 6, 2)
+    // right (1, 5, 6, 2)
     std::vector<int> rightFace = {1, 5, 6, 2};
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
@@ -224,7 +224,7 @@ void Box::CreateBox()
         mVertices.push_back(vertex);
     }
     
-    // 左面 (4, 0, 3, 7)
+    // left (4, 0, 3, 7)
     std::vector<int> leftFace = {4, 0, 3, 7};
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
@@ -234,7 +234,7 @@ void Box::CreateBox()
         mVertices.push_back(vertex);
     }
     
-    // 上面 (3, 2, 6, 7)
+    // top (3, 2, 6, 7)
     std::vector<int> topFace = {3, 2, 6, 7};
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
@@ -244,7 +244,7 @@ void Box::CreateBox()
         mVertices.push_back(vertex);
     }
     
-    // 下面 (4, 7, 6, 5) - 注意顶点顺序要逆时针
+    // bottom (4, 7, 6, 5) - note that the vertex order should be counter-clockwise
     std::vector<int> bottomFace = {4, 7, 6, 5};
     for (int i = 0; i < 4; ++i) {
         Vertex vertex;
@@ -254,24 +254,24 @@ void Box::CreateBox()
         mVertices.push_back(vertex);
     }
     
-    // 创建索引数据 (每个面2个三角形)
+    // create index data (each face has 2 triangles)
     for (int face = 0; face < 6; ++face) {
         int baseIndex = face * 4;
         
-        // 第一个三角形
+        // first triangle
         mIndices.push_back(baseIndex + 0);
         mIndices.push_back(baseIndex + 1);
         mIndices.push_back(baseIndex + 2);
         
-        // 第二个三角形
+        // second triangle
         mIndices.push_back(baseIndex + 0);
         mIndices.push_back(baseIndex + 2);
         mIndices.push_back(baseIndex + 3);
     }
     
-    // 设置UV标志
+    // set UV flag
     mbHasUV = true;
     
-    // 设置网格
+    // set mesh
     SetupMesh();
 }
