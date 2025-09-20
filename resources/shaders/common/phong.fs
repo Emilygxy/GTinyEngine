@@ -1,4 +1,8 @@
 #version 330 core
+
+// include common math functions
+#include <includes/math_common.glsl>
+
 out vec4 FragColor;
 
 in vec3 FragPos;

@@ -18,7 +18,6 @@ namespace te
         std::string includeDirectory = "resources/shaders/includes/";  // include directory
         bool enableMacroExpansion = true;  // enable macro expansion
         bool enableIncludeProcessing = true;  // enable include processing
-        bool enableLineDirectives = false;  // enable line directives (disabled by default due to OpenGL compatibility issues)
     };
 
     // macro definition structure
@@ -45,8 +44,10 @@ namespace te
         std::string ProcessShader(const std::string& shaderPath);
         std::string ProcessShaderContent(const std::string& content, const std::string& basePath = "");
 
-        // macro definition management
-        void DefineMacro(const std::string& name, const std::string& value = "", bool isFunction = false);
+        //
+        std::string ProcessMacros(const std::string& content);
+        //
+        void DefineMacro(const std::string& name, const std::string& value, bool isFunction = false);
         void UndefineMacro(const std::string& name);
         void ClearMacros();
         bool IsMacroDefined(const std::string& name) const;
@@ -61,19 +62,12 @@ namespace te
     private:
         // core processing function
         std::string ProcessIncludes(const std::string& content, const std::string& basePath, int depth = 0);
-        std::string ProcessMacros(const std::string& content);
         std::string ProcessLineDirectives(const std::string& content, const std::string& originalPath);
 
         // auxiliary function
         std::string ReadFile(const std::string& filePath);
         std::string ResolveIncludePath(const std::string& includePath, const std::string& basePath);
         bool IsValidIncludeDepth(int depth);
-        
-        // macro processing auxiliary function
-        std::string ExpandMacro(const ShaderMacro& macro, const std::string& content);
-        std::string ExpandFunctionMacro(const ShaderMacro& macro, const std::string& content);
-        std::string ExpandSimpleMacro(const ShaderMacro& macro, const std::string& content);
-        std::vector<std::string> ParseMacroArguments(const std::string& args);
 
         // member variables
         ShaderPreprocessorConfig mConfig;

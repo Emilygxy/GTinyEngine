@@ -53,12 +53,6 @@ namespace te
             mLastProcessedContent = ProcessMacros(mLastProcessedContent);
         }
 
-        // 3. process line directives (for debugging)
-        if (mConfig.enableLineDirectives)
-        {
-            mLastProcessedContent = ProcessLineDirectives(mLastProcessedContent, basePath);
-        }
-
         // Debug output (can be enabled for troubleshooting)
         #ifdef SHADER_PREPROCESSOR_DEBUG
         std::cout << "=== Processed Shader Content ===" << std::endl;
@@ -117,30 +111,33 @@ namespace te
 
     std::string ShaderPreprocessor::ProcessMacros(const std::string& content)
     {
-        std::string result = content;
+        //todo
+        std::string result, targetField = "#version";
 
-        // process macro definitions
-        std::regex defineRegex(R"(#define\s+(\w+)(?:\(([^)]*)\))?\s*(.*))");
-        std::smatch match;
+        size_t pos = content.find(targetField); // find target feid pod
+        if (pos == std::string::npos) 
+            return content;   // not found return
 
-        while (std::regex_search(result, match, defineRegex))
+         // line head: search last change-line flag forwardly
+        size_t lineStart = content.rfind('\n', pos) + 1; // +1 skip change-line flag
+        if (lineStart == std::string::npos) lineStart = 0;
+
+        // line tear: search next change-line flag backwardly
+        size_t lineEnd = content.find('\n', pos);
+        if (lineEnd == std::string::npos) lineEnd = content.length();
+
+        // get substring by line end  pos
+
+        result += content.substr(0, lineEnd);
+        std::string subContent1 = content.substr(lineEnd, content.length() - lineEnd);
+        std::string newField = "";
+        for (auto macro: mMacros)
         {
-            std::string macroName = match[1].str();
-            std::string parameters = match[2].str();
-            std::string macroValue = match[3].str();
-
-            bool isFunction = !parameters.empty();
-            DefineMacro(macroName, macroValue, isFunction);
-
-            // remove the #define line
-            result = std::regex_replace(result, defineRegex, "", std::regex_constants::format_first_only);
+            newField += "\n#define " + macro.second.name + macro.second.value + "\n";
         }
 
-        // expand macros
-        for (const auto& [name, macro] : mMacros)
-        {
-            result = ExpandMacro(macro, result);
-        }
+        result += newField;
+        result += subContent1;
 
         return result;
     }
@@ -233,128 +230,6 @@ namespace te
     const ShaderPreprocessorConfig& ShaderPreprocessor::GetConfig() const
     {
         return mConfig;
-    }
-
-    std::string ShaderPreprocessor::ExpandMacro(const ShaderMacro& macro, const std::string& content)
-    {
-        if (macro.isFunction)
-        {
-            return ExpandFunctionMacro(macro, content);
-        }
-        else
-        {
-            return ExpandSimpleMacro(macro, content);
-        }
-    }
-
-    std::string ShaderPreprocessor::ExpandFunctionMacro(const ShaderMacro& macro, const std::string& content)
-    {
-        // simple function macro expansion implementation
-        std::string pattern = macro.name + "\\s*\\(";
-        std::regex macroRegex(pattern);
-        std::smatch match;
-
-        std::string result = content;
-        while (std::regex_search(result, match, macroRegex))
-        {
-            // find the matching position
-            size_t pos = match.position();
-            size_t start = pos + match.length() - 1; // skip the function name and left parenthesis
-
-            // find the parameter list
-            int parenCount = 1;
-            size_t end = start;
-            while (end < result.length() && parenCount > 0)
-            {
-                end++;
-                if (result[end] == '(') parenCount++;
-                else if (result[end] == ')') parenCount--;
-            }
-
-            if (parenCount == 0)
-            {
-                std::string args = result.substr(start + 1, end - start - 1);
-                std::vector<std::string> arguments = ParseMacroArguments(args);
-                
-                // simple parameter replacement
-                std::string expanded = macro.value;
-                for (size_t i = 0; i < arguments.size(); ++i)
-                {
-                    std::string paramName = "\\$" + std::to_string(i + 1);
-                    std::regex paramRegex(paramName);
-                    expanded = std::regex_replace(expanded, paramRegex, arguments[i]);
-                }
-
-                result.replace(pos, end - pos + 1, expanded);
-            }
-            else
-            {
-                break; // syntax error, stop processing
-            }
-        }
-
-        return result;
-    }
-
-    std::string ShaderPreprocessor::ExpandSimpleMacro(const ShaderMacro& macro, const std::string& content)
-    {
-        // simple macro expansion, avoid expanding in strings and comments
-        std::string result = content;
-        std::string pattern = "\\b" + macro.name + "\\b";
-        std::regex macroRegex(pattern);
-        
-        result = std::regex_replace(result, macroRegex, macro.value);
-        return result;
-    }
-
-    std::vector<std::string> ShaderPreprocessor::ParseMacroArguments(const std::string& args)
-    {
-        std::vector<std::string> arguments;
-        std::string current;
-        int parenCount = 0;
-        bool inString = false;
-        char stringChar = 0;
-
-        for (char c : args)
-        {
-            if (!inString && (c == '"' || c == '\''))
-            {
-                inString = true;
-                stringChar = c;
-                current += c;
-            }
-            else if (inString && c == stringChar)
-            {
-                inString = false;
-                current += c;
-            }
-            else if (!inString && c == '(')
-            {
-                parenCount++;
-                current += c;
-            }
-            else if (!inString && c == ')')
-            {
-                parenCount--;
-                current += c;
-            }
-            else if (!inString && c == ',' && parenCount == 0)
-            {
-                arguments.push_back(current);
-                current.clear();
-            }
-            else
-            {
-                current += c;
-            }
-        }
-
-        if (!current.empty())
-        {
-            arguments.push_back(current);
-        }
-
-        return arguments;
     }
 
     void ShaderPreprocessor::InitializeBuiltinMacros()
