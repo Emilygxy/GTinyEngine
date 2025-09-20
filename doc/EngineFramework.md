@@ -8,8 +8,8 @@
 ### 2. Renderer（渲染器）
 抽象接口：定义统一的渲染 API（如 DrawMesh、SetMaterial）。  
 后端实现：OpenGL、OpenGLES、Vulkan 各自实现接口，便于切换。  
-渲染流程：支持多 Pass、延迟/前向渲染、后处理等。  
-Shader 管理：统一管理 shader 加载、编译、热重载。  
+渲染流程：支持多 Pass、延迟/前向渲染、后处理等。  *(已支持MRT渲染)
+Shader 管理：统一管理 shader 加载、编译、热重载。 (需要中间件支持着色器中的头文件包含和宏定义) 
 材质系统：支持不同材质类型（如 Phong、PBR），可扩展。  
 Uniform/Descriptor 管理：屏蔽不同后端的差异。  
 ### 3. Scene/Entity（场景与实体）  
