@@ -16,7 +16,7 @@ namespace te
     {
         std::string shaderDirectory = "resources/shaders/";  // shader root directory
         std::string includeDirectory = "resources/shaders/includes/";  // include directory
-        bool enableMacroExpansion = true;  // enable macro expansion
+        bool enableMacroExpansion = false;  // enable macro expansion
         bool enableIncludeProcessing = true;  // enable include processing
     };
 
