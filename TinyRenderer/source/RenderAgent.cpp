@@ -156,7 +156,7 @@ void RenderAgent::Render()
 {
     if (!mpGeometry)
     {
-        mpGeometry = std::make_shared<Box>(2.0f, 2.0f, 2.0f);
+        mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
         //mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
         material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");

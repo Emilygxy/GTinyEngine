@@ -275,3 +275,102 @@ void Box::CreateBox()
     // set mesh
     SetupMesh();
 }
+
+//plane geometry
+Plane::Plane(float width, float height)
+    : m_Width(width), m_Height(height)
+{
+    CreatePlane();
+
+    //material
+    auto pPhongMaterial = std::make_shared<PhongMaterial>();
+    pPhongMaterial->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+    SetMaterial(pPhongMaterial);
+}
+
+void Plane::SetPosition(const glm::vec3& pos)
+{
+    m_Pos = pos;
+    CreatePlane();
+}
+
+void Plane::SetSize(float width, float height)
+{
+    m_Width = width;
+    m_Height = height;
+    CreatePlane();
+}
+
+void Plane::SetWidth(float width)
+{
+    m_Width = width;
+    CreatePlane();
+}
+
+void Plane::SetHeight(float height)
+{
+    m_Height = height;
+    CreatePlane();
+}
+
+glm::vec3 Plane::GetPosition() const noexcept
+{
+    return m_Pos;
+}
+
+void Plane::CreatePlane()
+{
+    mVertices.clear();
+    mIndices.clear();
+
+    // calculate half size
+    float w = m_Width * 0.5f;
+    float h = m_Height * 0.5f;
+
+    // define 8 vertices (relative to center point)
+    std::vector<glm::vec3> positions = {
+        // front (Z+)
+        glm::vec3(-w, -h,  0) + m_Pos,  // 0: left bottom
+        glm::vec3(w, -h,  0) + m_Pos,  // 1: right bottom
+        glm::vec3(w,  h,  0) + m_Pos,  // 2: right top
+        glm::vec3(-w,  h,  0) + m_Pos,  // 3: left top
+    };
+
+    // define normals
+    glm::vec3 normal = glm::cross((positions[1]- positions[0]), (positions[2] - positions[0]));
+
+    // define texture coordinates
+    std::vector<glm::vec2> texCoords = {
+        glm::vec2(0.0f, 0.0f),  // left bottom
+        glm::vec2(1.0f, 0.0f),  // right bottom
+        glm::vec2(1.0f, 1.0f),  // right top
+        glm::vec2(0.0f, 1.0f)   // left top
+    };
+
+    // create vertices data
+    // front (0, 1, 2, 3)
+    for (int i = 0; i < 4; ++i) {
+        Vertex vertex;
+        vertex.position = positions[i];
+        vertex.normal = normal;
+        vertex.texCoords = texCoords[i];
+        mVertices.push_back(vertex);
+    }
+
+    // create index data (each face has 2 triangles)
+    // first triangle
+    mIndices.push_back(0);
+    mIndices.push_back(1);
+    mIndices.push_back(2);
+
+    // second triangle
+    mIndices.push_back(0);
+    mIndices.push_back(2);
+    mIndices.push_back(3);
+
+    // set UV flag
+    mbHasUV = true;
+
+    // set mesh
+    SetupMesh();
+}
