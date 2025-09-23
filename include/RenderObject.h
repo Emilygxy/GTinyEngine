@@ -10,7 +10,7 @@ public:
 
 	void SetMaterial(const std::shared_ptr<MaterialBase>& material);
 	std::shared_ptr<MaterialBase> GetMaterial();
-	virtual void Draw() const {}
+	virtual void Draw() {}
 
 protected:
 	std::shared_ptr<MaterialBase> mpMaterial{ nullptr };

@@ -12,9 +12,14 @@ GLuint TextureBase::GetHandle()
 	return mHandle;
 }
 
-bool  TextureBase::IsValid()
+bool TextureBase::IsValid()
 {
 	return (mHandle != kInvalidHandle);
+}
+
+void TextureBase::SetTypeName(const std::string& name)
+{
+	mTypeName = name;
 }
 
 void TextureBase::SetTexturePaths(const std::vector<std::string>& paths)
