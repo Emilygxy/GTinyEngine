@@ -9,7 +9,7 @@
 抽象接口：定义统一的渲染 API（如 DrawMesh、SetMaterial）。  
 后端实现：OpenGL、OpenGLES、Vulkan 各自实现接口，便于切换。  
 渲染流程：支持多 Pass、延迟/前向渲染、后处理等。  *(已支持MRT渲染)
-Shader 管理：统一管理 shader 加载、编译、热重载。 (需要中间件支持着色器中的头文件包含和宏定义) 
+Shader 管理：统一管理 shader 加载、编译、热重载。 (需要中间件支持着色器中的头文件包含和宏定义, 已支持) 
 材质系统：支持不同材质类型（如 Phong、PBR），可扩展。  
 Uniform/Descriptor 管理：屏蔽不同后端的差异。  
 ### 3. Scene/Entity（场景与实体）  
@@ -17,7 +17,7 @@ Uniform/Descriptor 管理：屏蔽不同后端的差异。
 实体-组件系统（ECS）：每个实体可挂载组件（如 Transform、MeshRenderer、Light）。  
 层级关系：支持父子节点、变换继承。  
 ### 4. Resource Manager（资源管理）
-统一接口：管理纹理、模型、shader、材质等资源的加载、缓存、释放。  
+统一接口：管理纹理、模型、shader、材质等资源的加载、缓存、释放。  （目前支持模型加载-材质处理有待完善）
 异步加载：支持后台加载大资源。  
 引用计数：防止资源泄漏。  
 ### 5. Input/Window（输入与窗口）
