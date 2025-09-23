@@ -11,6 +11,16 @@ public:
     Mesh(/* args */);
     ~Mesh();
 
+    std::vector<Vertex>& VerticesRef() noexcept
+    {
+        return mVertices;
+    }
+
+    std::vector<unsigned int>& IndicesRef() noexcept
+    {
+        return mIndices;
+    }
+
     std::vector<Vertex> GetVertices() const noexcept
     {
         return mVertices;

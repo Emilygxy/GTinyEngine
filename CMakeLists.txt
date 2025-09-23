@@ -155,6 +155,7 @@ add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
 add_subdirectory(Examples/ShaderPreprocessorSimpleExample)
+add_subdirectory(Examples/LoadModelDemo)
 add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
