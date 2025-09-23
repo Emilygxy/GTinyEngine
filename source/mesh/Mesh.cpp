@@ -15,6 +15,11 @@ Mesh::~Mesh()
 
 void Mesh::SetupMesh()
 {
+    if (mVertices.empty())
+    {
+        return;
+    }
+
     glGenVertexArrays(1, &mVAO);
     glGenBuffers(1, &mVBO);
     glGenBuffers(1, &mEBO);
@@ -46,9 +51,16 @@ void Mesh::SetupMesh()
     initialized = true;
 }
 
-void Mesh::Draw() const
+void Mesh::Draw()
 {
-    if (!initialized) return;
+    if (!initialized)
+    {
+        if (!SubmitMesh())
+        {
+            std::cout << "Mesh::Draw Fail to draw mesh, empty mesh." << std::endl;
+            return;
+        }
+    }
 
     // bind texture
     mpMaterial->OnBind();
@@ -112,4 +124,16 @@ void Mesh::SetWorldTransform(const glm::mat4& trn)
 void Mesh::MarkHasUV(bool has)
 {
     mbHasUV = has;
+}
+
+bool Mesh::SubmitMesh()
+{
+    if (mVertices.empty())
+    {
+        return false;
+    }
+
+    SetupMesh();
+
+    return initialized;
 }

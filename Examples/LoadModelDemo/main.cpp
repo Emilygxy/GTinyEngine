@@ -143,7 +143,7 @@ int main()
     if (!g_model)
     {
         g_model = std::make_shared<Model>();
-        g_model->loadModel("models/rock/rock.obj");
+        g_model->loadModel("resources/models/rock/rock.obj");
     }
    /* auto material = std::make_shared<BlinnPhongMaterial>();
     material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
@@ -174,6 +174,12 @@ int main()
             {
                 RenderCommand meshCommand;
                 meshCommand.material = mesh->GetMaterial();
+                if (auto blinphong = std::dynamic_pointer_cast<BlinnPhongMaterial>(meshCommand.material))
+                {
+                    blinphong->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+                    mesh->SetWorldTransform(glm::scale(glm::mat4(1.0f), glm::vec3(0.5f,0.5f,0.5f)));
+                }
+
                 meshCommand.vertices = mesh->GetVertices();
                 meshCommand.indices = mesh->GetIndices();
                 meshCommand.transform = mesh->GetWorldTransform();

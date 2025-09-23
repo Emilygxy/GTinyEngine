@@ -34,6 +34,8 @@ Model::~Model()
 void Model::loadModel(std::string const& path)
 {
     auto modelFullFile = FileSystem::getPath(path);
+    std::cout << "Model::loadModel - Original path: " << path << std::endl;
+    std::cout << "Model::loadModel - Resolved path: " << modelFullFile << std::endl;
 
     // read file via ASSIMP
     Assimp::Importer importer;
@@ -42,13 +44,22 @@ void Model::loadModel(std::string const& path)
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {
         std::cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << std::endl;
+        std::cout << "ERROR::ASSIMP:: Scene flags: " << scene->mFlags << std::endl;
+        std::cout << "ERROR::ASSIMP:: Root node: " << (scene->mRootNode ? "exists" : "null") << std::endl;
         return;
     }
     // retrieve the directory path of the filepath
     mDirectory = modelFullFile.substr(0, modelFullFile.find_last_of('/'));
 
+    std::cout << "Model::loadModel - Scene loaded successfully!" << std::endl;
+    std::cout << "Model::loadModel - Number of meshes: " << scene->mNumMeshes << std::endl;
+    std::cout << "Model::loadModel - Number of materials: " << scene->mNumMaterials << std::endl;
+    std::cout << "Model::loadModel - Directory: " << mDirectory << std::endl;
+
     // process ASSIMP's root node recursively
     processNode(scene->mRootNode, scene);
+    
+    std::cout << "Model::loadModel - Processed " << mMeshList.size() << " meshes" << std::endl;
 }
 
 // processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
@@ -141,6 +152,7 @@ std::shared_ptr<MaterialBase> Model::processMaterial(aiMesh* mesh, const aiScene
     std::vector<std::shared_ptr<Texture2D>> textures;
 
     aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+    std::cout << "Model::processMaterial - Processing material for mesh " << mesh->mMaterialIndex << std::endl;
     // we assume a convention for sampler names in the shaders. Each diffuse texture should be named
     // as 'texture_diffuseN' where N is a sequential number ranging from 1 to MAX_SAMPLER_NUMBER. 
     // Same applies to other texture as the following list summarizes:
@@ -151,11 +163,23 @@ std::shared_ptr<MaterialBase> Model::processMaterial(aiMesh* mesh, const aiScene
     // 1. diffuse maps
     std::vector<std::shared_ptr<Texture2D>> diffuseMaps;
     loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", diffuseMaps);
+    std::cout << "Model::processMaterial - Found " << diffuseMaps.size() << " diffuse textures" << std::endl;
     if (!diffuseMaps.empty())
     {
         pMaterial->SetDiffuseTexture(diffuseMaps[0]);
     }
     textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+    
+    // 1.5. bump maps (often used as diffuse in simple materials)
+    std::vector<std::shared_ptr<Texture2D>> bumpMaps;
+    loadMaterialTextures(material, aiTextureType_DISPLACEMENT, "texture_diffuse", bumpMaps);
+    std::cout << "Model::processMaterial - Found " << bumpMaps.size() << " bump/displacement textures" << std::endl;
+    if (!bumpMaps.empty() && diffuseMaps.empty()) // Only use bump as diffuse if no diffuse texture exists
+    {
+        std::cout << "Model::processMaterial - Using bump texture as diffuse texture" << std::endl;
+        pMaterial->SetDiffuseTexture(bumpMaps[0]);
+    }
+    textures.insert(textures.end(), bumpMaps.begin(), bumpMaps.end());
     // 2. specular maps
     std::vector<std::shared_ptr<Texture2D>> specularMaps;
     loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", specularMaps);

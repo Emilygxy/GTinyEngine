@@ -31,7 +31,7 @@ public:
         return mIndices;
     }
 
-    void Draw() const;
+    void Draw() override;
 
     std::optional<te::AaBB> GetAABB(bool update);
     std::optional<te::AaBB> GetLocalAABB();
@@ -50,8 +50,10 @@ public:
 
     void MarkHasUV(bool has);
 
+
 protected:
     virtual void SetupMesh();
+    bool SubmitMesh();
 
     std::vector<Vertex> mVertices;
     std::vector<unsigned int> mIndices;
