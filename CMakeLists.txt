@@ -45,6 +45,9 @@ set(VULKAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/VulkanSDK/1.3.275.0)
 set(VULKAN_INCLUDE_DIR ${VULKAN_DIR}/Include)
 set(VULKAN_LIB ${VULKAN_DIR}/Lib/vulkan-1.lib)
 set(GLFW_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/lib/glfw3.lib)
+ 
+set(FFMPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/include)
+set(FFMPEG_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib)
 
 #收集文件
 file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
@@ -78,6 +81,12 @@ set(THIRD_PARTY_LIB
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/glm/lib/glm.lib
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/assimp/lib/assimp.lib
 	imgui
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avcodec.lib
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avformat.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avutil.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swscale.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avdevice.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swresample.lib
 	# more
 	)
 
@@ -85,6 +94,7 @@ set(THIRD_PARTY_INCLUDE_DIR
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/glm/
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/assimp/
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/imgui/
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/include/
 	# more
 	)
 
@@ -126,8 +136,8 @@ target_compile_features(GTinyEngine PRIVATE cxx_std_17)
 set(ALL_LIBS
 	${GLFW_LIB}
 	${VULKAN_LIB}
-	GTinyEngine
 	${THIRD_PARTY_LIB}
+	GTinyEngine
 )
 
 # 设置资源目录路径（假设资源在项目根目录的 Resources/ 下）
