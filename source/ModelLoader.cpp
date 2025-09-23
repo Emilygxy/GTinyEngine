@@ -1,4 +1,4 @@
-#include "Model.h"
+#include "ModelLoader.h"
 #include "materials/BlinnPhongMaterial.h"
 #include "filesystem.h"
 
@@ -20,18 +20,18 @@ namespace
     }
 }
 
-Model::Model()
+ModelLoader::ModelLoader()
 {
     mMeshList.clear();
 }
 
-Model::~Model()
+ModelLoader::~ModelLoader()
 {
     mMeshList.clear();
 }
 
 // loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.
-void Model::loadModel(std::string const& path)
+void ModelLoader::loadModel(std::string const& path)
 {
     auto modelFullFile = FileSystem::getPath(path);
     std::cout << "Model::loadModel - Original path: " << path << std::endl;
@@ -63,7 +63,7 @@ void Model::loadModel(std::string const& path)
 }
 
 // processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
-void Model::processNode(aiNode* node, const aiScene* scene)
+void ModelLoader::processNode(aiNode* node, const aiScene* scene)
 {
     // process each mesh located at the current node
     for (unsigned int i = 0; i < node->mNumMeshes; i++)
@@ -80,7 +80,7 @@ void Model::processNode(aiNode* node, const aiScene* scene)
     }
 }
 
-std::shared_ptr<Mesh> Model::processMesh(aiMesh* mesh, const aiScene* scene)
+std::shared_ptr<Mesh> ModelLoader::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     // data to fill
     std::shared_ptr<Mesh> pMesh = std::make_shared<Mesh>();
@@ -147,7 +147,7 @@ std::shared_ptr<Mesh> Model::processMesh(aiMesh* mesh, const aiScene* scene)
     return pMesh;
 }
 
-std::shared_ptr<MaterialBase> Model::processMaterial(aiMesh* mesh, const aiScene* scene)
+std::shared_ptr<MaterialBase> ModelLoader::processMaterial(aiMesh* mesh, const aiScene* scene)
 {
     std::vector<std::shared_ptr<Texture2D>> textures;
 

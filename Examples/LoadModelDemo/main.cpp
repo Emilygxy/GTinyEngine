@@ -16,7 +16,7 @@
 #include "materials/BlitMaterial.h"
 #include "RenderView.h"
 #include "framework/RenderContext.h"
-#include "Model.h"
+#include "ModelLoader.h"
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -28,7 +28,7 @@ std::shared_ptr<RenderContext> g_RenderContext = nullptr;
 std::shared_ptr<RenderView> g_RenderView = nullptr;
 std::shared_ptr<Camera> g_camera = nullptr;
 std::shared_ptr<Light> g_light = nullptr;
-std::shared_ptr<Model> g_model = nullptr;
+std::shared_ptr<ModelLoader> g_modelloader = nullptr;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -140,10 +140,10 @@ int main()
     g_RenderContext->PushAttachLight(g_light);
 
     // 创建几何体
-    if (!g_model)
+    if (!g_modelloader)
     {
-        g_model = std::make_shared<Model>();
-        g_model->loadModel("resources/models/rock/rock.obj");
+        g_modelloader = std::make_shared<ModelLoader>();
+        g_modelloader->loadModel("resources/models/rock/rock.obj");
     }
    /* auto material = std::make_shared<BlinnPhongMaterial>();
     material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
@@ -170,7 +170,7 @@ int main()
         {
             // 创建渲染命令
             std::vector<RenderCommand> commands;
-            for (const auto& mesh: g_model->GetMeshList())
+            for (const auto& mesh: g_modelloader->GetMeshList())
             {
                 RenderCommand meshCommand;
                 meshCommand.material = mesh->GetMaterial();
@@ -198,7 +198,7 @@ int main()
         {
             // 传统单Pass渲染
             //g_renderer->DrawBackgroud();
-            for (auto mesh : g_model->GetMeshList())
+            for (auto mesh : g_modelloader->GetMeshList())
             {
                 g_renderer->DrawMesh(mesh->GetVertices(),
                     mesh->GetIndices(),

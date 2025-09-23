@@ -7,11 +7,11 @@
 
 class Texture2D;
 
-class Model
+class ModelLoader
 {
     public:
-        Model();
-        ~Model();
+        ModelLoader();
+        ~ModelLoader();
 
         std::vector<std::shared_ptr<Mesh>>& GetMeshList() noexcept
         {
