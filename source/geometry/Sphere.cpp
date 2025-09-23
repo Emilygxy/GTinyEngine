@@ -50,7 +50,7 @@ void Sphere::CreateSphere(int sectors, int stacks) {
             vertex.position = /*m_Pos + */glm::vec3(x, y, z);
             vertex.normal = glm::normalize(glm::vec3(x, y, z));
             vertex.texCoords = glm::vec2((float)j / sectors, (float)i / stacks);
-            mbHasUV = true;
+            MarkHasUV(true);
 
             mVertices.push_back(vertex);
         }
