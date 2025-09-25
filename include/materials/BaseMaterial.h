@@ -69,6 +69,10 @@ public:
 	void UpdateUniform() override;
 
 	void SetDiffuseTexturePath(const std::string& path);
+	void SetDiffuseTexture(const std::shared_ptr<TextureBase>& diffusemap)
+	{
+		mpDiffuseTexture = diffusemap;
+	}
 	std::shared_ptr<TextureBase> GetDiffuseTexture() const { return mpDiffuseTexture; }
 	bool HasTexture() const { return mbHasTexture; }
 

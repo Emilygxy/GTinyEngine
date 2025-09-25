@@ -81,12 +81,12 @@ set(THIRD_PARTY_LIB
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/glm/lib/glm.lib
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/assimp/lib/assimp.lib
 	imgui
-	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avcodec.lib
-	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avformat.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avutil.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swscale.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avdevice.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swresample.lib
+	# ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avcodec.lib
+	# ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avformat.lib
+    # ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avutil.lib
+    # ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swscale.lib
+    # ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avdevice.lib
+    # ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swresample.lib
 	# more
 	)
 
@@ -155,6 +155,7 @@ add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
 add_subdirectory(Examples/ShaderPreprocessorSimpleExample)
+add_subdirectory(Examples/LoadModelDemo)
 add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
