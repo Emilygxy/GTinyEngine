@@ -61,6 +61,7 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
                    ${CMAKE_CURRENT_SOURCE_DIR}/source/shader/*.cpp
                    ${CMAKE_CURRENT_SOURCE_DIR}/source/math/*.cpp
+                   ${CMAKE_CURRENT_SOURCE_DIR}/source/video/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h
@@ -72,6 +73,7 @@ file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/math/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader/*.h
+                  ${CMAKE_CURRENT_SOURCE_DIR}/include/video/*.h
                   )
 
 # configure root dir for cpp
@@ -81,12 +83,14 @@ set(THIRD_PARTY_LIB
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/glm/lib/glm.lib
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/assimp/lib/assimp.lib
 	imgui
-	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avcodec.lib
+    # frequantly used libs
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avfilter.lib
 	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avformat.lib
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avcodec.lib
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avutil.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swresample.lib
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swscale.lib
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/avdevice.lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/lib/swresample.lib
 	# more
 	)
 
@@ -108,6 +112,7 @@ include_directories(
 
 # copy dlls files, ahead of GTinyEngine library
 set(THIRD_PARTY_DLLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/assimp/dlls/
+                        ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/ffmpeg/bin/
 					# more
 					)
 add_custom_target(copy-runtime-files ALL COMMAND ${CMAKE_COMMAND} -E copy_directory 
@@ -155,6 +160,7 @@ add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
 add_subdirectory(Examples/ShaderPreprocessorSimpleExample)
+add_subdirectory(Examples/VideoRenderDemo)
 add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD

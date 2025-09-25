@@ -27,7 +27,7 @@ public:
 
 	void SetTexturePaths(const std::vector<std::string>& paths);
 
-	bool IsValid();
+	virtual bool IsValid() const;
 
 protected:
 	virtual void Destroy() = 0;

@@ -12,7 +12,7 @@ GLuint TextureBase::GetHandle()
 	return mHandle;
 }
 
-bool  TextureBase::IsValid()
+bool  TextureBase::IsValid() const
 {
 	return (mHandle != kInvalidHandle);
 }

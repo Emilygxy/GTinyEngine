@@ -3,20 +3,22 @@
 
 struct ViewPort
 {
-	uint16_t mWidth;
-	uint16_t mHeight;
+	int mWidth;
+	int mHeight;
 };
 
 class RenderView : public Object
 {
 public:
 	RenderView() = delete;
-	RenderView(uint16_t w = 1200, uint16_t h = 800);
+	RenderView(int w = 1200, int h = 800);
 	~RenderView();
 
-	uint16_t Width() const noexcept;
-	uint16_t Height() const noexcept;
+	int Width() const noexcept;
+	int Height() const noexcept;
+	void ResizeViewport(int w, int h);
 
 private:
 	ViewPort mVP;
+	bool mDirty{ true };
 };

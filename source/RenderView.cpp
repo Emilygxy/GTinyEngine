@@ -1,6 +1,6 @@
 #include "RenderView.h"
 
-RenderView::RenderView(uint16_t w, uint16_t h)
+RenderView::RenderView(int w, int h)
 	:mVP({w,h})
 {
 }
@@ -9,11 +9,25 @@ RenderView::~RenderView()
 {
 }
 
-uint16_t RenderView::Width() const noexcept
+int RenderView::Width() const noexcept
 {
 	return mVP.mWidth;
 }
-uint16_t RenderView::Height() const noexcept
+int RenderView::Height() const noexcept
 {
 	return mVP.mHeight;
+}
+
+void RenderView::ResizeViewport(int w, int h)
+{
+	if (mVP.mWidth != w)
+	{
+		mVP.mWidth = w;
+		mDirty = true;
+	}
+	if (mVP.mHeight != h)
+	{
+		mVP.mHeight = h;
+		mDirty = true;
+	}
 }
