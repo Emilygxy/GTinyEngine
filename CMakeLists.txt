@@ -152,6 +152,7 @@ target_compile_definitions(GTinyEngine PUBLIC
 add_subdirectory(Examples/TestRenderer)
 add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
+add_subdirectory(Examples/VulkanPractice2)
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
 add_subdirectory(Examples/ShaderPreprocessorSimpleExample)
