@@ -1,7 +1,27 @@
 #include "RenderAgent.h"
-#include "Renderer.h"
+//#include "Renderer.h"
+#include "framework/Renderer.h"
+#include "geometry/Sphere.h"
+#include "materials/BlinnPhongMaterial.h"
+#include "materials/BlitMaterial.h"
+#include "Camera.h"
+#include "Light.h"
+#include "mesh/AaBB.h"
+#include <cmath>
 
-using namespace te;
+// ImGui includes
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+
+// Additional includes for AABB and math
+#include <limits>
+#include <algorithm>
+
+#include "RenderView.h"
+#include "framework/RenderContext.h"
+#include "framework/RenderPass.h"
+
 namespace
 {
     void PrintCullingInfo()
@@ -34,15 +54,13 @@ namespace
 */
 RenderAgent::RenderAgent()
 {
-    mRenderer = new te::Renderer();
 }
 
 RenderAgent::~RenderAgent()
 {
-    if (mRenderer)
+    if (mpRenderer)
     {
-        delete mRenderer;
-        mRenderer = nullptr;
+        mpRenderer.reset();
     }
 }
 
@@ -72,6 +90,22 @@ void RenderAgent::InitGL()
     glfwSetFramebufferSizeCallback(mWindow, EventHelper::framebuffer_size_callback);
     glfwSetCursorPosCallback(mWindow, EventHelper::mouse_callback);
     glfwSetScrollCallback(mWindow, EventHelper::scroll_callback);
+    
+    // Add mouse button callback for picking
+    glfwSetMouseButtonCallback(mWindow, [](GLFWwindow* window, int button, int action, int mods) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            // Get RenderAgent instance and handle click
+            RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
+            if (agent) {
+                agent->HandleMouseClick(xpos, ypos);
+            }
+        }
+    });
+    
+    // Set window user pointer for callbacks
+    glfwSetWindowUserPointer(mWindow, this);
 
     //not to capture mouse in initing state
 
@@ -87,20 +121,50 @@ void RenderAgent::InitGL()
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW); // ccw is default positive face
+    
+    // Initialize ImGui
+    InitImGui();
 }
 
 void RenderAgent::SetupRenderer()
 {
-    mRenderer->InitCamera(SCR_WIDTH, SCR_HEIGHT);
-    mRenderer->InitSkybox();
-    mRenderer->InitLight();
+    // create renderer
+    mpRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
+    if (!mpRenderer || !mpRenderer->Initialize())
+    {
+        std::cout << "Failed to initialize renderer" << std::endl;
+    }
 
-    mpCameraEvent = std::make_shared<Camera_Event>(mRenderer->GetCamera());
+    mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
+    mpRenderContext = std::make_shared<RenderContext>();
+    mpRenderer->SetRenderContext(mpRenderContext);
+
+    //init camera
+    auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
+    pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
+    mpCameraEvent = std::make_shared<Camera_Event>(pCamera);
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
+    mpRenderContext->AttachCamera(pCamera);
+    //init light
+    auto pLight = std::make_shared<Light>();
+    pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
+    pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
+    mpRenderContext->PushAttachLight(pLight);
 }
 
 void RenderAgent::Render()
 {
+    if (!mpGeometry)
+    {
+        mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
+        //mpGeometry = std::make_shared<Sphere>();
+        auto material = std::make_shared<BlinnPhongMaterial>();
+        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+        
+        mpGeometry->SetMaterial(material);
+        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
+    }
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -115,13 +179,53 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
-        // render
-        // ------
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        // Begin Render Frame
+        mpRenderer->BeginFrame();
 
-        mRenderer->Render();
+        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
+        mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        mpRenderer->Clear(0x3); // clear color/clear depth
 
+        if (mpRenderer->IsMultiPassEnabled())
+        {
+            // create render command
+            std::vector<RenderCommand> commands;
+            RenderCommand sphereCommand;
+            sphereCommand.material = mpGeometry->GetMaterial();
+            sphereCommand.vertices = mpGeometry->GetVertices();
+            sphereCommand.indices = mpGeometry->GetIndices();
+            sphereCommand.transform = mpGeometry->GetWorldTransform();
+            sphereCommand.state = RenderMode::Opaque;
+            sphereCommand.hasUV = true;
+            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+
+            commands.push_back(sphereCommand);
+
+            // use RenderPassManager to execute Pass（with correct dependency management）
+            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+        }
+        else
+        {
+            // traditional single Pass rendering
+            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                mpGeometry->GetIndices(),
+                mpGeometry->GetMaterial(),
+                mpGeometry->GetWorldTransform());
+        }
+
+        //mpRenderer->DrawBackgroud();
+
+        //// DrawMesh
+        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+        //    mpGeometry->GetIndices(),
+        //    mpGeometry->GetMaterial(),
+        //    mpGeometry->GetWorldTransform());
+
+        // Render ImGui
+        RenderImGui();
+
+        // End Render Frame
+        mpRenderer->EndFrame();
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(mWindow);
@@ -133,6 +237,11 @@ void RenderAgent::Render()
 
 void RenderAgent::PostRender()
 {
+    // Shutdown ImGui
+    ShutdownImGui();
+    
+    mpRenderer->Shutdown();
+
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
@@ -141,6 +250,253 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
+
+    SetupMultiPassRendering();
+}
+
+void RenderAgent::SetupMultiPassRendering()
+{
+    // create skybox Pass
+    auto skyboxPass = std::make_shared<te::SkyboxPass>();
+    skyboxPass->Initialize(mpRenderView, mpRenderContext);
+
+    // create geometry Pass
+    auto geometryPass = std::make_shared<te::GeometryPass>();
+    geometryPass->Initialize(mpRenderView, mpRenderContext);
+
+    // create lighting Pass
+    auto basePass = std::make_shared<te::BasePass>();
+    basePass->Initialize(mpRenderView, mpRenderContext);
+
+    // PostProcessPass Pass
+    auto postProcessPass = std::make_shared<te::PostProcessPass>();
+    postProcessPass->Initialize(mpRenderView, mpRenderContext);
+
+    postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
+
+    // add Pass to RenderPassManager（for dependency management）
+    // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
+    te::RenderPassManager::GetInstance().AddPass(skyboxPass);
+    te::RenderPassManager::GetInstance().AddPass(geometryPass);
+    te::RenderPassManager::GetInstance().AddPass(basePass);
+    te::RenderPassManager::GetInstance().AddPass(postProcessPass);
+
+    // enable multi-pass rendering
+    mpRenderer->SetMultiPassEnabled(true);
+}
+
+
+// ImGui implementation
+void RenderAgent::InitImGui()
+{
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(mWindow, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+}
+
+void RenderAgent::ShutdownImGui()
+{
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void RenderAgent::RenderImGui()
+{
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Create a simple window
+    ImGui::Begin("Mouse Picking Demo");
+    
+    ImGui::Text("Click on the Geometry to select it!");
+    ImGui::Separator();
+    
+    if (mGeomSelected)
+    {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected! Hit by AABB, there may in delta errors.");
+        ImGui::Text("Position: (%.2f, %.2f, %.2f)", 
+                   mSelectedGeomPosition.x, 
+                   mSelectedGeomPosition.y, 
+                   mSelectedGeomPosition.z);
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No Geometry selected");
+    }
+    
+    ImGui::Separator();
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+               1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+    
+    ImGui::End();
+
+    // Rendering
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+// Mouse picking implementation
+Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
+{
+    // Get camera matrices
+    auto camera = mpRenderContext->GetAttachedCamera();
+    if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
+    
+    glm::mat4 viewMatrix = camera->GetViewMatrix();
+    glm::mat4 projectionMatrix = camera->GetProjectionMatrix();
+    
+    // Step 1: Convert screen coordinates to normalized device coordinates (NDC)
+    // Screen coordinates: (0,0) at top-left, (SCR_WIDTH, SCR_HEIGHT) at bottom-right
+    // NDC coordinates: (-1,-1) at bottom-left, (1,1) at top-right
+    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // Flip Y: screen Y=0 is top, NDC Y=1 is top
+    
+    // Step 2: Create two points in clip space (near and far planes)
+    glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
+    glm::vec4 rayClipFar(ndcX, ndcY, 1.0f, 1.0f);   // far plane Z=1
+    
+    // Step 3: Transform from clip space to eye space (inverse projection)
+    glm::mat4 invProj = glm::inverse(projectionMatrix);
+    glm::vec4 rayEyeNear = invProj * rayClipNear;
+    glm::vec4 rayEyeFar = invProj * rayClipFar;
+    
+    // Step 4: Perspective divide
+    rayEyeNear /= rayEyeNear.w; 
+    rayEyeFar /= rayEyeFar.w;
+    
+    // Step 5: Transform from eye space to world space (inverse view)
+    glm::mat4 invView = glm::inverse(viewMatrix);
+    glm::vec3 worldNear = glm::vec3(invView * rayEyeNear);
+    glm::vec3 worldFar = glm::vec3(invView * rayEyeFar);
+    
+    // Step 6: Calculate ray origin and direction
+    glm::vec3 rayOrigin = camera->GetEye();  // Camera position in world space
+    glm::vec3 rayDirection = glm::normalize(worldFar - worldNear);
+    
+    return {rayOrigin, rayDirection};
+}
+
+bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
+{
+    // Ray-AABB intersection using slab method
+    // This is a more general approach that works for any AABB
+    //step 1: initialize
+    float tMin = 0.0f;
+    float tMax = std::numeric_limits<float>::max();
+    
+    // step 2: test intersection with each axis-aligned plane
+    for (int i = 0; i < 3; ++i) {
+        if (std::abs(rayDirection[i]) < 1e-6f) {
+            // Ray is parallel to the plane
+            if (rayOrigin[i] < aabb.min[i] || rayOrigin[i] > aabb.max[i]) {
+                return false; // Ray is outside the AABB
+            }
+        } else {
+            // Calculate intersection distances
+            float invDir = 1.0f / rayDirection[i];
+            float t1 = (aabb.min[i] - rayOrigin[i]) * invDir;
+            float t2 = (aabb.max[i] - rayOrigin[i]) * invDir;
+            
+            // Ensure t1 is the near intersection and t2 is the far intersection
+            if (t1 > t2) {
+                std::swap(t1, t2);
+            }
+            
+            // Update the intersection interval
+            tMin = std::max(tMin, t1);
+            tMax = std::min(tMax, t2);
+            
+            // If the intersection interval becomes empty, there's no intersection
+            if (tMin > tMax) {
+                return false;
+            }
+        }
+    }
+    
+    // Check if the intersection is in front of the ray origin
+    if (tMin < 0.0f) {
+        if (tMax < 0.0f) {
+            return false; // AABB is behind the ray origin
+        }
+        t = tMax; // Use the far intersection point
+    } else {
+        t = tMin; // Use the near intersection point
+    }
+    
+    return true;
+}
+
+void RenderAgent::HandleMouseClick(double xpos, double ypos)
+{
+    // Get camera position
+    auto camera = mpRenderContext->GetAttachedCamera();
+    if (!camera) return;
+    
+    glm::vec3 cameraPos = camera->GetEye();
+    auto re_ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
+    
+    // Debug output
+    std::cout << "Mouse click at: (" << xpos << ", " << ypos << ")" << std::endl;
+    std::cout << "Camera position: (" << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << ")" << std::endl;
+    std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
+    
+    // Get sphere information for intersection testing
+    if (!mpGeometry) return;
+    
+    // Get geometry's world transform to find center position
+    glm::mat4 worldTransform = mpGeometry->GetWorldTransform();
+    glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
+    
+    // Get sphere radius (assuming it's a Sphere object)
+    auto sphere = std::dynamic_pointer_cast<Sphere>(mpGeometry);
+    float sphereRadius = 1.0f; // Default radius
+    if (sphere) {
+        sphereRadius = sphere->GetRadius();
+    }
+    
+    // Debug sphere info
+    std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
+    
+    auto worldAABB = mpGeometry->GetWorldAABB();
+    
+    if (!worldAABB.has_value()) {
+        std::cout << "No AABB available for geometry" << std::endl;
+        return;
+    }
+    
+    // Debug AABB info
+    std::cout << "World AABB min: (" << worldAABB->min.x << ", " << worldAABB->min.y << ", " << worldAABB->min.z << ")" << std::endl;
+    std::cout << "World AABB max: (" << worldAABB->max.x << ", " << worldAABB->max.y << ", " << worldAABB->max.z << ")" << std::endl;
+    
+    // Test intersection with geometry's world AABB
+    // Both ray and AABB are in world space, so we can test directly
+    float t;
+    if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
+    {
+        mGeomSelected = true;
+        //mSelectedSpherePosition = sphereCenter;
+        //mSelectedSphereRadius = sphereRadius;
+        mSelectedGeomPosition = geomCenter;
+        std::cout << "Geometry hit! Distance: " << t << std::endl;
+    }
+    else {
+        mGeomSelected = false;
+        std::cout << "No hit" << std::endl;
+    }
 }
 
 /** 
@@ -168,6 +524,12 @@ void EventHelper::processInput(GLFWwindow* window)
 {
     auto cameraEvent = GetInstance().GetCameraEvent();
     if (!cameraEvent) return; 
+
+    // Check if ImGui wants to capture input
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureKeyboard || io.WantCaptureMouse) {
+        return; // Skip camera controls if ImGui is using input
+    }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -290,6 +652,6 @@ void EventHelper::scroll_callback(GLFWwindow* window, double xoffset, double yof
 
     if (enableInteraction)
     {
-        cameraEvent->ProcessMouseScroll(yoffset);
+        cameraEvent->ProcessMouseScroll(float(yoffset));
     }
 }

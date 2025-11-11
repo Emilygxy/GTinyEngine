@@ -29,16 +29,18 @@ public:
 
 	bool IsValid();
 
+	void SetTypeName(const std::string& name);
+
 protected:
 	virtual void Destroy() = 0;
 	virtual void ParseData() = 0;
 
 	TextureType mTextureType{ TextureType::Count };
+	std::string mTypeName{""};
 	GLuint mHandle{ kInvalidHandle };
 
 	std::vector<std::string> mTexturePaths;
 private:
-	static GLuint sPassIdSeed;
 };
 
 class Texture2D : public TextureBase

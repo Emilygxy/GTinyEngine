@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 #include <iostream>
+#include "filesystem.h"
 
 // utility function for loading a 2D texture from file
 // ---------------------------------------------------
@@ -11,8 +12,12 @@ unsigned int loadTexture(char const* path, bool generateMipMap)
     unsigned int textureID;
     glGenTextures(1, &textureID);
 
+    // set pixel alignment, solve the problem of non-4 byte alignment image loading
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
     int width, height, nrComponents;
-    unsigned char* data = stbi_load(path, &width, &height, &nrComponents, 0);
+    std::string fullPath = FileSystem::getPath(path);
+    unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrComponents, 0);
     if (data)
     {
         GLenum format;
@@ -58,19 +63,33 @@ unsigned int loadCubemap(const std::vector<std::string>& faces)
 
     glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
+    // set pixel alignment, solve the problem of non-4 byte alignment image loading
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
     int width, height, nrChannels;
     for (unsigned int i = 0; i < faces.size(); i++)
     {
-        unsigned char* data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+        std::string fullPath = FileSystem::getPath(faces[i]);
+        std::cout << "Loading cubemap face: " << fullPath << std::endl;
+        unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrChannels, 0);
         if (data)
         {
-            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            GLenum format;
+            if (nrChannels == 1)
+                format = GL_RED;
+            else if (nrChannels == 3)
+                format = GL_RGB;
+            else if (nrChannels == 4)
+                format = GL_RGBA;
+            
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
             stbi_image_free(data);
+            std::cout << "Successfully loaded cubemap face " << i << ": " << width << "x" << height << " channels: " << nrChannels << std::endl;
         }
         else
         {
-            std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
-            stbi_image_free(data);
+            std::cout << "Cubemap texture failed to load at path: " << fullPath << std::endl;
+            std::cout << "STBI error: " << stbi_failure_reason() << std::endl;
         }
     }
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

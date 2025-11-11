@@ -15,6 +15,7 @@ public:
 	virtual ~MaterialBase() = default;
 	virtual void OnPerFrameUpdate() = 0;
 	virtual void OnBind() = 0;
+	virtual void UnBind() {}
 	virtual void UpdateUniform() = 0;
 
 	void OnApply();
@@ -25,6 +26,8 @@ public:
 	{
 		return mpShader;
 	}
+
+	virtual void SetUseGeometryTarget(bool use) {}
 
 protected:
 	MaterialBase(const std::string& vs_path, const std::string& fs_path);
@@ -61,14 +64,25 @@ public:
 	~PhongMaterial();
 
 	void OnBind() override;
+	void UnBind() override;
 	void OnPerFrameUpdate() override {}
 	void UpdateUniform() override;
 
 	void SetDiffuseTexturePath(const std::string& path);
+	void SetDiffuseTexture(const std::shared_ptr<TextureBase>& diffusemap)
+	{
+		mpDiffuseTexture = diffusemap;
+	}
+	std::shared_ptr<TextureBase> GetDiffuseTexture() const { return mpDiffuseTexture; }
+	bool HasTexture() const { return mbHasTexture; }
+
+	void SetUseGeometryTarget(bool use) override;
+protected:
+	glm::vec4 mUseEnables; // ƒ¨»œ π”√ Blinn-Phong
 
 private:
 	std::shared_ptr<TextureBase> mpDiffuseTexture{ nullptr };
 	bool mbHasTexture = false;
 	glm::vec4 mIntensities{ 1.0f,1.0f, 1.0f, 1.0f};// environment,diffuse,specular,shininess
-	bool useBlinnPhong = true;
+	//bool useBlinnPhong = true;
 };

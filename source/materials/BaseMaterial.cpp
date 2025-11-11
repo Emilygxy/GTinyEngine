@@ -4,6 +4,7 @@
 #include "glad/glad.h"
 #include "Camera.h"
 #include "Light.h"
+#include "filesystem.h"
 
 MaterialBase::MaterialBase(const std::string& vs_path, const std::string& fs_path)
 {
@@ -51,10 +52,8 @@ void UnlitMaterial::OnPerFrameUpdate()
 
 void UnlitMaterial::UpdateUniform()
 {
-    // Set transformation matrix
-    glm::mat4 model = glm::mat4(1.0f);
-    mpShader->setMat4("model", model);
-
+    // Note: model matrix is set by the renderer, don't override it here
+    
     if (auto pCamera = mpAttachedCamera.lock())
     {
         mpShader->setMat4("view", pCamera->GetViewMatrix());
@@ -82,6 +81,7 @@ PhongMaterial::PhongMaterial(const std::string& vs_path, const std::string& fs_p
 	: MaterialBase(vs_path, fs_path)
     , mpDiffuseTexture(std::make_shared<Texture2D>())
 {
+    mUseEnables = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 PhongMaterial::~PhongMaterial()
@@ -92,16 +92,33 @@ void PhongMaterial::OnBind()
 {
     // bind texture
     if (mbHasTexture) {
+        if (mpDiffuseTexture->GetHandle() == 0) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - mpDiffuseTexture is 0!" << std::endl;
+            return;
+        }
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle()); //uniform location?
+        glBindTexture(GL_TEXTURE_2D, mpDiffuseTexture->GetHandle());
+
+        GLint boundTexture;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &boundTexture);
+        if (boundTexture != mpDiffuseTexture->GetHandle()) {
+            std::cout << "ERROR: PhongMaterial::OnBind() - Failed to bind texture! Expected: " << mpDiffuseTexture->GetHandle() << ", Got: " << boundTexture << std::endl;
+        }
+        else {
+            std::cout << "PhongMaterial::OnBind() - Successfully bound texture " << mpDiffuseTexture->GetHandle() << " to GL_TEXTURE0" << std::endl;
+        }
     }
+}
+
+void PhongMaterial::UnBind()
+{
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void PhongMaterial::UpdateUniform()
 {
-    // Set transformation matrix
-    glm::mat4 model = glm::mat4(1.0f);
-    mpShader->setMat4("model", model);
+    // Note: model matrix is set by the renderer, don't override it here
 
     if (auto pCamera = mpAttachedCamera.lock())
     {
@@ -111,8 +128,13 @@ void PhongMaterial::UpdateUniform()
     }
     
     mpShader->setVec3("u_objectColor", glm::vec3(0.7f, 0.3f, 0.3f));
-    mpShader->setInt("u_diffuseTexture", 0);
     mpShader->setVec4("u_Strengths", mIntensities);
+    
+    mpShader->setInt("u_diffuseTexture", 0);
+    mpShader->setInt("u_geomAlbedoMap", 1);
+    mpShader->setInt("u_geomNormalMap", 2);
+    mpShader->setInt("u_geomPositionMap", 3);
+    mpShader->setInt("u_geomDepthMap", 4);
 
     // Set lighting parameters
     if (auto pLight = mpAttachedLight.lock())
@@ -120,10 +142,8 @@ void PhongMaterial::UpdateUniform()
         mpShader->setVec3("u_lightColor", pLight->GetColor());
         mpShader->setVec3("u_lightPos", pLight->GetPosition());
     }
-    if (useBlinnPhong)
-    {
-        mpShader->setFloat("u_UseBlinnPhong", useBlinnPhong ? 1.0f : 0.0f);
-    }
+
+    mpShader->setVec4("u_useBlinn_Geometry", mUseEnables);
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
@@ -136,4 +156,9 @@ void PhongMaterial::SetDiffuseTexturePath(const std::string& path)
 
     mpDiffuseTexture->SetTexturePaths({ path });
     mbHasTexture = true;
+}
+
+void PhongMaterial::SetUseGeometryTarget(bool use)
+{
+    mUseEnables[1] = use ? 1.0f : 0.0f;
 }

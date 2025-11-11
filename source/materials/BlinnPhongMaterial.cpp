@@ -3,6 +3,7 @@
 BlinnPhongMaterial::BlinnPhongMaterial(const std::string& vs_path, const std::string& fs_path)
     : PhongMaterial(vs_path, fs_path)
 {
+    mUseEnables[0] = 1.0f; //use blinnphong
 }
 
 BlinnPhongMaterial::~BlinnPhongMaterial()
@@ -11,9 +12,6 @@ BlinnPhongMaterial::~BlinnPhongMaterial()
 
 void BlinnPhongMaterial::UpdateUniform()
 {
-    // 调用父类的 UpdateUniform 方法
+    // invoke parent's UpdateUniform
     PhongMaterial::UpdateUniform();
-    
-    // 设置 Blinn-Phong 切换 uniform
-    GetShader()->setFloat("u_useBlinnPhong", mUseBlinnPhong ? 1.0f : 0.0f);
 } 

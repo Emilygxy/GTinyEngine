@@ -7,5 +7,5 @@ void main()
 {
     TexCoords = aPos;
     gl_Position = projection * view * vec4(aPos, 1.0);
-    gl_Position = gl_Position.xyww; // 保证深度为1
+    gl_Position = gl_Position.xyww; // make sure depth is 1.0
 }

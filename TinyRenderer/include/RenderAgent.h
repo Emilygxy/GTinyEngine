@@ -2,16 +2,25 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <glm/glm.hpp>
+#include <memory>
+
+namespace te
+{
+	struct AaBB;
+}
 
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-namespace te
-{
-	class Renderer;
-}
+
+
+class IRenderer;
 class Camera_Event;
 class RenderAgent;
+class BasicGeometry;
+class RenderView;
+class RenderContext;
 
 class EventHelper
 {
@@ -35,6 +44,11 @@ private:
 	std::shared_ptr<Camera_Event> GetCameraEvent();
 
 	std::weak_ptr<Camera_Event> mwpCameraEvent;
+};
+
+struct Ray {
+	glm::vec3 origin;
+	glm::vec3 direction;
 };
 
 // will be singleton class
@@ -62,10 +76,29 @@ public:
 	}
 private:
 	void SetupRenderer();
+	void SetupMultiPassRendering();
+	void InitImGui();
+	void ShutdownImGui();
+	void RenderImGui();
+	
+	// Mouse picking functions
+	Ray ScreenToWorldRay(float mouseX, float mouseY);
+	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
+	                          const te::AaBB& aabb, float& t);
+	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
 
-	te::Renderer* mRenderer{ nullptr };
+	std::shared_ptr<IRenderer> mpRenderer{ nullptr };
+
+	std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+	std::shared_ptr<RenderView> mpRenderView{ nullptr };
+
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
+	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
+	
+	// Mouse picking state
+	bool mGeomSelected{ false };
+	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 };
