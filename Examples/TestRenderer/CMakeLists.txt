@@ -18,7 +18,7 @@ target_include_directories(TestRenderer PRIVATE
 target_link_libraries(TestRenderer PUBLIC ${ALL_LIBS})
 set_target_properties(TestRenderer
 	PROPERTIES 
-	FOLDER "Examples"
+	FOLDER "Examples/opengl"
 	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>/
 )
 target_compile_features(TestRenderer PRIVATE cxx_std_17)
