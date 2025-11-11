@@ -21,10 +21,15 @@ private:
 	void mainLoop();
 	void cleanUp();
 
+	void createInstance();
+
 private:
 	GLFWwindow* m_window{nullptr};
 
 	uint16_t m_width;
 	uint16_t m_height;
+
+	//--------------
+	VkInstance m_instance;
 };
 
