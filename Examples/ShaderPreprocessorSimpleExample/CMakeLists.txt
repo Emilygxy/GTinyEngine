@@ -11,7 +11,7 @@ target_compile_features(ShaderPreprocessorSimpleExample PRIVATE cxx_std_17)
 # 设置输出目录
 set_target_properties(ShaderPreprocessorSimpleExample
     PROPERTIES
-    FOLDER "Examples"
+    FOLDER "Examples/opengl"
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIGURATION>
 )
 
