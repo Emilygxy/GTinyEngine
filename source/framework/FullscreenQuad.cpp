@@ -1,42 +1,46 @@
 #include "framework/FullscreenQuad.h"
+#include "materials/BlitMaterial.h"
 
 namespace te
 {
     FullscreenQuad::FullscreenQuad()
     {
-        // fullscreen quad vertices
-        float quadVertices[] = {
-            // positions   // texCoords
-            -1.0f,  1.0f,  0.0f, 1.0f,
-            -1.0f, -1.0f,  0.0f, 0.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
+        CreateFullscreenQuad();
 
-            -1.0f,  1.0f,  0.0f, 1.0f,
-             1.0f, -1.0f,  1.0f, 0.0f,
-             1.0f,  1.0f,  1.0f, 1.0f
+        //material
+        auto pbgMaterial = std::make_shared<BackgroundMaterial>();
+        pbgMaterial->SetTexturePath("resources/textures/IMG_8515.JPG");
+        SetMaterial(pbgMaterial);
+    }
+
+    void FullscreenQuad::CreateFullscreenQuad()
+    {
+        mVertices.clear();
+        mIndices.clear();
+
+        Vertex quadVertices[6] = {
+            // positions   // texCoords
+            Vertex(glm::vec3(-1.0f,  1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(0.0f, 1.0f)),
+            Vertex(glm::vec3(-1.0f, -1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(0.0f, 0.0f)),
+            Vertex(glm::vec3( 1.0f, -1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(1.0f, 0.0f)),
+
+            Vertex(glm::vec3(-1.0f,  1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(0.0f, 1.0f)),
+            Vertex(glm::vec3( 1.0f, -1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(1.0f, 0.0f)),
+            Vertex(glm::vec3( 1.0f,  1.0f, 0.0f), glm::vec3(1.0f), glm::vec2(1.0f, 1.0f))
         };
 
-        glGenVertexArrays(1, &mVAO);
-        glGenBuffers(1, &mVBO);
-        glBindVertexArray(mVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, mVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        // create vertices data
+        // front (0, 1, 2, 3)
+        for (int i = 0; i < 6; ++i) {
+            mVertices.push_back(quadVertices[i]);
+            mIndices.push_back(i);
+        }
+
+        // set UV flag
+        MarkHasUV(true);
+
+        // set mesh
+        SetupMesh();
     }
 
-    FullscreenQuad::~FullscreenQuad()
-    {
-        glDeleteVertexArrays(1, &mVAO);
-        glDeleteBuffers(1, &mVBO);
-    }
-
-    void FullscreenQuad::Draw()
-    {
-        glBindVertexArray(mVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
-    }
 }

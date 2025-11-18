@@ -7,6 +7,14 @@ struct ViewPort
 	uint16_t mHeight;
 };
 
+enum class EnvironmentType
+{
+	Skybox,
+	Image,
+	Color,
+	Hybrid // Color + Image
+};
+
 class RenderView : public Object
 {
 public:
