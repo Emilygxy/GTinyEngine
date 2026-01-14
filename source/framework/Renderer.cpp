@@ -9,6 +9,7 @@
 #include <functional>
 #include <algorithm>
 #include "framework/RenderContext.h"
+#include "RenderView.h"
 
 // Render Factory Impl
 std::shared_ptr<IRenderer> RendererFactory::CreateRenderer(RendererBackend backend)
@@ -68,6 +69,11 @@ bool OpenGLRenderer::Initialize()
     
     mStats.Reset();
 
+    if (!mpRenderView)
+    {
+        mpRenderView = std::make_shared<RenderView>(1200,1280);
+    }
+
     std::cout << "OpenGLRenderer::Initialize completed successfully" << std::endl;
     return true;
 }
@@ -87,7 +93,11 @@ void OpenGLRenderer::BeginFrame()
     mStats.Reset();
 
     // init bachground
-    
+    if (mpRenderView)
+    {
+        mpRenderView->BindCamera(mpRenderContext->GetAttachedCamera());
+        mpRenderView->Update();
+    }
 }
 
 void OpenGLRenderer::EndFrame()
@@ -171,10 +181,9 @@ void OpenGLRenderer::DrawMeshes(const std::vector<RenderCommand>& commands)
    }
 }
 
-void OpenGLRenderer::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+void OpenGLRenderer::SetViewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
 {
-    glViewport(static_cast<GLint>(x), static_cast<GLint>(y), 
-               static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+    mpRenderView->SetViewPort({ x, y, width, height });
 }
 
 void OpenGLRenderer::SetClearColor(float r, float g, float b, float a)
