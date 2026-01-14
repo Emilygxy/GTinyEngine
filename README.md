@@ -20,3 +20,6 @@ A Simple Game Engine Project
 
 ### 2025.09.12
 - 完成了 MRT 多渲染目标的实现。融合skybox、物体的渲染和后处理效果的预备支持。
+
+### 2026.01.14
+- 在Camera和RenderView之间增加了观察者设计模式，使得RenderView可以观察Camera中的对象，随之变化渲染视口。
