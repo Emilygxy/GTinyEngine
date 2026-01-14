@@ -12,6 +12,7 @@ class Camera;
 class Light;
 class Shader;
 class RenderContext;
+class RenderView;
 
 // Forward declarations for multi-pass rendering
 namespace te
@@ -74,7 +75,7 @@ public:
     // batch rendering
     virtual void DrawMeshes(const std::vector<RenderCommand>& commands) = 0;
     
-    virtual void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) = 0;
+    virtual void SetViewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height) = 0;
     virtual void SetClearColor(float r, float g, float b, float a) = 0;
     virtual void Clear(uint32_t flags) = 0;
     
@@ -124,7 +125,7 @@ public:
     
     void DrawMeshes(const std::vector<RenderCommand>& commands) override;
 
-    void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
+    void SetViewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height) override;
     void SetClearColor(float r, float g, float b, float a) override;
     void Clear(uint32_t flags) override;
     
@@ -141,7 +142,6 @@ public:
     std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const override;
     void ExecuteRenderPasses(const std::vector<RenderCommand>& commands = {}) override;
 
-    //
     void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
 private:
     void SetupMeshBuffers(const std::vector<Vertex>& vertices, 
@@ -172,4 +172,6 @@ private:
     std::unordered_map<size_t, MeshCache> mMeshCache;
 
     std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+
+    std::shared_ptr<RenderView> mpRenderView{ nullptr };
 }; 

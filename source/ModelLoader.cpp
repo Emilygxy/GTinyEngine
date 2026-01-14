@@ -40,6 +40,13 @@ void ModelLoader::loadModel(std::string const& path)
     // read file via ASSIMP
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(modelFullFile, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+
+    if (!scene)
+    {
+        std::cout << "ERROR::ASSIMP:: Empty Scene!" << std::endl;
+        return;
+    }
+
     // check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) // if is Not Zero
     {

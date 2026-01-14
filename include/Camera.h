@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
+#include "ObserverModeObject.h"
 
 enum class Camera_Movement {
     FORWARD,
@@ -42,13 +43,13 @@ private:
     std::shared_ptr<Camera> mpCamera;
 };
 
-class Camera : public std::enable_shared_from_this<Camera>
+class Camera : public std::enable_shared_from_this<Camera>, public Subject
 {
 public:
     friend class Camera_Event;
 
     Camera() = delete;
-    Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = -90.0f, float pitch = 0.0f);
+    Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = -90.0f, float pitch = 0.0f, const std::string& name = "MainCamera");
     ~Camera() {}
 
     Camera(const Camera& rhs);
@@ -95,6 +96,16 @@ public:
     void SetPerspective(float fov, float asp, float zNear, float zFar);
     void SetPerspective(float left, float right, float bottom, float up, float zNear, float zFar);
 
+    void SetName(const std::string& name)
+    {
+        mName = name;
+    }
+    
+    std::string GetName() const noexcept
+    {
+        return mName;
+    }
+
 private:
     void updateCameraVectors(); 
     void SyncProjectMatrix();
@@ -132,4 +143,6 @@ private:
     bool mbUseDirectProjMatrix{ false };
 
     static constexpr float sDeg2Rad = 0.0174532924F;
+
+    std::string mName;
 };
