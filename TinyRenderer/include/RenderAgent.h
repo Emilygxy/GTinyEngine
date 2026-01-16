@@ -21,6 +21,9 @@ class RenderAgent;
 class BasicGeometry;
 class RenderView;
 class RenderContext;
+class RenderCommandQueue;
+class FrameSync;
+class RenderThread;
 
 class EventHelper
 {
@@ -87,6 +90,9 @@ private:
 	                          const te::AaBB& aabb, float& t);
 	void HandleMouseClick(double xpos, double ypos);
 
+	//
+	void ShadringContext();
+
 	GLFWwindow* mWindow { nullptr };
 
 	std::shared_ptr<IRenderer> mpRenderer{ nullptr };
@@ -98,7 +104,12 @@ private:
 	//EventHelper mEventHelper;
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
 	
+	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
+	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };
+	std::shared_ptr<RenderThread> mpRenderThread{ nullptr };
+
 	// Mouse picking state
 	bool mGeomSelected{ false };
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
+	bool mMultithreadedRendering{ true };
 };

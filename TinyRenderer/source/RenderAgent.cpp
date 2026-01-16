@@ -8,6 +8,8 @@
 #include "Light.h"
 #include "mesh/AaBB.h"
 #include <cmath>
+#include <thread>
+#include <chrono>
 
 // ImGui includes
 #include "imgui.h"
@@ -21,6 +23,13 @@
 #include "RenderView.h"
 #include "framework/RenderContext.h"
 #include "framework/RenderPass.h"
+#include "framework/RenderCommandQueue.h"
+#include "framework/FrameSync.h"
+#include "framework/RenderThread.h"
+#include <mutex>
+
+// declare external mutex for context synchronization (defined in RenderThread.cpp)
+extern std::mutex g_GLContextMutex;
 
 namespace
 {
@@ -107,6 +116,8 @@ void RenderAgent::InitGL()
     // Set window user pointer for callbacks
     glfwSetWindowUserPointer(mWindow, this);
 
+    ShadringContext();
+
     //not to capture mouse in initing state
 
     // glad: load all OpenGL function pointers
@@ -179,16 +190,10 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
-        // Begin Render Frame
-        mpRenderer->BeginFrame();
-
-        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
-        mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // clear color/clear depth
-
-        if (mpRenderer->IsMultiPassEnabled())
+        if (mMultithreadedRendering)
         {
-            // create render command
+            // multi-thread rendering path
+            // 1. generate render commands (main thread)
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = mpGeometry->GetMaterial();
@@ -198,38 +203,85 @@ void RenderAgent::Render()
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
             sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-
+            
             commands.push_back(sphereCommand);
-
-            // use RenderPassManager to execute Pass（with correct dependency management）
-            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            
+            // 2. push to command queue
+            mpCommandQueue->PushCommands(commands);
+            
+            // 3. signal frame ready
+            mpFrameSync->SignalFrameReady();
+            
+            // 4. wait for render complete (optional, for synchronization)
+            mpFrameSync->WaitForRenderComplete();
+            
+            // 5. render ImGui (need to be in main thread, because ImGui needs main thread context)
+            // note: ImGui rendering needs to be in main thread, because ImGui needs main thread context
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                RenderImGui();
+                glfwSwapBuffers(mWindow);
+                glfwMakeContextCurrent(nullptr);  // release context, let render thread use
+            }
+            
+            // 6. poll events (must be in main thread)
+            glfwPollEvents();
         }
         else
         {
-            // traditional single Pass rendering
-            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-                mpGeometry->GetIndices(),
-                mpGeometry->GetMaterial(),
-                mpGeometry->GetWorldTransform());
+            // Begin Render Frame
+            mpRenderer->BeginFrame();
+
+            mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
+            mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            mpRenderer->Clear(0x3); // clear color/clear depth
+
+            if (mpRenderer->IsMultiPassEnabled())
+            {
+                // create render command
+                std::vector<RenderCommand> commands;
+                RenderCommand sphereCommand;
+                sphereCommand.material = mpGeometry->GetMaterial();
+                sphereCommand.vertices = mpGeometry->GetVertices();
+                sphereCommand.indices = mpGeometry->GetIndices();
+                sphereCommand.transform = mpGeometry->GetWorldTransform();
+                sphereCommand.state = RenderMode::Opaque;
+                sphereCommand.hasUV = true;
+                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+
+                commands.push_back(sphereCommand);
+
+                // use RenderPassManager to execute Pass（with correct dependency management）
+                te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            }
+            else
+            {
+                // traditional single Pass rendering
+                mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                    mpGeometry->GetIndices(),
+                    mpGeometry->GetMaterial(),
+                    mpGeometry->GetWorldTransform());
+            }
+
+            //mpRenderer->DrawBackgroud();
+
+            //// DrawMesh
+            //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+            //    mpGeometry->GetIndices(),
+            //    mpGeometry->GetMaterial(),
+            //    mpGeometry->GetWorldTransform());
+
+            // Render ImGui
+            RenderImGui();
+
+            // End Render Frame
+            mpRenderer->EndFrame();
+            // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+            // -------------------------------------------------------------------------------
+            glfwSwapBuffers(mWindow);
+            glfwPollEvents();
         }
-
-        //mpRenderer->DrawBackgroud();
-
-        //// DrawMesh
-        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-        //    mpGeometry->GetIndices(),
-        //    mpGeometry->GetMaterial(),
-        //    mpGeometry->GetWorldTransform());
-
-        // Render ImGui
-        RenderImGui();
-
-        // End Render Frame
-        mpRenderer->EndFrame();
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
-        glfwSwapBuffers(mWindow);
-        glfwPollEvents();
 
         static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
     }
@@ -237,6 +289,12 @@ void RenderAgent::Render()
 
 void RenderAgent::PostRender()
 {
+    // stop render thread
+    if (mpRenderThread)
+    {
+        mpRenderThread->Stop();
+        mpRenderThread->Join();
+    }
     // Shutdown ImGui
     ShutdownImGui();
     
@@ -250,8 +308,31 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
-
     SetupMultiPassRendering();
+
+    // initialize multi-thread rendering
+    if (mMultithreadedRendering)
+    {
+        mpCommandQueue = std::make_shared<RenderCommandQueue>();
+        mpFrameSync = std::make_shared<FrameSync>();
+        
+        // create render thread (share OpenGL context)
+        // note: use mutex to synchronize context access
+        mpRenderThread = std::make_shared<RenderThread>(
+            mpCommandQueue,
+            mpFrameSync,
+            mpRenderer,
+            mWindow  // pass main window
+        );
+        
+        // set RenderView to get viewport size
+        mpRenderThread->SetRenderView(mpRenderView);
+        
+        mpRenderThread->Start();
+        
+        // wait for render thread initialization to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 void RenderAgent::SetupMultiPassRendering()
@@ -497,6 +578,19 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
         mGeomSelected = false;
         std::cout << "No hit" << std::endl;
     }
+}
+
+void RenderAgent::ShadringContext()
+{
+    // create main context in main thread
+    // void* mainContext = glfwGetCurrentContext();
+
+    // create shared context in render thread
+    // void* renderContext = glfwCreateContext(mWindow);
+    // glfwMakeContextCurrent(renderContext);
+
+    // set shared resources (textures, buffers, etc. can be shared between threads)
+    // note: resources need to be created and used in the same thread
 }
 
 /** 

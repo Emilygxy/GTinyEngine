@@ -47,6 +47,9 @@ GTinyEngine 当前采用**单线程同步渲染架构**，所有渲染相关操�
 ```cpp
 void RenderAgent::Render()
 {
+    // ... 省略部分代码
+
+    // 主循环
     while (!glfwWindowShouldClose(mWindow))
     {
         // 1. 时间计算
@@ -325,6 +328,9 @@ public:
 // 主线程：生成渲染命令
 void RenderAgent::Render()
 {
+     
+    // ...省略部分代码
+
     while (!glfwWindowShouldClose(mWindow))
     {
         // 1. 游戏逻辑更新
