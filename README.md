@@ -26,4 +26,3 @@ A Simple Game Engine Project
 
 ### 2026.01.16
 - 新增了简单的多线程渲染的支持：通过简单实现典型的<生产-消费者>模型，实现了多线程渲染的支持。特别处理了在共享OpenGL上下文的情况下，多线程渲染结合UI的同步问题，可详见 [多线程渲染架构分析与改造方案](doc/multithreaded_rendering_architecture.md "多线程渲染架构分析与改造方案") 和 [ImGui 多线程渲染问题修复](doc/imgui_multithreaded_fix.md "ImGui 多线程渲染问题修复") 。
-test
