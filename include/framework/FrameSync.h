@@ -10,23 +10,23 @@ public:
     FrameSync() = default;
     ~FrameSync() = default;
     
-    // 禁止拷贝
+    //  disable copy
     FrameSync(const FrameSync&) = delete;
     FrameSync& operator=(const FrameSync&) = delete;
     
-    // 主线程：标记帧准备完成
+    //  main thread: signal frame ready
     void SignalFrameReady();
     
-    // 渲染线程：等待帧准备
+    //  render thread: wait for frame ready
     void WaitForFrameReady();
     
-    // 渲染线程：标记渲染完成
+    //  render thread: signal render complete
     void SignalRenderComplete();
     
-    // 主线程：等待渲染完成
+    //  main thread: wait for render complete
     void WaitForRenderComplete();
     
-    // 非阻塞检查
+    //  non-blocking check
     bool IsFrameReady() const;
     bool IsRenderComplete() const;
 

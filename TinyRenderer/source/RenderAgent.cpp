@@ -116,8 +116,6 @@ void RenderAgent::InitGL()
     // Set window user pointer for callbacks
     glfwSetWindowUserPointer(mWindow, this);
 
-    ShadringContext();
-
     //not to capture mouse in initing state
 
     // glad: load all OpenGL function pointers
@@ -149,7 +147,7 @@ void RenderAgent::SetupRenderer()
     mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
     mpRenderContext = std::make_shared<RenderContext>();
     mpRenderer->SetRenderContext(mpRenderContext);
-
+    
     //init camera
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
@@ -193,7 +191,21 @@ void RenderAgent::Render()
         if (mMultithreadedRendering)
         {
             // multi-thread rendering path
-            // 1. generate render commands (main thread)
+            // 1. prepare ImGui frame (must be done early in main thread for input handling)
+            //    This needs to happen before rendering so ImGui can process input
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                
+                // Start ImGui frame (this processes input and prepares UI state)
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+                
+                glfwMakeContextCurrent(nullptr);  // release context
+            }
+            
+            // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = mpGeometry->GetMaterial();
@@ -206,26 +218,56 @@ void RenderAgent::Render()
             
             commands.push_back(sphereCommand);
             
-            // 2. push to command queue
+            // 3. build ImGui UI (this can be done without OpenGL context)
+            BuildImGuiUI();
+            
+            // 4. push to command queue
             mpCommandQueue->PushCommands(commands);
             
-            // 3. signal frame ready
+            // 5. signal frame ready (render thread can now start rendering)
             mpFrameSync->SignalFrameReady();
             
-            // 4. wait for render complete (optional, for synchronization)
+            // 6. wait for render complete (3D scene rendering is done)
             mpFrameSync->WaitForRenderComplete();
             
-            // 5. render ImGui (need to be in main thread, because ImGui needs main thread context)
-            // note: ImGui rendering needs to be in main thread, because ImGui needs main thread context
+            // 7. render ImGui on top of 3D scene (must be in main thread with OpenGL context)
+            //    Note: ImGui rendering must happen after 3D scene is rendered, but before buffer swap
             {
                 std::lock_guard<std::mutex> lock(g_GLContextMutex);
                 glfwMakeContextCurrent(mWindow);
-                RenderImGui();
+                
+                // Ensure OpenGL state is correct for ImGui rendering
+                // ImGui_ImplOpenGL3_RenderDrawData will set up the correct state internally,
+                // but we need to make sure the context is properly bound
+                
+                // Render ImGui draw data (this actually draws the UI)
+                // Note: ImGui_ImplOpenGL3_RenderDrawData will:
+                // 1. Save current OpenGL state
+                // 2. Set up ImGui's required state (blend enabled, depth test disabled, etc.)
+                // 3. Render ImGui
+                // 4. Restore previous OpenGL state
+                ImGui::Render();
+                
+                // Check if ImGui has valid draw data
+                ImDrawData* draw_data = ImGui::GetDrawData();
+                if (draw_data && draw_data->CmdListsCount > 0)
+                {
+                    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+                }
+                else
+                {
+                    // Debug: ImGui has no draw data (this shouldn't happen if UI was built correctly)
+                    // This might indicate that BuildImGuiUI() wasn't called or didn't create any UI
+                }
+                
+                // 8. swap buffers (must be in main thread)
                 glfwSwapBuffers(mWindow);
-                glfwMakeContextCurrent(nullptr);  // release context, let render thread use
+                
+                // Release context so render thread can use it in the next frame
+                glfwMakeContextCurrent(nullptr);
             }
             
-            // 6. poll events (must be in main thread)
+            // 9. poll events (must be in main thread)
             glfwPollEvents();
         }
         else
@@ -393,13 +435,11 @@ void RenderAgent::ShutdownImGui()
     ImGui::DestroyContext();
 }
 
-void RenderAgent::RenderImGui()
+void RenderAgent::BuildImGuiUI()
 {
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
+    // Build ImGui UI (this can be called without OpenGL context)
+    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
+    
     // Create a simple window
     ImGui::Begin("Mouse Picking Demo");
     
@@ -424,6 +464,20 @@ void RenderAgent::RenderImGui()
                1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     
     ImGui::End();
+}
+
+void RenderAgent::RenderImGui()
+{
+    // Legacy method for single-threaded rendering
+    // For multi-threaded rendering, use BuildImGuiUI() and separate Render() call
+    
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Build UI
+    BuildImGuiUI();
 
     // Rendering
     ImGui::Render();
@@ -578,19 +632,6 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
         mGeomSelected = false;
         std::cout << "No hit" << std::endl;
     }
-}
-
-void RenderAgent::ShadringContext()
-{
-    // create main context in main thread
-    // void* mainContext = glfwGetCurrentContext();
-
-    // create shared context in render thread
-    // void* renderContext = glfwCreateContext(mWindow);
-    // glfwMakeContextCurrent(renderContext);
-
-    // set shared resources (textures, buffers, etc. can be shared between threads)
-    // note: resources need to be created and used in the same thread
 }
 
 /** 

@@ -55,6 +55,7 @@ struct Ray {
 };
 
 // will be singleton class
+// main thread
 class RenderAgent
 {
 public:
@@ -62,7 +63,7 @@ public:
 	RenderAgent();
 	~RenderAgent();
 
-	void InitGL();
+	void InitGL(); // main thread
 
 	void PreRender();
 	void Render();
@@ -80,18 +81,18 @@ public:
 private:
 	void SetupRenderer();
 	void SetupMultiPassRendering();
+
+	// ui
 	void InitImGui();
 	void ShutdownImGui();
-	void RenderImGui();
+	void RenderImGui();  // Legacy method for single-threaded rendering
+	void BuildImGuiUI();  // Build ImGui UI (for multi-threaded rendering, called without OpenGL context)
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
 	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
 	void HandleMouseClick(double xpos, double ypos);
-
-	//
-	void ShadringContext();
 
 	GLFWwindow* mWindow { nullptr };
 

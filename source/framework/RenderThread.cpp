@@ -96,13 +96,13 @@ void RenderThread::RenderLoop()
         glfwMakeContextCurrent(mMainWindow);
     }
     
-    // ensure GLAD is loaded (if not already)
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cerr << "RenderThread::RenderLoop - Failed to initialize GLAD" << std::endl;
-        mRunning = false;
-        return;
-    }
+    //// ensure GLAD is loaded (if not already)
+    //if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    //{
+    //    std::cerr << "RenderThread::RenderLoop - Failed to initialize GLAD" << std::endl;
+    //    mRunning = false;
+    //    return;
+    //}
     
     std::cout << "RenderThread::RenderLoop - OpenGL context initialized" << std::endl;
     
@@ -151,7 +151,8 @@ void RenderThread::RenderLoop()
         {
             std::lock_guard<std::mutex> lock(g_GLContextMutex);
             
-            // ensure context is bound
+            // IMPORTANT: Re-bind context at the start of each frame
+            // The context was released after the previous frame's ImGui rendering
             glfwMakeContextCurrent(mMainWindow);
             
             // start rendering frame
@@ -187,6 +188,10 @@ void RenderThread::RenderLoop()
             
             // end rendering frame
             mpRenderer->EndFrame();
+            
+            // IMPORTANT: Release context after rendering so main thread can use it for ImGui
+            // The context will be re-bound in the next frame
+            glfwMakeContextCurrent(nullptr);
         }
         
         // notify main thread rendering complete
