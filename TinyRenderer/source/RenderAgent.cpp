@@ -8,6 +8,8 @@
 #include "Light.h"
 #include "mesh/AaBB.h"
 #include <cmath>
+#include <thread>
+#include <chrono>
 
 // ImGui includes
 #include "imgui.h"
@@ -21,6 +23,13 @@
 #include "RenderView.h"
 #include "framework/RenderContext.h"
 #include "framework/RenderPass.h"
+#include "framework/RenderCommandQueue.h"
+#include "framework/FrameSync.h"
+#include "framework/RenderThread.h"
+#include <mutex>
+
+// declare external mutex for context synchronization (defined in RenderThread.cpp)
+extern std::mutex g_GLContextMutex;
 
 namespace
 {
@@ -138,7 +147,7 @@ void RenderAgent::SetupRenderer()
     mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
     mpRenderContext = std::make_shared<RenderContext>();
     mpRenderer->SetRenderContext(mpRenderContext);
-
+    
     //init camera
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
@@ -179,16 +188,24 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
-        // Begin Render Frame
-        mpRenderer->BeginFrame();
-
-        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
-        mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // clear color/clear depth
-
-        if (mpRenderer->IsMultiPassEnabled())
+        if (mMultithreadedRendering)
         {
-            // create render command
+            // multi-thread rendering path
+            // 1. prepare ImGui frame (must be done early in main thread for input handling)
+            //    This needs to happen before rendering so ImGui can process input
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                
+                // Start ImGui frame (this processes input and prepares UI state)
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+                
+                glfwMakeContextCurrent(nullptr);  // release context
+            }
+            
+            // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = mpGeometry->GetMaterial();
@@ -198,38 +215,115 @@ void RenderAgent::Render()
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
             sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-
+            
             commands.push_back(sphereCommand);
-
-            // use RenderPassManager to execute Pass（with correct dependency management）
-            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            
+            // 3. build ImGui UI (this can be done without OpenGL context)
+            BuildImGuiUI();
+            
+            // 4. push to command queue
+            mpCommandQueue->PushCommands(commands);
+            
+            // 5. signal frame ready (render thread can now start rendering)
+            mpFrameSync->SignalFrameReady();
+            
+            // 6. wait for render complete (3D scene rendering is done)
+            mpFrameSync->WaitForRenderComplete();
+            
+            // 7. render ImGui on top of 3D scene (must be in main thread with OpenGL context)
+            //    Note: ImGui rendering must happen after 3D scene is rendered, but before buffer swap
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                
+                // Ensure OpenGL state is correct for ImGui rendering
+                // ImGui_ImplOpenGL3_RenderDrawData will set up the correct state internally,
+                // but we need to make sure the context is properly bound
+                
+                // Render ImGui draw data (this actually draws the UI)
+                // Note: ImGui_ImplOpenGL3_RenderDrawData will:
+                // 1. Save current OpenGL state
+                // 2. Set up ImGui's required state (blend enabled, depth test disabled, etc.)
+                // 3. Render ImGui
+                // 4. Restore previous OpenGL state
+                ImGui::Render();
+                
+                // Check if ImGui has valid draw data
+                ImDrawData* draw_data = ImGui::GetDrawData();
+                if (draw_data && draw_data->CmdListsCount > 0)
+                {
+                    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+                }
+                else
+                {
+                    // Debug: ImGui has no draw data (this shouldn't happen if UI was built correctly)
+                    // This might indicate that BuildImGuiUI() wasn't called or didn't create any UI
+                }
+                
+                // 8. swap buffers (must be in main thread)
+                glfwSwapBuffers(mWindow);
+                
+                // Release context so render thread can use it in the next frame
+                glfwMakeContextCurrent(nullptr);
+            }
+            
+            // 9. poll events (must be in main thread)
+            glfwPollEvents();
         }
         else
         {
-            // traditional single Pass rendering
-            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-                mpGeometry->GetIndices(),
-                mpGeometry->GetMaterial(),
-                mpGeometry->GetWorldTransform());
+            // Begin Render Frame
+            mpRenderer->BeginFrame();
+
+            mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
+            mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            mpRenderer->Clear(0x3); // clear color/clear depth
+
+            if (mpRenderer->IsMultiPassEnabled())
+            {
+                // create render command
+                std::vector<RenderCommand> commands;
+                RenderCommand sphereCommand;
+                sphereCommand.material = mpGeometry->GetMaterial();
+                sphereCommand.vertices = mpGeometry->GetVertices();
+                sphereCommand.indices = mpGeometry->GetIndices();
+                sphereCommand.transform = mpGeometry->GetWorldTransform();
+                sphereCommand.state = RenderMode::Opaque;
+                sphereCommand.hasUV = true;
+                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+
+                commands.push_back(sphereCommand);
+
+                // use RenderPassManager to execute Pass（with correct dependency management）
+                te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            }
+            else
+            {
+                // traditional single Pass rendering
+                mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                    mpGeometry->GetIndices(),
+                    mpGeometry->GetMaterial(),
+                    mpGeometry->GetWorldTransform());
+            }
+
+            //mpRenderer->DrawBackgroud();
+
+            //// DrawMesh
+            //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+            //    mpGeometry->GetIndices(),
+            //    mpGeometry->GetMaterial(),
+            //    mpGeometry->GetWorldTransform());
+
+            // Render ImGui
+            RenderImGui();
+
+            // End Render Frame
+            mpRenderer->EndFrame();
+            // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+            // -------------------------------------------------------------------------------
+            glfwSwapBuffers(mWindow);
+            glfwPollEvents();
         }
-
-        //mpRenderer->DrawBackgroud();
-
-        //// DrawMesh
-        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-        //    mpGeometry->GetIndices(),
-        //    mpGeometry->GetMaterial(),
-        //    mpGeometry->GetWorldTransform());
-
-        // Render ImGui
-        RenderImGui();
-
-        // End Render Frame
-        mpRenderer->EndFrame();
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
-        glfwSwapBuffers(mWindow);
-        glfwPollEvents();
 
         static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
     }
@@ -237,6 +331,12 @@ void RenderAgent::Render()
 
 void RenderAgent::PostRender()
 {
+    // stop render thread
+    if (mpRenderThread)
+    {
+        mpRenderThread->Stop();
+        mpRenderThread->Join();
+    }
     // Shutdown ImGui
     ShutdownImGui();
     
@@ -250,8 +350,31 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
-
     SetupMultiPassRendering();
+
+    // initialize multi-thread rendering
+    if (mMultithreadedRendering)
+    {
+        mpCommandQueue = std::make_shared<RenderCommandQueue>();
+        mpFrameSync = std::make_shared<FrameSync>();
+        
+        // create render thread (share OpenGL context)
+        // note: use mutex to synchronize context access
+        mpRenderThread = std::make_shared<RenderThread>(
+            mpCommandQueue,
+            mpFrameSync,
+            mpRenderer,
+            mWindow  // pass main window
+        );
+        
+        // set RenderView to get viewport size
+        mpRenderThread->SetRenderView(mpRenderView);
+        
+        mpRenderThread->Start();
+        
+        // wait for render thread initialization to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 void RenderAgent::SetupMultiPassRendering()
@@ -312,13 +435,11 @@ void RenderAgent::ShutdownImGui()
     ImGui::DestroyContext();
 }
 
-void RenderAgent::RenderImGui()
+void RenderAgent::BuildImGuiUI()
 {
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
+    // Build ImGui UI (this can be called without OpenGL context)
+    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
+    
     // Create a simple window
     ImGui::Begin("Mouse Picking Demo");
     
@@ -343,6 +464,20 @@ void RenderAgent::RenderImGui()
                1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     
     ImGui::End();
+}
+
+void RenderAgent::RenderImGui()
+{
+    // Legacy method for single-threaded rendering
+    // For multi-threaded rendering, use BuildImGuiUI() and separate Render() call
+    
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Build UI
+    BuildImGuiUI();
 
     // Rendering
     ImGui::Render();

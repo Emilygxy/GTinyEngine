@@ -14,13 +14,15 @@ namespace te
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-
 class IRenderer;
 class Camera_Event;
 class RenderAgent;
 class BasicGeometry;
 class RenderView;
 class RenderContext;
+class RenderCommandQueue;
+class FrameSync;
+class RenderThread;
 
 class EventHelper
 {
@@ -52,6 +54,7 @@ struct Ray {
 };
 
 // will be singleton class
+// main thread
 class RenderAgent
 {
 public:
@@ -59,7 +62,7 @@ public:
 	RenderAgent();
 	~RenderAgent();
 
-	void InitGL();
+	void InitGL(); // main thread
 
 	void PreRender();
 	void Render();
@@ -77,9 +80,12 @@ public:
 private:
 	void SetupRenderer();
 	void SetupMultiPassRendering();
+
+	// ui
 	void InitImGui();
 	void ShutdownImGui();
-	void RenderImGui();
+	void RenderImGui();  // Legacy method for single-threaded rendering
+	void BuildImGuiUI();  // Build ImGui UI (for multi-threaded rendering, called without OpenGL context)
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
@@ -98,7 +104,12 @@ private:
 	//EventHelper mEventHelper;
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
 	
+	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
+	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };
+	std::shared_ptr<RenderThread> mpRenderThread{ nullptr };
+
 	// Mouse picking state
 	bool mGeomSelected{ false };
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
+	bool mMultithreadedRendering{ true };
 };
