@@ -3,6 +3,7 @@
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/PBRMaterial.h"
 #include "materials/BlitMaterial.h"
 #include "Camera.h"
 #include "Light.h"
@@ -167,8 +168,11 @@ void RenderAgent::Render()
     {
         //mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
         mpGeometry = std::make_shared<Sphere>();
-        auto material = std::make_shared<BlinnPhongMaterial>();
-        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+        /*auto material = std::make_shared<BlinnPhongMaterial>();
+        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");*/
+
+        auto material = std::make_shared<PBRMaterial>();
+        material->SetAlbedoTexturePath("resources/textures/IMG_8515.JPG");
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
