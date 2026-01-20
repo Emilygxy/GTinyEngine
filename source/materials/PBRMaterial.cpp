@@ -104,7 +104,8 @@ void PBRMaterial::UpdateUniform()
     }
     
     // Set brightness and lighting controls
-    glm::vec2 intensities(mLightIntensity, mAmbientIntensity);
+    // Note: u_intensities.x = ambient, u_intensities.y = light (as per shader comment)
+    glm::vec2 intensities(mAmbientIntensity, mLightIntensity);
     mpShader->setVec2("u_intensities", intensities);
     mpShader->setFloat("u_exposure", mExposure);
     

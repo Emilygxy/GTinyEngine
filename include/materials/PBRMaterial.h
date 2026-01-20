@@ -53,9 +53,16 @@ public:
 
     // Material property setters (for non-textured materials)
     void SetAlbedo(const glm::vec3& albedo) { mAlbedo = albedo; }
+    glm::vec3 GetAlbedo() const { return mAlbedo; }
+    
     void SetMetallic(float metallic) { mMetallic = glm::clamp(metallic, 0.0f, 1.0f); }
+    float GetMetallic() const { return mMetallic; }
+    
     void SetRoughness(float roughness) { mRoughness = glm::clamp(roughness, 0.0f, 1.0f); }
+    float GetRoughness() const { return mRoughness; }
+    
     void SetAO(float ao) { mAO = glm::clamp(ao, 0.0f, 1.0f); }
+    float GetAO() const { return mAO; }
 
     // Brightness and lighting controls
     void SetAmbientIntensity(float intensity) { mAmbientIntensity = glm::max(intensity, 0.0f); }

@@ -5,6 +5,7 @@
 #include "RenderView.h"
 #include "materials/GeometryMaterial.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/PBRMaterial.h"
 #include "materials/SkyboxMaterial.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
@@ -343,10 +344,19 @@ namespace te
                 if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
                 {
                     pGeometryMat->SetDiffuseTexture(texture);
-                    //// Bind original texture to geometry material
-                    //glActiveTexture(GL_TEXTURE0);
-                    //glBindTexture(GL_TEXTURE_2D, texture->GetHandle());
-                    //mpOverMaterial->GetShader()->setInt("u_diffuseTexture", 0);
+                }
+            }
+            else if (auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(command.material))
+            {
+                // For PBR materials, use albedo texture as diffuse texture for geometry pass
+                if (auto texture = pbrMaterial->GetAlbedoTexture())
+                {
+                    pGeometryMat->SetDiffuseTexture(texture);
+                }
+                else
+                {
+                    // If no texture, use albedo color as object color
+                    pGeometryMat->SetObjectColor(pbrMaterial->GetAlbedo());
                 }
             }
             
@@ -448,7 +458,8 @@ namespace te
             {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
         }; // outputs
         mConfig.dependencies = {
-            {"GeometryPass", true, []() { return true; }},
+            {"SkyboxPass", true, []() { return true; }},   // Need BackgroundColor input
+            {"GeometryPass", true, []() { return true; }}, // Need G-Buffer inputs
         }; // dependencies
         mConfig.clearColor = true;
         mConfig.clearDepth = true;
@@ -494,7 +505,7 @@ namespace te
             if (!command.material || command.vertices.empty() || command.indices.empty())
                 continue;
 
-            // Use geometry material
+            // Use original material from command (e.g., PBRMaterial, PhongMaterial, etc.)
             auto pMaterial = command.material;
             if (FindDependency("GeometryPass"))
             {

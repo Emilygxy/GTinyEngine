@@ -172,7 +172,7 @@ void RenderAgent::Render()
         material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");*/
 
         auto material = std::make_shared<PBRMaterial>();
-        material->SetAlbedoTexturePath("resources/textures/IMG_8515.JPG");
+        material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
@@ -466,6 +466,119 @@ void RenderAgent::BuildImGuiUI()
     ImGui::Separator();
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
                1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+    // Material Panel
+    ImGui::Separator();
+    ImGui::Text("Material Properties");
+    if (auto pMat = mpGeometry->GetMaterial())
+    {
+        if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
+        {
+            // Material Properties Section
+            if (ImGui::CollapsingHeader("PBR Material", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                // Albedo (Base Color)
+                glm::vec3 albedo = pPBRMat->GetAlbedo();
+                float albedoArray[3] = { albedo.r, albedo.g, albedo.b };
+                if (ImGui::ColorEdit3("Albedo", albedoArray))
+                {
+                    pPBRMat->SetAlbedo(glm::vec3(albedoArray[0], albedoArray[1], albedoArray[2]));
+                }
+                
+                // Metallic
+                float metallic = pPBRMat->GetMetallic();
+                if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetMetallic(metallic);
+                }
+                
+                // Roughness
+                float roughness = pPBRMat->GetRoughness();
+                if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetRoughness(roughness);
+                }
+                
+                // Ambient Occlusion
+                float ao = pPBRMat->GetAO();
+                if (ImGui::SliderFloat("AO", &ao, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetAO(ao);
+                }
+                
+                ImGui::Separator();
+                ImGui::Text("Lighting Controls");
+                
+                // Ambient Intensity
+                float ambientIntensity = pPBRMat->GetAmbientIntensity();
+                if (ImGui::SliderFloat("Ambient Intensity", &ambientIntensity, 0.0f, 2.0f, "%.2f"))
+                {
+                    pPBRMat->SetAmbientIntensity(ambientIntensity);
+                }
+                
+                // Light Intensity
+                float lightIntensity = pPBRMat->GetLightIntensity();
+                if (ImGui::SliderFloat("Light Intensity", &lightIntensity, 0.0f, 5.0f, "%.2f"))
+                {
+                    pPBRMat->SetLightIntensity(lightIntensity);
+                }
+                
+                // Exposure
+                float exposure = pPBRMat->GetExposure();
+                if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 3.0f, "%.2f"))
+                {
+                    pPBRMat->SetExposure(exposure);
+                }
+                
+                // Quick preset buttons
+                ImGui::Separator();
+                ImGui::Text("Presets");
+                if (ImGui::Button("Metal (Polished)"))
+                {
+                    pPBRMat->SetMetallic(1.0f);
+                    pPBRMat->SetRoughness(0.1f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Metal (Rusted)"))
+                {
+                    pPBRMat->SetMetallic(0.8f);
+                    pPBRMat->SetRoughness(0.7f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Plastic"))
+                {
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.3f);
+                }
+                if (ImGui::Button("Rubber"))
+                {
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.9f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Default"))
+                {
+                    pPBRMat->SetAlbedo(glm::vec3(0.7f, 0.3f, 0.3f));
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.5f);
+                    pPBRMat->SetAO(1.0f);
+                    pPBRMat->SetAmbientIntensity(0.3f);
+                    pPBRMat->SetLightIntensity(1.0f);
+                    pPBRMat->SetExposure(1.0f);
+                }
+            }
+        }
+        else
+        {
+            ImGui::Text("Material type: Non-PBR Material");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "PBR controls only available for PBRMaterial");
+        }
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No material attached");
+    }
+
     
     ImGui::End();
 }
