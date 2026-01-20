@@ -165,8 +165,8 @@ void RenderAgent::Render()
 {
     if (!mpGeometry)
     {
-        mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
-        //mpGeometry = std::make_shared<Sphere>();
+        //mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
+        mpGeometry = std::make_shared<Sphere>();
         auto material = std::make_shared<BlinnPhongMaterial>();
         material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
         
@@ -489,6 +489,7 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
     auto camera = mpRenderContext->GetAttachedCamera();
+    //auto pRenderView = mpRenderContext->Get();
     if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
     
     glm::mat4 viewMatrix = camera->GetViewMatrix();
@@ -497,8 +498,8 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
     // Step 1: Convert screen coordinates to normalized device coordinates (NDC)
     // Screen coordinates: (0,0) at top-left, (SCR_WIDTH, SCR_HEIGHT) at bottom-right
     // NDC coordinates: (-1,-1) at bottom-left, (1,1) at top-right
-    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
-    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // Flip Y: screen Y=0 is top, NDC Y=1 is top
+    float ndcX = (2.0f * mouseX) / mpRenderView->Width() - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / mpRenderView->Height(); // Flip Y: screen Y=0 is top, NDC Y=1 is top
     
     // Step 2: Create two points in clip space (near and far planes)
     glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
@@ -575,6 +576,87 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     return true;
 }
 
+bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t)
+{
+    if (!pGeometry) {
+        return false;
+    }
+
+    // Get vertices and indices from geometry
+    std::vector<Vertex> vertices = pGeometry->GetVertices();
+    std::vector<unsigned int> indices = pGeometry->GetIndices();
+    
+    if (vertices.empty() || indices.empty() || indices.size() % 3 != 0) {
+        return false;
+    }
+
+    // Get world transform to convert vertices to world space
+    glm::mat4 worldTransform = pGeometry->GetWorldTransform();
+    
+    // Initialize closest intersection distance
+    float closestT = std::numeric_limits<float>::max();
+    bool foundIntersection = false;
+    const float EPSILON = 1e-6f;
+
+    // Iterate through all triangles
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        // Get triangle vertices (in local space)
+        glm::vec3 v0_local = vertices[indices[i]].position;
+        glm::vec3 v1_local = vertices[indices[i + 1]].position;
+        glm::vec3 v2_local = vertices[indices[i + 2]].position;
+        
+        // Transform vertices to world space
+        glm::vec3 v0 = glm::vec3(worldTransform * glm::vec4(v0_local, 1.0f));
+        glm::vec3 v1 = glm::vec3(worldTransform * glm::vec4(v1_local, 1.0f));
+        glm::vec3 v2 = glm::vec3(worldTransform * glm::vec4(v2_local, 1.0f));
+        
+        // Möller-Trumbore ray-triangle intersection algorithm
+        
+        glm::vec3 edge1 = v1 - v0;
+        glm::vec3 edge2 = v2 - v0;
+        glm::vec3 h = glm::cross(ray.direction, edge2);
+        float a = glm::dot(edge1, h);
+        
+        // Ray is parallel to triangle
+        if (std::abs(a) < EPSILON) {
+            continue;
+        }
+        
+        float f = 1.0f / a;
+        glm::vec3 s = ray.origin - v0;
+        float u = f * glm::dot(s, h);
+        
+        // Intersection point is outside triangle
+        if (u < 0.0f || u > 1.0f) {
+            continue;
+        }
+        
+        glm::vec3 q = glm::cross(s, edge1);
+        float v = f * glm::dot(ray.direction, q);
+        
+        // Intersection point is outside triangle
+        if (v < 0.0f || u + v > 1.0f) {
+            continue;
+        }
+        
+        // Calculate intersection distance
+        float t_intersection = f * glm::dot(edge2, q);
+        
+        // Check if intersection is in front of ray origin
+        if (t_intersection > EPSILON && t_intersection < closestT) {
+            closestT = t_intersection;
+            foundIntersection = true;
+        }
+    }
+    
+    if (foundIntersection) {
+        t = closestT;
+        return true;
+    }
+    
+    return false;
+}
+
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
 {
     // Get camera position
@@ -623,10 +705,14 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
     {
         mGeomSelected = true;
-        //mSelectedSpherePosition = sphereCenter;
-        //mSelectedSphereRadius = sphereRadius;
-        mSelectedGeomPosition = geomCenter;
-        std::cout << "Geometry hit! Distance: " << t << std::endl;
+
+        // detail hiting
+        mGeomSelected &= TrianglesIntersection(re_ray, mpGeometry, t);
+        if (mGeomSelected)
+        {
+            mSelectedGeomPosition = geomCenter;
+            std::cout << "Geometry hit! Distance: " << t << std::endl;
+        }
     }
     else {
         mGeomSelected = false;

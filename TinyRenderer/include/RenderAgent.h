@@ -53,6 +53,10 @@ struct Ray {
 	glm::vec3 direction;
 };
 
+struct Triangle
+{
+};
+
 // will be singleton class
 // main thread
 class RenderAgent
@@ -91,6 +95,8 @@ private:
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
 	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
+	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t);
+
 	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
