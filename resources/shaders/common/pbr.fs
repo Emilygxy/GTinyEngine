@@ -112,12 +112,12 @@ vec3 getNormalFromMap()
 void main()
 {
     // Sample textures or use uniform values
-    vec3 albedo = u_hasTextures.x > 0.5 ? pow(texture(u_albedoMap, TexCoords).rgb, vec3(2.2)) : u_albedo;
+    vec3 albedo = u_hasTextures.x > 0.5 ? mix(pow(texture(u_albedoMap, TexCoords).rgb, vec3(2.2)), u_albedo, 0.05): u_albedo;
     float metallic = u_hasTextures.z > 0.5 ? texture(u_metallicMap, TexCoords).r : u_metallic;
     float roughness = u_hasTextures.w > 0.5 ? texture(u_roughnessMap, TexCoords).r : u_roughness;
     // AO texture is optional, always sample but use uniform as fallback
-    float ao = u_useIBL_ao.y ? texture(u_aoMap, TexCoords).r : u_ao;
-    if (ao <= 0.0) ao = u_ao; // Use uniform value if texture returns 0 (likely unbound)
+    float ao = u_useIBL_ao.y > 0.5 ? texture(u_aoMap, TexCoords).r : u_ao;
+    if (ao < 0.0) ao = u_ao; // Use uniform value if texture returns 0 (likely unbound)
     
     // Get normal
     vec3 N = u_hasTextures.y > 0.5 ? getNormalFromMap() : normalize(Normal);

@@ -29,4 +29,7 @@ A Simple Game Engine Project
 
 ### 2026.01.20
 - 优化了 鼠标点选 (三角面片级别)。
-- 新增PBR材质的支持，并实现了基于物理的渲染， 但是在MultiPass渲染的时候有点问题，待修复。
+- 新增PBR材质的支持，并实现了基于物理的渲染， 但是在MultiPass渲染的时候有点问题，待修复(可能是shader有错误)。
+
+### 2026.01.21
+- fix: pbr shader的error - UI 正常可调整PBR材质参数（所见即所得）。
