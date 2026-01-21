@@ -33,3 +33,4 @@ A Simple Game Engine Project
 
 ### 2026.01.21
 - fix: pbr shader的error - UI 正常可调整PBR材质参数（所见即所得）。
+- 新增窗口Resize的支持，并同步更新framebuffer的大小。
