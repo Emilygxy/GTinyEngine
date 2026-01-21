@@ -17,12 +17,17 @@ void RenderContext::AttachCamera(const std::shared_ptr<Camera>& camera)
 
 std::shared_ptr<Camera> RenderContext::GetAttachedCamera()
 {
-	if (mpAttachCamera.expired())
+	if (auto pCamera = mpAttachCamera.lock())
 	{
-		return nullptr;
+		if (mpAttachCamera.expired())
+		{
+			return nullptr;
+		}
+
+		return pCamera;
 	}
 
-	return mpAttachCamera.lock();
+	return nullptr;
 }
 
 void RenderContext::PushAttachLight(const std::shared_ptr<Light>& light)

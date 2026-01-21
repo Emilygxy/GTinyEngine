@@ -128,6 +128,38 @@ namespace te
         glViewport(0, 0, mDesc.width, mDesc.height);
     }
 
+    void RenderTarget::Update(const RenderTargetDesc& desc)
+    {
+        // Check if update is actually needed (only check width/height for resize)
+        bool needsUpdate = (mDesc.width != desc.width || mDesc.height != desc.height || 
+                           mDesc.format != desc.format || mDesc.type != desc.type);
+        
+        if (!needsUpdate && mInitialized)
+        {
+            return; // No update needed
+        }
+
+        // Delete old resources if they exist
+        if (mInitialized)
+        {
+            if (mTextureHandle != 0)
+            {
+                glDeleteTextures(1, &mTextureHandle);
+                mTextureHandle = 0;
+            }
+            if (mFramebufferHandle != 0)
+            {
+                glDeleteFramebuffers(1, &mFramebufferHandle);
+                mFramebufferHandle = 0;
+            }
+        }
+
+        mDesc = desc;
+        CreateTexture();
+        CreateFramebuffer();
+        mInitialized = true;
+    }
+
     GLenum RenderTarget::GetInternalFormat() const
     {
         switch (mDesc.format)
@@ -370,6 +402,42 @@ namespace te
     void MultiRenderTarget::SetViewport()
     {
         glViewport(0, 0, mWidth, mHeight);
+    }
+
+    void MultiRenderTarget::Resize(uint32_t width, uint32_t height)
+    {
+        // Check if resize is actually needed
+        if (mWidth == width && mHeight == height)
+        {
+            return;
+        }
+
+        mWidth = width;
+        mHeight = height;
+
+        // Update all RenderTargets with new dimensions
+        for (auto& renderTarget : mRenderTargets)
+        {
+            if (renderTarget)
+            {
+                RenderTargetDesc desc = renderTarget->GetDesc();
+                desc.width = width;
+                desc.height = height;
+                renderTarget->Update(desc);
+            }
+        }
+
+        // Recreate framebuffer and rebind all render targets
+        if (mFramebufferHandle != 0)
+        {
+            glDeleteFramebuffers(1, &mFramebufferHandle);
+            mFramebufferHandle = 0;
+        }
+
+        glGenFramebuffers(1, &mFramebufferHandle);
+        
+        // Rebind all render targets to the new framebuffer
+        // This will be done when Bind() is called next time
     }
 
     void MultiRenderTarget::UpdateDrawBuffers()

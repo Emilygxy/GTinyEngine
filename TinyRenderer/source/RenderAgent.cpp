@@ -3,16 +3,14 @@
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/PBRMaterial.h"
 #include "materials/BlitMaterial.h"
 #include "Camera.h"
 #include "Light.h"
 #include "mesh/AaBB.h"
 #include <cmath>
-
-// ImGui includes
-#include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
+#include <thread>
+#include <chrono>
 
 // Additional includes for AABB and math
 #include <limits>
@@ -21,6 +19,16 @@
 #include "RenderView.h"
 #include "framework/RenderContext.h"
 #include "framework/RenderPass.h"
+#include "framework/RenderCommandQueue.h"
+#include "framework/FrameSync.h"
+#include "framework/RenderThread.h"
+#include <mutex>
+
+#include "GUIManager.h"
+#include "imgui.h"
+
+// declare external mutex for context synchronization (defined in RenderThread.cpp)
+extern std::mutex g_GLContextMutex;
 
 namespace
 {
@@ -123,7 +131,7 @@ void RenderAgent::InitGL()
     glFrontFace(GL_CCW); // ccw is default positive face
     
     // Initialize ImGui
-    InitImGui();
+    GUIManager::GetInstance().Init(mWindow);
 }
 
 void RenderAgent::SetupRenderer()
@@ -138,7 +146,7 @@ void RenderAgent::SetupRenderer()
     mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
     mpRenderContext = std::make_shared<RenderContext>();
     mpRenderer->SetRenderContext(mpRenderContext);
-
+    
     //init camera
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
@@ -156,10 +164,13 @@ void RenderAgent::Render()
 {
     if (!mpGeometry)
     {
-        mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
-        //mpGeometry = std::make_shared<Sphere>();
-        auto material = std::make_shared<BlinnPhongMaterial>();
-        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
+        //mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
+        mpGeometry = std::make_shared<Sphere>();
+        /*auto material = std::make_shared<BlinnPhongMaterial>();
+        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");*/
+
+        auto material = std::make_shared<PBRMaterial>();
+        material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
         
         mpGeometry->SetMaterial(material);
         mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
@@ -179,16 +190,22 @@ void RenderAgent::Render()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
-        // Begin Render Frame
-        mpRenderer->BeginFrame();
-
-        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
-        mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        mpRenderer->Clear(0x3); // clear color/clear depth
-
-        if (mpRenderer->IsMultiPassEnabled())
+        if (mMultithreadedRendering)
         {
-            // create render command
+            // multi-thread rendering path
+            // 1. prepare ImGui frame (must be done early in main thread for input handling)
+            //    This needs to happen before rendering so ImGui can process input
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                
+                // Start ImGui frame (this processes input and prepares UI state)
+                GUIManager::GetInstance().BeginRender();
+                
+                glfwMakeContextCurrent(nullptr);  // release context
+            }
+            
+            // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = mpGeometry->GetMaterial();
@@ -198,38 +215,93 @@ void RenderAgent::Render()
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
             sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-
+            
             commands.push_back(sphereCommand);
-
-            // use RenderPassManager to execute Pass（with correct dependency management）
-            te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            
+            // 3. build ImGui UI (this can be done without OpenGL context)
+            UpdateGUI();
+            
+            // 4. push to command queue
+            mpCommandQueue->PushCommands(commands);
+            
+            // 5. signal frame ready (render thread can now start rendering)
+            mpFrameSync->SignalFrameReady();
+            
+            // 6. wait for render complete (3D scene rendering is done)
+            mpFrameSync->WaitForRenderComplete();
+            
+            // 7. render ImGui on top of 3D scene (must be in main thread with OpenGL context)
+            //    Note: ImGui rendering must happen after 3D scene is rendered, but before buffer swap
+            {
+                std::lock_guard<std::mutex> lock(g_GLContextMutex);
+                glfwMakeContextCurrent(mWindow);
+                
+                GUIManager::GetInstance().Render();
+                
+                // 8. swap buffers (must be in main thread)
+                glfwSwapBuffers(mWindow);
+                
+                // Release context so render thread can use it in the next frame
+                glfwMakeContextCurrent(nullptr);
+            }
+            
+            // 9. poll events (must be in main thread)
+            glfwPollEvents();
         }
         else
         {
-            // traditional single Pass rendering
-            mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-                mpGeometry->GetIndices(),
-                mpGeometry->GetMaterial(),
-                mpGeometry->GetWorldTransform());
+            // Begin Render Frame
+            mpRenderer->BeginFrame();
+
+            mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
+            mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            mpRenderer->Clear(0x3); // clear color/clear depth
+
+            if (mpRenderer->IsMultiPassEnabled())
+            {
+                // create render command
+                std::vector<RenderCommand> commands;
+                RenderCommand sphereCommand;
+                sphereCommand.material = mpGeometry->GetMaterial();
+                sphereCommand.vertices = mpGeometry->GetVertices();
+                sphereCommand.indices = mpGeometry->GetIndices();
+                sphereCommand.transform = mpGeometry->GetWorldTransform();
+                sphereCommand.state = RenderMode::Opaque;
+                sphereCommand.hasUV = true;
+                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+
+                commands.push_back(sphereCommand);
+
+                // use RenderPassManager to execute Pass（with correct dependency management）
+                te::RenderPassManager::GetInstance().ExecuteAll(commands);
+            }
+            else
+            {
+                // traditional single Pass rendering
+                mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+                    mpGeometry->GetIndices(),
+                    mpGeometry->GetMaterial(),
+                    mpGeometry->GetWorldTransform());
+            }
+
+            //mpRenderer->DrawBackgroud();
+
+            //// DrawMesh
+            //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
+            //    mpGeometry->GetIndices(),
+            //    mpGeometry->GetMaterial(),
+            //    mpGeometry->GetWorldTransform());
+
+            // Render ImGui
+            RenderUI();
+
+            // End Render Frame
+            mpRenderer->EndFrame();
+            // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
+            // -------------------------------------------------------------------------------
+            glfwSwapBuffers(mWindow);
+            glfwPollEvents();
         }
-
-        //mpRenderer->DrawBackgroud();
-
-        //// DrawMesh
-        //mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-        //    mpGeometry->GetIndices(),
-        //    mpGeometry->GetMaterial(),
-        //    mpGeometry->GetWorldTransform());
-
-        // Render ImGui
-        RenderImGui();
-
-        // End Render Frame
-        mpRenderer->EndFrame();
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
-        glfwSwapBuffers(mWindow);
-        glfwPollEvents();
 
         static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
     }
@@ -237,8 +309,15 @@ void RenderAgent::Render()
 
 void RenderAgent::PostRender()
 {
-    // Shutdown ImGui
-    ShutdownImGui();
+    // stop render thread
+    if (mpRenderThread)
+    {
+        mpRenderThread->Stop();
+        mpRenderThread->Join();
+    }
+
+    // Terminate ImGui
+    GUIManager::GetInstance().EndRender();
     
     mpRenderer->Shutdown();
 
@@ -250,8 +329,31 @@ void RenderAgent::PostRender()
 void RenderAgent::PreRender()
 {
     SetupRenderer();
-
     SetupMultiPassRendering();
+
+    // initialize multi-thread rendering
+    if (mMultithreadedRendering)
+    {
+        mpCommandQueue = std::make_shared<RenderCommandQueue>();
+        mpFrameSync = std::make_shared<FrameSync>();
+        
+        // create render thread (share OpenGL context)
+        // note: use mutex to synchronize context access
+        mpRenderThread = std::make_shared<RenderThread>(
+            mpCommandQueue,
+            mpFrameSync,
+            mpRenderer,
+            mWindow  // pass main window
+        );
+        
+        // set RenderView to get viewport size
+        mpRenderThread->SetRenderView(mpRenderView);
+        
+        mpRenderThread->Start();
+        
+        // wait for render thread initialization to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 void RenderAgent::SetupMultiPassRendering()
@@ -285,42 +387,13 @@ void RenderAgent::SetupMultiPassRendering()
     mpRenderer->SetMultiPassEnabled(true);
 }
 
-
-// ImGui implementation
-void RenderAgent::InitImGui()
+void RenderAgent::UpdateGUI()
 {
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(mWindow, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
-}
-
-void RenderAgent::ShutdownImGui()
-{
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-
-void RenderAgent::RenderImGui()
-{
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
+    // Build ImGui UI (this can be called without OpenGL context)
+    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
+    
     // Create a simple window
-    ImGui::Begin("Mouse Picking Demo");
+    ImGui::Begin("GUI Helper");
     
     ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
@@ -341,12 +414,134 @@ void RenderAgent::RenderImGui()
     ImGui::Separator();
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
                1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+    // Material Panel
+    ImGui::Separator();
+    ImGui::Text("Material Properties");
+    if (auto pMat = mpGeometry->GetMaterial())
+    {
+        if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
+        {
+            // Material Properties Section
+            if (ImGui::CollapsingHeader("PBR Material", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                // Albedo (Base Color)
+                glm::vec3 albedo = pPBRMat->GetAlbedo();
+                float albedoArray[3] = { albedo.r, albedo.g, albedo.b };
+                if (ImGui::ColorEdit3("Albedo", albedoArray))
+                {
+                    pPBRMat->SetAlbedo(glm::vec3(albedoArray[0], albedoArray[1], albedoArray[2]));
+                }
+                
+                // Metallic
+                float metallic = pPBRMat->GetMetallic();
+                if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetMetallic(metallic);
+                }
+                
+                // Roughness
+                float roughness = pPBRMat->GetRoughness();
+                if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetRoughness(roughness);
+                }
+                
+                // Ambient Occlusion
+                float ao = pPBRMat->GetAO();
+                if (ImGui::SliderFloat("AO", &ao, 0.0f, 1.0f, "%.2f"))
+                {
+                    pPBRMat->SetAO(ao);
+                }
+                
+                ImGui::Separator();
+                ImGui::Text("Lighting Controls");
+                
+                // Ambient Intensity
+                float ambientIntensity = pPBRMat->GetAmbientIntensity();
+                if (ImGui::SliderFloat("Ambient Intensity", &ambientIntensity, 0.0f, 2.0f, "%.2f"))
+                {
+                    pPBRMat->SetAmbientIntensity(ambientIntensity);
+                }
+                
+                // Light Intensity
+                float lightIntensity = pPBRMat->GetLightIntensity();
+                if (ImGui::SliderFloat("Light Intensity", &lightIntensity, 0.0f, 5.0f, "%.2f"))
+                {
+                    pPBRMat->SetLightIntensity(lightIntensity);
+                }
+                
+                // Exposure
+                float exposure = pPBRMat->GetExposure();
+                if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 3.0f, "%.2f"))
+                {
+                    pPBRMat->SetExposure(exposure);
+                }
+                
+                // Quick preset buttons
+                ImGui::Separator();
+                ImGui::Text("Presets");
+                if (ImGui::Button("Metal (Polished)"))
+                {
+                    pPBRMat->SetMetallic(1.0f);
+                    pPBRMat->SetRoughness(0.1f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Metal (Rusted)"))
+                {
+                    pPBRMat->SetMetallic(0.8f);
+                    pPBRMat->SetRoughness(0.7f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Plastic"))
+                {
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.3f);
+                }
+                if (ImGui::Button("Rubber"))
+                {
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.9f);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Default"))
+                {
+                    pPBRMat->SetAlbedo(glm::vec3(0.7f, 0.3f, 0.3f));
+                    pPBRMat->SetMetallic(0.0f);
+                    pPBRMat->SetRoughness(0.5f);
+                    pPBRMat->SetAO(1.0f);
+                    pPBRMat->SetAmbientIntensity(0.3f);
+                    pPBRMat->SetLightIntensity(1.0f);
+                    pPBRMat->SetExposure(1.0f);
+                }
+            }
+        }
+        else
+        {
+            ImGui::Text("Material type: Non-PBR Material");
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "PBR controls only available for PBRMaterial");
+        }
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No material attached");
+    }
+
     
     ImGui::End();
+}
+
+void RenderAgent::RenderUI()
+{
+    // Legacy method for single-threaded rendering
+    // For multi-threaded rendering, use BuildImGuiUI() and separate Render() call
+    GUIManager::GetInstance().BeginRender();
+
+    // Build UI
+    UpdateGUI();
 
     // Rendering
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    GUIManager::GetInstance().Render();
 }
 
 // Mouse picking implementation
@@ -354,6 +549,7 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
 {
     // Get camera matrices
     auto camera = mpRenderContext->GetAttachedCamera();
+    //auto pRenderView = mpRenderContext->Get();
     if (!camera) return {glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
     
     glm::mat4 viewMatrix = camera->GetViewMatrix();
@@ -362,8 +558,8 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
     // Step 1: Convert screen coordinates to normalized device coordinates (NDC)
     // Screen coordinates: (0,0) at top-left, (SCR_WIDTH, SCR_HEIGHT) at bottom-right
     // NDC coordinates: (-1,-1) at bottom-left, (1,1) at top-right
-    float ndcX = (2.0f * mouseX) / SCR_WIDTH - 1.0f;
-    float ndcY = 1.0f - (2.0f * mouseY) / SCR_HEIGHT; // Flip Y: screen Y=0 is top, NDC Y=1 is top
+    float ndcX = (2.0f * mouseX) / mpRenderView->Width() - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY) / mpRenderView->Height(); // Flip Y: screen Y=0 is top, NDC Y=1 is top
     
     // Step 2: Create two points in clip space (near and far planes)
     glm::vec4 rayClipNear(ndcX, ndcY, -1.0f, 1.0f); // near plane Z=-1
@@ -440,6 +636,87 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     return true;
 }
 
+bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t)
+{
+    if (!pGeometry) {
+        return false;
+    }
+
+    // Get vertices and indices from geometry
+    std::vector<Vertex> vertices = pGeometry->GetVertices();
+    std::vector<unsigned int> indices = pGeometry->GetIndices();
+    
+    if (vertices.empty() || indices.empty() || indices.size() % 3 != 0) {
+        return false;
+    }
+
+    // Get world transform to convert vertices to world space
+    glm::mat4 worldTransform = pGeometry->GetWorldTransform();
+    
+    // Initialize closest intersection distance
+    float closestT = std::numeric_limits<float>::max();
+    bool foundIntersection = false;
+    const float EPSILON = 1e-6f;
+
+    // Iterate through all triangles
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        // Get triangle vertices (in local space)
+        glm::vec3 v0_local = vertices[indices[i]].position;
+        glm::vec3 v1_local = vertices[indices[i + 1]].position;
+        glm::vec3 v2_local = vertices[indices[i + 2]].position;
+        
+        // Transform vertices to world space
+        glm::vec3 v0 = glm::vec3(worldTransform * glm::vec4(v0_local, 1.0f));
+        glm::vec3 v1 = glm::vec3(worldTransform * glm::vec4(v1_local, 1.0f));
+        glm::vec3 v2 = glm::vec3(worldTransform * glm::vec4(v2_local, 1.0f));
+        
+        // Möller-Trumbore ray-triangle intersection algorithm
+        
+        glm::vec3 edge1 = v1 - v0;
+        glm::vec3 edge2 = v2 - v0;
+        glm::vec3 h = glm::cross(ray.direction, edge2);
+        float a = glm::dot(edge1, h);
+        
+        // Ray is parallel to triangle
+        if (std::abs(a) < EPSILON) {
+            continue;
+        }
+        
+        float f = 1.0f / a;
+        glm::vec3 s = ray.origin - v0;
+        float u = f * glm::dot(s, h);
+        
+        // Intersection point is outside triangle
+        if (u < 0.0f || u > 1.0f) {
+            continue;
+        }
+        
+        glm::vec3 q = glm::cross(s, edge1);
+        float v = f * glm::dot(ray.direction, q);
+        
+        // Intersection point is outside triangle
+        if (v < 0.0f || u + v > 1.0f) {
+            continue;
+        }
+        
+        // Calculate intersection distance
+        float t_intersection = f * glm::dot(edge2, q);
+        
+        // Check if intersection is in front of ray origin
+        if (t_intersection > EPSILON && t_intersection < closestT) {
+            closestT = t_intersection;
+            foundIntersection = true;
+        }
+    }
+    
+    if (foundIntersection) {
+        t = closestT;
+        return true;
+    }
+    
+    return false;
+}
+
 void RenderAgent::HandleMouseClick(double xpos, double ypos)
 {
     // Get camera position
@@ -488,14 +765,26 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
     {
         mGeomSelected = true;
-        //mSelectedSpherePosition = sphereCenter;
-        //mSelectedSphereRadius = sphereRadius;
-        mSelectedGeomPosition = geomCenter;
-        std::cout << "Geometry hit! Distance: " << t << std::endl;
+
+        // detail hiting
+        mGeomSelected &= TrianglesIntersection(re_ray, mpGeometry, t);
+        if (mGeomSelected)
+        {
+            mSelectedGeomPosition = geomCenter;
+            std::cout << "Geometry hit! Distance: " << t << std::endl;
+        }
     }
     else {
         mGeomSelected = false;
         std::cout << "No hit" << std::endl;
+    }
+}
+
+void RenderAgent::ResizeRenderView(int width, int height)
+{
+    if (mpRenderView)
+    {
+        mpRenderView->Resize(width, height);
     }
 }
 
@@ -611,7 +900,12 @@ void EventHelper::framebuffer_size_callback(GLFWwindow* window, int width, int h
 {
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
+    // Update RenderView size (this will also update camera aspect ratio) and update glviewport in rendertarget.
+    RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
+    if (agent)
+    {
+        agent->ResizeRenderView(width, height);
+    }
 }
 
 // glfw: whenever the mouse moves, this callback is called

@@ -1,19 +1,21 @@
 #pragma once
 
 #include <glad/glad.h>
+#include "geometry/BasicGeometry.h"
 
 namespace te
 {
-    class FullscreenQuad
-    {
-    public:
-        FullscreenQuad();
-        ~FullscreenQuad();
+	class FullscreenQuad : public BasicGeometry
+	{
+	public:
+		FullscreenQuad();
+		~FullscreenQuad() = default;
 
-        void Draw();
+	private:
+		void CreateFullscreenQuad();
 
-    private:
-        GLuint mVAO;
-        GLuint mVBO;
-    };
+		float m_Width{ 1.0f };
+		float m_Height{ 1.0f };
+		glm::vec3 m_Pos{ 0.0f, 0.0f, 0.0f };
+	};
 }

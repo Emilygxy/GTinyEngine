@@ -5,6 +5,7 @@
 #include "RenderView.h"
 #include "materials/GeometryMaterial.h"
 #include "materials/BlinnPhongMaterial.h"
+#include "materials/PBRMaterial.h"
 #include "materials/SkyboxMaterial.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
@@ -124,6 +125,14 @@ namespace te
         else
         {
             glDisable(GL_BLEND);
+        }
+
+        // Clear buffers
+        if (mConfig.clearColor)
+        {
+            glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g,
+                mConfig.clearColorValue.b, mConfig.clearColorValue.a);
+            glClear(GL_COLOR_BUFFER_BIT);
         }
     }
 
@@ -343,10 +352,19 @@ namespace te
                 if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
                 {
                     pGeometryMat->SetDiffuseTexture(texture);
-                    //// Bind original texture to geometry material
-                    //glActiveTexture(GL_TEXTURE0);
-                    //glBindTexture(GL_TEXTURE_2D, texture->GetHandle());
-                    //mpOverMaterial->GetShader()->setInt("u_diffuseTexture", 0);
+                }
+            }
+            else if (auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(command.material))
+            {
+                // For PBR materials, use albedo texture as diffuse texture for geometry pass
+                if (auto texture = pbrMaterial->GetAlbedoTexture())
+                {
+                    pGeometryMat->SetDiffuseTexture(texture);
+                }
+                else
+                {
+                    // If no texture, use albedo color as object color
+                    pGeometryMat->SetObjectColor(pbrMaterial->GetAlbedo());
                 }
             }
             
@@ -448,7 +466,8 @@ namespace te
             {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
         }; // outputs
         mConfig.dependencies = {
-            {"GeometryPass", true, []() { return true; }},
+            {"SkyboxPass", true, []() { return true; }},   // Need BackgroundColor input
+            {"GeometryPass", true, []() { return true; }}, // Need G-Buffer inputs
         }; // dependencies
         mConfig.clearColor = true;
         mConfig.clearDepth = true;
@@ -461,6 +480,26 @@ namespace te
         mConfig.enableBlend = false;
         mConfig.blendSrc = GL_SRC_ALPHA;
         mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
+    }
+
+    void RenderPass::Prepare()
+    {
+        // sync viewport
+        uint16_t active_W = 800, active_H = 600; // default size
+        if (mpAttachView) {
+            active_W = mpAttachView->Width();
+            active_H = mpAttachView->Height();
+        }
+        mConfig.viewport = glm::ivec4(0, 0, active_W, active_H);
+
+        // Resize FrameBuffer if needed
+        if (mFrameBuffer)
+        {
+            if ((active_W != mFrameBuffer->GetWidth()) || (active_H != mFrameBuffer->GetHeight()))
+            {
+                mFrameBuffer->Resize(active_W, active_H);
+            }
+        }
     }
 
     void BasePass::Execute(const std::vector<RenderCommand>& commands)
@@ -477,14 +516,6 @@ namespace te
         // Apply render settings
         ApplyRenderSettings();
 
-        // Clear buffers
-        if (mConfig.clearColor)
-        {
-            glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
-                        mConfig.clearColorValue.b, mConfig.clearColorValue.a);
-            glClear(GL_COLOR_BUFFER_BIT);
-        }
-
         // Bind input textures
         BindInputs();
 
@@ -494,7 +525,7 @@ namespace te
             if (!command.material || command.vertices.empty() || command.indices.empty())
                 continue;
 
-            // Use geometry material
+            // Use original material from command (e.g., PBRMaterial, PhongMaterial, etc.)
             auto pMaterial = command.material;
             if (FindDependency("GeometryPass"))
             {
@@ -1130,6 +1161,8 @@ namespace te
                 }
             }
 
+            //Prepare Pass
+            pass->Prepare();
             //  Execute Pass
             pass->Execute(commands);
         }

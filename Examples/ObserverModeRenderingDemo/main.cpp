@@ -48,13 +48,17 @@ public:
         }
 
         // 创建渲染器
-        mpRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
-        if (!mpRenderer || !mpRenderer->Initialize())
+        auto iRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
+        mpGLRenderer = std::dynamic_pointer_cast<OpenGLRenderer>(iRenderer);
+
+        if (!mpGLRenderer || !mpGLRenderer->Initialize())
         {
             std::cout << "Failed to initialize renderer" << std::endl;
             return false;
         }
+
         auto pRenderContext = std::make_shared<RenderContext>();
+
         // 设置相机
         mpCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
         mpCamera->SetAspectRatio(800.0f / 600.0f);
@@ -75,7 +79,7 @@ public:
         mpBlinnPhongMaterial->AttachedCamera(mpCamera);
         mpBlinnPhongMaterial->AttachedLight(mpLight);
 
-        mpRenderer->SetRenderContext(pRenderContext);
+        mpGLRenderer->SetRenderContext(pRenderContext);
 
         return true;
     }
@@ -87,13 +91,13 @@ public:
             // 处理输入
             ProcessInput();
 
-            // 开始渲染帧
-            mpRenderer->BeginFrame();
-
             // 设置视口和清除颜色
-            mpRenderer->SetViewport(0, 0, 800, 600);
-            mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            mpRenderer->Clear(0x3); // 清除颜色和深度缓冲
+            mpGLRenderer->SetViewport(0, 0, 800, 600);
+            mpGLRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+            mpGLRenderer->Clear(0x3); // 清除颜色和深度缓冲
+
+            // 开始渲染帧
+            mpGLRenderer->BeginFrame();
 
             // 渲染球体
             RenderSphere();
@@ -102,7 +106,7 @@ public:
             RenderTorus();
 
             // 结束渲染帧
-            mpRenderer->EndFrame();
+            mpGLRenderer->EndFrame();
 
             // 显示渲染统计
             DisplayStats();
@@ -115,7 +119,7 @@ public:
 
     void Shutdown()
     {
-        mpRenderer->Shutdown();
+        mpGLRenderer->Shutdown();
         glfwTerminate();
     }
 
@@ -140,7 +144,7 @@ private:
     void RenderSphere()
     {
         // 使用统一的 DrawMesh 接口渲染球体
-        mpRenderer->DrawMesh(mpSphere->GetVertices(), 
+        mpGLRenderer->DrawMesh(mpSphere->GetVertices(),
                            mpSphere->GetIndices(), 
                            mpBlinnPhongMaterial,
                            glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
@@ -149,7 +153,7 @@ private:
     void RenderTorus()
     {
         // 使用统一的 DrawMesh 接口渲染环面
-        mpRenderer->DrawMesh(mpTorus->GetVertices(), 
+        mpGLRenderer->DrawMesh(mpTorus->GetVertices(),
                            mpTorus->GetIndices(), 
                            mpBlinnPhongMaterial,
                            glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 0.0f, 0.0f)));
@@ -157,7 +161,7 @@ private:
 
     void DisplayStats()
     {
-        const auto& stats = mpRenderer->GetRenderStats();
+        const auto& stats = mpGLRenderer->GetRenderStats();
         std::cout << "\rDraw Calls: " << stats.drawCalls 
                   << " | Triangles: " << stats.triangles 
                   << " | Vertices: " << stats.vertices << std::flush;
@@ -165,7 +169,7 @@ private:
 
 private:
     GLFWwindow* mWindow = nullptr;
-    std::shared_ptr<IRenderer> mpRenderer;
+    std::shared_ptr<OpenGLRenderer> mpGLRenderer;
     std::shared_ptr<Camera> mpCamera;
     std::shared_ptr<Light> mpLight;
     std::shared_ptr<Sphere> mpSphere;

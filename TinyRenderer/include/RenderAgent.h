@@ -14,13 +14,15 @@ namespace te
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
-
 class IRenderer;
 class Camera_Event;
 class RenderAgent;
 class BasicGeometry;
 class RenderView;
 class RenderContext;
+class RenderCommandQueue;
+class FrameSync;
+class RenderThread;
 
 class EventHelper
 {
@@ -51,7 +53,12 @@ struct Ray {
 	glm::vec3 direction;
 };
 
+struct Triangle
+{
+};
+
 // will be singleton class
+// main thread
 class RenderAgent
 {
 public:
@@ -59,7 +66,7 @@ public:
 	RenderAgent();
 	~RenderAgent();
 
-	void InitGL();
+	void InitGL(); // main thread
 
 	void PreRender();
 	void Render();
@@ -74,17 +81,24 @@ public:
 	{
 		return mpCameraEvent;
 	}
+
+	// Resize RenderView when window size changes
+	void ResizeRenderView(int width, int height);
+
 private:
 	void SetupRenderer();
 	void SetupMultiPassRendering();
-	void InitImGui();
-	void ShutdownImGui();
-	void RenderImGui();
+
+	// ui
+	void RenderUI();  // Legacy method for single-threaded rendering
+	void UpdateGUI();  // Build ImGui UI (for multi-threaded rendering, called without OpenGL context)
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
 	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
 	                          const te::AaBB& aabb, float& t);
+	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t);
+
 	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
@@ -98,7 +112,12 @@ private:
 	//EventHelper mEventHelper;
 	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
 	
+	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
+	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };
+	std::shared_ptr<RenderThread> mpRenderThread{ nullptr };
+
 	// Mouse picking state
 	bool mGeomSelected{ false };
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
+	bool mMultithreadedRendering{ true };
 };

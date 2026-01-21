@@ -75,6 +75,7 @@ namespace te
 
         // 设置视口
         void SetViewport();
+        void Update(const RenderTargetDesc& desc);
 
     private:
         void CreateTexture();
@@ -123,6 +124,7 @@ namespace te
         // 获取尺寸
         uint32_t GetWidth() const { return mWidth; }
         uint32_t GetHeight() const { return mHeight; }
+        void Resize(uint32_t width, uint32_t height);
 
     private:
         void UpdateDrawBuffers();

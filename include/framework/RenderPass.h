@@ -25,6 +25,7 @@ namespace te
     enum class RenderPassType
     {
         Geometry,       // Geometry Pass (G-Buffer generation)
+        Background,         // Background Pass
         Skybox,         // Skybox Pass
         
         Base,       // Lighting Pass
@@ -124,6 +125,7 @@ namespace te
         virtual void Shutdown();
 
         // Execute Pass
+        virtual void Prepare();
         virtual void Execute(const std::vector<RenderCommand>& commands) = 0;
         virtual void Execute() { Execute({}); }
 
@@ -225,7 +227,6 @@ namespace te
         void OnInitialize() override;
         void BindInputs() override;
         void UnbindInputs() override;
-
 
     private:
         struct PostProcessEffect

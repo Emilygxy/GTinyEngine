@@ -16,7 +16,21 @@ A Simple Game Engine Project
 - 完成了 Light的实现和材质重构的实现。
 
 ### 2025.08.10
-- 完成了 鼠标点选并集成 imgui 展示点选结果。
+- 完成了 鼠标点选并集成 imgui 展示点选结果(AABB级别)。
 
 ### 2025.09.12
 - 完成了 MRT 多渲染目标的实现。融合skybox、物体的渲染和后处理效果的预备支持。
+
+### 2026.01.14
+- 在Camera和RenderView之间增加了观察者设计模式，使得RenderView可以观察Camera中的对象，随之变化渲染视口。
+
+### 2026.01.16
+- 新增了简单的多线程渲染的支持：通过简单实现典型的<生产-消费者>模型，实现了多线程渲染的支持。特别处理了在共享OpenGL上下文的情况下，多线程渲染结合UI的同步问题，可详见 [多线程渲染架构分析与改造方案](doc/multithreaded_rendering_architecture.md "多线程渲染架构分析与改造方案") 和 [ImGui 多线程渲染问题修复](doc/imgui_multithreaded_fix.md "ImGui 多线程渲染问题修复") 。
+
+### 2026.01.20
+- 优化了 鼠标点选 (三角面片级别)。
+- 新增PBR材质的支持，并实现了基于物理的渲染， 但是在MultiPass渲染的时候有点问题，待修复(可能是shader有错误)。
+
+### 2026.01.21
+- fix: pbr shader的error - UI 正常可调整PBR材质参数（所见即所得）。
+- 新增窗口Resize的支持，并同步更新framebuffer的大小。

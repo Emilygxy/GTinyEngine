@@ -2,7 +2,13 @@
 #include <iostream>
 #include <glm/ext.hpp>
 
-Camera::Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch)
+namespace 
+{
+constexpr float g_epsilon = 0.000001f;
+#define Check_Dirty(vala, valb) (std::fabs(vala - valb) > g_epsilon)
+}
+
+Camera::Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch, const std::string& name)
 {
     mPosition = position;
     mWorldUp = up;
@@ -23,7 +29,7 @@ Camera::Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch)
     
     // Initialize target position
     mTarget = mPosition + glm::vec3(0.0f, 0.0f, -1.0f);
-
+    mName = name;
     updateCameraVectors();
 }
 
@@ -95,6 +101,8 @@ void Camera::SetViewMatrix(glm::mat4 viewMatrix)
 {
     mViewMatrix = viewMatrix;
     mbUseDirectViewMatrix = true;
+
+    Notify(kEvent_OrientationChanged);
 }
 
 glm::mat4 Camera::GetProjectionMatrix() const noexcept
@@ -107,6 +115,8 @@ void Camera::SetProjectionMatrix(glm::mat4 projectionMatrix)
 {
     mProjectionMatrix = projectionMatrix;
     mbUseDirectProjMatrix = true;
+
+    Notify(kEvent_ProjectionChanged);
 }   
 
 glm::vec3 Camera::GetEye() const noexcept
@@ -117,6 +127,8 @@ glm::vec3 Camera::GetEye() const noexcept
 void Camera::SetEye(glm::vec3 position)
 {
     mPosition = position;
+
+    Notify(kEvent_PositionChanged);
 }
 
 glm::vec3 Camera::GetTarget() const noexcept
@@ -127,6 +139,8 @@ glm::vec3 Camera::GetTarget() const noexcept
 void Camera::SetTarget(glm::vec3 target)
 {
     mTarget = target;
+
+    Notify(kEvent_OrientationChanged);
 }
 
 glm::vec3 Camera::GetUp() const noexcept
@@ -137,6 +151,7 @@ glm::vec3 Camera::GetUp() const noexcept
 void Camera::SetUp(glm::vec3 up)
 {
     mUp = up;
+    Notify(kEvent_OrientationChanged);
 }
 
 glm::vec3 Camera::GetRight() const noexcept
@@ -147,6 +162,8 @@ glm::vec3 Camera::GetRight() const noexcept
 void Camera::SetRight(glm::vec3 right)
 {
     mRight = right;
+
+    Notify(kEvent_OrientationChanged);
 }
 
 float Camera::GetFov() const noexcept
@@ -158,6 +175,8 @@ void Camera::SetFov(float fov)
 {
     mFov.x = mFov.y = mFov.z = mFov.w = fov;
     mProjDirty = true;
+
+    Notify(kEvent_ProjectionChanged);
 }
 
 glm::vec3 Camera::GetFront() const noexcept
@@ -168,12 +187,19 @@ glm::vec3 Camera::GetFront() const noexcept
 void Camera::SetFront(glm::vec3 front)
 {
     mFront = front;
+
+    Notify(kEvent_OrientationChanged);
 }
 
 void Camera::SetAspectRatio(float aspectRatio)
 {
-    mAspectRatio = aspectRatio;
-    mProjDirty = true;
+    if (Check_Dirty(aspectRatio, mAspectRatio))
+    {
+        mAspectRatio = aspectRatio;
+        mProjDirty = true;
+
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetAspectRatio() const noexcept
@@ -183,8 +209,13 @@ float Camera::GetAspectRatio() const noexcept
 
 void Camera::SetNearPlane(float nearPlane)
 {
-    mNearPlane = nearPlane;
-    mProjDirty = true;
+    if (Check_Dirty(nearPlane, mNearPlane))
+    {
+        mNearPlane = nearPlane;
+        mProjDirty = true;
+
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetNearPlane() const noexcept
@@ -194,8 +225,13 @@ float Camera::GetNearPlane() const noexcept
 
 void Camera::SetFarPlane(float farPlane)
 {
-    mFarPlane = farPlane;
-    mProjDirty = true;
+    if (Check_Dirty(farPlane, mFarPlane))
+    {
+        mFarPlane = farPlane;
+        mProjDirty = true;
+
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetFarPlane() const noexcept
@@ -205,8 +241,13 @@ float Camera::GetFarPlane() const noexcept
 
 void Camera::SetOrthoScale(float scale)
 {
-    mOrthoScale = scale;
-    mProjDirty = true;
+    if (Check_Dirty(scale, mOrthoScale))
+    {
+        mOrthoScale = scale;
+        mProjDirty = true;
+
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetOrthoScale() const noexcept
@@ -222,6 +263,9 @@ void Camera::SetLookAt(float posX, float posY, float posZ, float atX, float atY,
 
     mViewDirty = true;
     mProjDirty = true;
+
+    Notify(kEvent_PositionChanged);
+    Notify(kEvent_ProjectionChanged);
 }
 
 void Camera::SyncProjectMatrix()
