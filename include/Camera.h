@@ -43,7 +43,7 @@ private:
     std::shared_ptr<Camera> mpCamera;
 };
 
-class Camera : public std::enable_shared_from_this<Camera>, public Subject
+class Camera : public Subject
 {
 public:
     friend class Camera_Event;

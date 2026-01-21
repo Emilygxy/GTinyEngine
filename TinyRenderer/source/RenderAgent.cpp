@@ -780,6 +780,14 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     }
 }
 
+void RenderAgent::ResizeRenderView(int width, int height)
+{
+    if (mpRenderView)
+    {
+        mpRenderView->Resize(width, height);
+    }
+}
+
 /** 
 * EventHelper class implement - Meyer's Singleton
 */
@@ -892,7 +900,12 @@ void EventHelper::framebuffer_size_callback(GLFWwindow* window, int width, int h
 {
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
+    // Update RenderView size (this will also update camera aspect ratio) and update glviewport in rendertarget.
+    RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
+    if (agent)
+    {
+        agent->ResizeRenderView(width, height);
+    }
 }
 
 // glfw: whenever the mouse moves, this callback is called

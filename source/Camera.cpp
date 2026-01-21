@@ -2,6 +2,12 @@
 #include <iostream>
 #include <glm/ext.hpp>
 
+namespace 
+{
+constexpr float g_epsilon = 0.000001f;
+#define Check_Dirty(vala, valb) (std::fabs(vala - valb) > g_epsilon)
+}
+
 Camera::Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch, const std::string& name)
 {
     mPosition = position;
@@ -187,10 +193,13 @@ void Camera::SetFront(glm::vec3 front)
 
 void Camera::SetAspectRatio(float aspectRatio)
 {
-    mAspectRatio = aspectRatio;
-    mProjDirty = true;
+    if (Check_Dirty(aspectRatio, mAspectRatio))
+    {
+        mAspectRatio = aspectRatio;
+        mProjDirty = true;
 
-    Notify(kEvent_ProjectionChanged);
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetAspectRatio() const noexcept
@@ -200,10 +209,13 @@ float Camera::GetAspectRatio() const noexcept
 
 void Camera::SetNearPlane(float nearPlane)
 {
-    mNearPlane = nearPlane;
-    mProjDirty = true;
+    if (Check_Dirty(nearPlane, mNearPlane))
+    {
+        mNearPlane = nearPlane;
+        mProjDirty = true;
 
-    Notify(kEvent_ProjectionChanged);
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetNearPlane() const noexcept
@@ -213,10 +225,13 @@ float Camera::GetNearPlane() const noexcept
 
 void Camera::SetFarPlane(float farPlane)
 {
-    mFarPlane = farPlane;
-    mProjDirty = true;
+    if (Check_Dirty(farPlane, mFarPlane))
+    {
+        mFarPlane = farPlane;
+        mProjDirty = true;
 
-    Notify(kEvent_ProjectionChanged);
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetFarPlane() const noexcept
@@ -226,10 +241,13 @@ float Camera::GetFarPlane() const noexcept
 
 void Camera::SetOrthoScale(float scale)
 {
-    mOrthoScale = scale;
-    mProjDirty = true;
+    if (Check_Dirty(scale, mOrthoScale))
+    {
+        mOrthoScale = scale;
+        mProjDirty = true;
 
-    Notify(kEvent_ProjectionChanged);
+        Notify(kEvent_ProjectionChanged);
+    }
 }
 
 float Camera::GetOrthoScale() const noexcept

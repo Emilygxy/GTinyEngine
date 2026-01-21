@@ -125,6 +125,7 @@ namespace te
         virtual void Shutdown();
 
         // Execute Pass
+        virtual void Prepare();
         virtual void Execute(const std::vector<RenderCommand>& commands) = 0;
         virtual void Execute() { Execute({}); }
 

@@ -126,6 +126,14 @@ namespace te
         {
             glDisable(GL_BLEND);
         }
+
+        // Clear buffers
+        if (mConfig.clearColor)
+        {
+            glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g,
+                mConfig.clearColorValue.b, mConfig.clearColorValue.a);
+            glClear(GL_COLOR_BUFFER_BIT);
+        }
     }
 
     void RenderPass::RestoreRenderSettings()
@@ -474,6 +482,26 @@ namespace te
         mConfig.blendDst = GL_ONE_MINUS_SRC_ALPHA;
     }
 
+    void RenderPass::Prepare()
+    {
+        // sync viewport
+        uint16_t active_W = 800, active_H = 600; // default size
+        if (mpAttachView) {
+            active_W = mpAttachView->Width();
+            active_H = mpAttachView->Height();
+        }
+        mConfig.viewport = glm::ivec4(0, 0, active_W, active_H);
+
+        // Resize FrameBuffer if needed
+        if (mFrameBuffer)
+        {
+            if ((active_W != mFrameBuffer->GetWidth()) || (active_H != mFrameBuffer->GetHeight()))
+            {
+                mFrameBuffer->Resize(active_W, active_H);
+            }
+        }
+    }
+
     void BasePass::Execute(const std::vector<RenderCommand>& commands)
     {
         if (!IsEnabled() || !mFrameBuffer)
@@ -487,14 +515,6 @@ namespace te
         
         // Apply render settings
         ApplyRenderSettings();
-
-        // Clear buffers
-        if (mConfig.clearColor)
-        {
-            glClearColor(mConfig.clearColorValue.r, mConfig.clearColorValue.g, 
-                        mConfig.clearColorValue.b, mConfig.clearColorValue.a);
-            glClear(GL_COLOR_BUFFER_BIT);
-        }
 
         // Bind input textures
         BindInputs();
@@ -1141,6 +1161,8 @@ namespace te
                 }
             }
 
+            //Prepare Pass
+            pass->Prepare();
             //  Execute Pass
             pass->Execute(commands);
         }

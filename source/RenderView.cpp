@@ -17,8 +17,8 @@ void RenderView::Update()
 {
 	if (mDirty)
 	{
-		glViewport(static_cast<GLint>(mVP.mOriginX), static_cast<GLint>(mVP.mOriginY),
-			static_cast<GLsizei>(mVP.mWidth), static_cast<GLsizei>(mVP.mHeight));
+		// will update gl viewport in rendertarget object
+		mDirty = false;
 	}
 }
 
@@ -45,7 +45,7 @@ void RenderView::OnNotify(const std::shared_ptr<Subject>& camera, const std::str
 		if (event == kEvent_ProjectionChanged)
 		{
 			float new_aspect = static_cast<float>(mVP.mWidth) / mVP.mHeight;
-			if (std::abs(new_aspect - pCamera->GetAspectRatio()) > 0.01f) {
+			if (std::fabs(new_aspect - pCamera->GetAspectRatio()) > 0.01f) {
 				pCamera->SetAspectRatio(new_aspect);
 			}
 		}
@@ -57,12 +57,16 @@ void RenderView::OnNotify(const std::shared_ptr<Subject>& camera, const std::str
 
 void RenderView::Resize(int width, int height)
 {
+	if(mVP.mWidth == width && mVP.mHeight == height)
+	{
+		return;
+	}
+
 	mVP.mWidth = width;
 	mVP.mHeight = height;
-
+	
 	if (auto pcamera = mwp_Camera.lock()) {
-		float newAsp = static_cast<float>(mVP.mWidth) / mVP.mHeight;
-		pcamera->SetAspectRatio(newAsp);
+		OnNotify(pcamera, kEvent_ProjectionChanged);
 	}
 
 	mDirty = true;
@@ -76,4 +80,5 @@ void RenderView::BindCamera(const std::shared_ptr<Subject>& camera)
 	}
 
 	camera->AddObserver(shared_from_this()); // registing as an observer
+	mwp_Camera = camera; // watching each other
 }

@@ -18,7 +18,7 @@ struct ViewPort
 	uint16_t mHeight;
 };
 
-class Camera; // Camera is Component in the Scene
+class Subject; // Camera is Component in the Scene
 
 class RenderView : public Object, public Observer
 {
@@ -59,5 +59,5 @@ private:
 	std::string mName;
 
 	bool mDirty{false};
-	std::weak_ptr<Camera> mwp_Camera;
+	std::weak_ptr<Subject> mwp_Camera;
 };

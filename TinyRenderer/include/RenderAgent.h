@@ -81,6 +81,10 @@ public:
 	{
 		return mpCameraEvent;
 	}
+
+	// Resize RenderView when window size changes
+	void ResizeRenderView(int width, int height);
+
 private:
 	void SetupRenderer();
 	void SetupMultiPassRendering();
