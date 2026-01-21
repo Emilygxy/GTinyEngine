@@ -86,10 +86,8 @@ private:
 	void SetupMultiPassRendering();
 
 	// ui
-	void InitImGui();
-	void ShutdownImGui();
-	void RenderImGui();  // Legacy method for single-threaded rendering
-	void BuildImGuiUI();  // Build ImGui UI (for multi-threaded rendering, called without OpenGL context)
+	void RenderUI();  // Legacy method for single-threaded rendering
+	void UpdateGUI();  // Build ImGui UI (for multi-threaded rendering, called without OpenGL context)
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);

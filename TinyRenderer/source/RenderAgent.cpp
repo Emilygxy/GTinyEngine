@@ -12,11 +12,6 @@
 #include <thread>
 #include <chrono>
 
-// ImGui includes
-#include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
-
 // Additional includes for AABB and math
 #include <limits>
 #include <algorithm>
@@ -28,6 +23,9 @@
 #include "framework/FrameSync.h"
 #include "framework/RenderThread.h"
 #include <mutex>
+
+#include "GUIManager.h"
+#include "imgui.h"
 
 // declare external mutex for context synchronization (defined in RenderThread.cpp)
 extern std::mutex g_GLContextMutex;
@@ -133,7 +131,7 @@ void RenderAgent::InitGL()
     glFrontFace(GL_CCW); // ccw is default positive face
     
     // Initialize ImGui
-    InitImGui();
+    GUIManager::GetInstance().Init(mWindow);
 }
 
 void RenderAgent::SetupRenderer()
@@ -202,9 +200,7 @@ void RenderAgent::Render()
                 glfwMakeContextCurrent(mWindow);
                 
                 // Start ImGui frame (this processes input and prepares UI state)
-                ImGui_ImplOpenGL3_NewFrame();
-                ImGui_ImplGlfw_NewFrame();
-                ImGui::NewFrame();
+                GUIManager::GetInstance().BeginRender();
                 
                 glfwMakeContextCurrent(nullptr);  // release context
             }
@@ -223,7 +219,7 @@ void RenderAgent::Render()
             commands.push_back(sphereCommand);
             
             // 3. build ImGui UI (this can be done without OpenGL context)
-            BuildImGuiUI();
+            UpdateGUI();
             
             // 4. push to command queue
             mpCommandQueue->PushCommands(commands);
@@ -240,29 +236,7 @@ void RenderAgent::Render()
                 std::lock_guard<std::mutex> lock(g_GLContextMutex);
                 glfwMakeContextCurrent(mWindow);
                 
-                // Ensure OpenGL state is correct for ImGui rendering
-                // ImGui_ImplOpenGL3_RenderDrawData will set up the correct state internally,
-                // but we need to make sure the context is properly bound
-                
-                // Render ImGui draw data (this actually draws the UI)
-                // Note: ImGui_ImplOpenGL3_RenderDrawData will:
-                // 1. Save current OpenGL state
-                // 2. Set up ImGui's required state (blend enabled, depth test disabled, etc.)
-                // 3. Render ImGui
-                // 4. Restore previous OpenGL state
-                ImGui::Render();
-                
-                // Check if ImGui has valid draw data
-                ImDrawData* draw_data = ImGui::GetDrawData();
-                if (draw_data && draw_data->CmdListsCount > 0)
-                {
-                    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-                }
-                else
-                {
-                    // Debug: ImGui has no draw data (this shouldn't happen if UI was built correctly)
-                    // This might indicate that BuildImGuiUI() wasn't called or didn't create any UI
-                }
+                GUIManager::GetInstance().Render();
                 
                 // 8. swap buffers (must be in main thread)
                 glfwSwapBuffers(mWindow);
@@ -319,7 +293,7 @@ void RenderAgent::Render()
             //    mpGeometry->GetWorldTransform());
 
             // Render ImGui
-            RenderImGui();
+            RenderUI();
 
             // End Render Frame
             mpRenderer->EndFrame();
@@ -341,8 +315,9 @@ void RenderAgent::PostRender()
         mpRenderThread->Stop();
         mpRenderThread->Join();
     }
-    // Shutdown ImGui
-    ShutdownImGui();
+
+    // Terminate ImGui
+    GUIManager::GetInstance().EndRender();
     
     mpRenderer->Shutdown();
 
@@ -412,40 +387,13 @@ void RenderAgent::SetupMultiPassRendering()
     mpRenderer->SetMultiPassEnabled(true);
 }
 
-
-// ImGui implementation
-void RenderAgent::InitImGui()
-{
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(mWindow, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
-}
-
-void RenderAgent::ShutdownImGui()
-{
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-}
-
-void RenderAgent::BuildImGuiUI()
+void RenderAgent::UpdateGUI()
 {
     // Build ImGui UI (this can be called without OpenGL context)
     // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
     
     // Create a simple window
-    ImGui::Begin("Mouse Picking Demo");
+    ImGui::Begin("GUI Helper");
     
     ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
@@ -583,22 +531,17 @@ void RenderAgent::BuildImGuiUI()
     ImGui::End();
 }
 
-void RenderAgent::RenderImGui()
+void RenderAgent::RenderUI()
 {
     // Legacy method for single-threaded rendering
     // For multi-threaded rendering, use BuildImGuiUI() and separate Render() call
-    
-    // Start the Dear ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+    GUIManager::GetInstance().BeginRender();
 
     // Build UI
-    BuildImGuiUI();
+    UpdateGUI();
 
     // Rendering
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    GUIManager::GetInstance().Render();
 }
 
 // Mouse picking implementation
