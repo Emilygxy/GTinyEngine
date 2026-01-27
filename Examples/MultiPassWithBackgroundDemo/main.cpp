@@ -7,7 +7,7 @@
 
 // GTinyEngine includes
 #include "framework/Renderer.h"
-#include "framework/RenderPass.h"
+#include "framework/RenderPassManager.h"
 #include "framework/FullScreenPass.h"
 #include "framework/FrameBuffer.h"
 #include "Camera.h"
