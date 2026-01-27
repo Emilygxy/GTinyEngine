@@ -34,3 +34,7 @@ A Simple Game Engine Project
 ### 2026.01.21
 - fix: pbr shader的error - UI 正常可调整PBR材质参数（所见即所得）。
 - 新增窗口Resize的支持，并同步更新framebuffer的大小。
+
+### 2026.01.27
+- 新增RenderGraph 功能，并实现可视化。例如TinyRender当前的渲染图示例:
+![TinyRenderer RenderGraph](doc/rendergraph/tinyrenderer_rendergraph.png)

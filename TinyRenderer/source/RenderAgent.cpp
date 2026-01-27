@@ -318,7 +318,8 @@ void RenderAgent::PostRender()
 
     // Terminate ImGui
     GUIManager::GetInstance().EndRender();
-    
+    te::RenderPassManager::GetInstance().GenerateVisualization("rendergraph.dot");
+
     mpRenderer->Shutdown();
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
@@ -382,7 +383,7 @@ void RenderAgent::SetupMultiPassRendering()
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);
     te::RenderPassManager::GetInstance().AddPass(postProcessPass);
-
+    te::RenderPassManager::GetInstance().EnableRenderGraph(true);
     // enable multi-pass rendering
     mpRenderer->SetMultiPassEnabled(true);
 }
