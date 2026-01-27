@@ -18,7 +18,7 @@
 
 #include "RenderView.h"
 #include "framework/RenderContext.h"
-#include "framework/RenderPass.h"
+#include "framework/RenderPassManager.h"
 #include "framework/RenderCommandQueue.h"
 #include "framework/FrameSync.h"
 #include "framework/RenderThread.h"

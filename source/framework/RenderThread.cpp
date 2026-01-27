@@ -1,5 +1,5 @@
 #include "framework/RenderThread.h"
-#include "framework/RenderPass.h"
+#include "framework/RenderPassManager.h"
 #include "RenderView.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"

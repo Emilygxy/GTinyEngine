@@ -113,6 +113,9 @@ namespace te
         GLint blendSrc, blendDst;
     };
 
+    // Callback type for config changes
+    using ConfigChangeCallback = std::function<void()>;
+
     // Render Pass Base Class
     class RenderPass
     {
@@ -131,7 +134,11 @@ namespace te
 
         // Configuration Management
         const RenderPassConfig& GetConfig() const { return mConfig; }
-        void SetConfig(const RenderPassConfig& config) { mConfig = config; }
+        void SetConfig(const RenderPassConfig& config);
+
+        // Callback Management
+        void SetConfigChangeCallback(const ConfigChangeCallback& callback) { mConfigChangeCallback = callback; }
+        void ClearConfigChangeCallback() { mConfigChangeCallback = nullptr; }
 
         // State Management
         RenderPassState GetState() const { return mConfig.state; }
@@ -179,6 +186,7 @@ namespace te
         std::shared_ptr<MaterialBase> mpOverMaterial{ nullptr };
         RenderPassFlag mRenderPassFlag{ RenderPassFlag::None };
         std::vector<RenderCommand> mCandidateCommands;
+        ConfigChangeCallback mConfigChangeCallback;  // Callback for config changes
     };
 
     // Geometry Pass (G-Buffer generation)
@@ -257,34 +265,5 @@ namespace te
     private:
         std::vector<Vertex> mSkyboxVertices;
         std::vector<unsigned int> mSkyboxIndices;
-    };
-
-    // Render Pass Manager
-    class RenderPassManager
-    {
-    public:
-        static RenderPassManager& GetInstance();
-
-        // Pass Management
-        bool AddPass(const std::shared_ptr<RenderPass>& pass);
-        void RemovePass(const std::string& name);
-        std::shared_ptr<RenderPass> GetPass(const std::string& name) const;
-
-        // Execute All Passes
-        void ExecuteAll(const std::vector<RenderCommand>& commands);
-        void ExecuteAll() { ExecuteAll({}); }
-
-        // Dependency Sorting
-        void SortPassesByDependencies();
-
-        // Cleanup
-        void Clear();
-
-    private:
-        RenderPassManager() = default;
-        ~RenderPassManager() = default;
-
-        std::vector<std::shared_ptr<RenderPass>> mPasses;
-        std::unordered_map<std::string, size_t> mPassIndexMap;
     };
 }
