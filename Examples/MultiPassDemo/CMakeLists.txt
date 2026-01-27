@@ -1,6 +1,13 @@
+# 包含辅助函数
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake)
+include(SetSourceGroup)
+
 add_executable(MultiPassDemo
     main.cpp
 )
+
+# 为源文件设置 source_group（需要在 add_executable 之后）
+set_source_group_for_files("${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 
 target_link_libraries(MultiPassDemo
     ${ALL_LIBS}
