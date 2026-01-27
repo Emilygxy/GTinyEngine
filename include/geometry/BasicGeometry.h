@@ -37,7 +37,7 @@ public:
 	float GetHeight() const noexcept { return m_Height; }
 	float GetDepth() const noexcept { return m_Depth; }
 
-	// 兼容旧接口
+	// Compatible with legacy interface
 	void SetLenth(float len) { SetSize(len, len, len); }
 	float GetLength() const noexcept { return m_Width; }
 
@@ -66,7 +66,7 @@ public:
 	float GetWidth() const noexcept { return m_Width; }
 	float GetHeight() const noexcept { return m_Height; }
 
-	// 兼容旧接口
+	// Compatible with legacy interface
 	void SetLenth(float len) { SetSize(len, len); }
 	float GetLength() const noexcept { return m_Width; }
 

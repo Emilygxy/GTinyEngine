@@ -246,7 +246,7 @@ namespace te
         // Unbind textures
         for (size_t i = 0; i < mConfig.inputs.size(); ++i)
         {
-            glActiveTexture(GL_TEXTURE0 + i);
+            glActiveTexture(GL_TEXTURE0 + GLenum(i));
             glBindTexture(GL_TEXTURE_2D, 0);
         }
 

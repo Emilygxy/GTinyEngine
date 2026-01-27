@@ -345,7 +345,7 @@ namespace te
                 desc.type == RenderTargetType::ColorDepth ||
                 desc.type == RenderTargetType::ColorDepthStencil)
             {
-                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, 
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + GLenum(i),
                                      GL_TEXTURE_2D, target->GetTextureHandle(), 0);
             }
             
@@ -378,7 +378,7 @@ namespace te
             auto it = mTargetIndexMap.find(name);
             if (it != mTargetIndexMap.end())
             {
-                mDrawBuffers.push_back(GL_COLOR_ATTACHMENT0 + it->second);
+                mDrawBuffers.push_back(GL_COLOR_ATTACHMENT0 + GLenum(it->second));
             }
         }
         
@@ -451,7 +451,7 @@ namespace te
                 desc.type == RenderTargetType::ColorDepth ||
                 desc.type == RenderTargetType::ColorDepthStencil)
             {
-                mDrawBuffers.push_back(GL_COLOR_ATTACHMENT0 + i);
+                mDrawBuffers.push_back(GL_COLOR_ATTACHMENT0 + GLenum(i));
             }
         }
         

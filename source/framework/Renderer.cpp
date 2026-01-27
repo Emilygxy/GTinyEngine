@@ -169,8 +169,8 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
 
    // update stats
    mStats.drawCalls++;
-   mStats.triangles += indices.size() / 3;
-   mStats.vertices += vertices.size();
+   mStats.triangles += uint32_t(indices.size()) / 3;
+   mStats.vertices += uint32_t(vertices.size());
 }
 
 void OpenGLRenderer::DrawMeshes(const std::vector<RenderCommand>& commands)
@@ -260,7 +260,7 @@ void OpenGLRenderer::ApplyRenderState(RenderMode state)
         glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);  // point rendering usually doesn't need face culling
-        glPointSize(2.0f);        // set point size,使其更可见
+        glPointSize(2.0f);        // set point size to make it more visible
         break;
     case RenderMode::Lines:
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

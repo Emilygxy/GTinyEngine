@@ -43,15 +43,15 @@ void processInput(GLFWwindow* window)
 
 void setupMultiPassRendering()
 {
-    // 创建天空盒Pass
+    // Create skybox Pass
     auto skyboxPass = std::make_shared<te::FullScreenPass>();
     skyboxPass->Initialize(g_RenderView, g_RenderContext);
 
-    //// 创建几何Pass
+    //// Create geometry Pass
     //auto geometryPass = std::make_shared<te::GeometryPass>();
     //geometryPass->Initialize(g_RenderView, g_RenderContext);
 
-    // 创建光照Pass
+    // Create lighting Pass
     auto basePass = std::make_shared<te::BasePass>();
     basePass->Initialize(g_RenderView, g_RenderContext);
 
@@ -61,13 +61,13 @@ void setupMultiPassRendering()
 
     //postProcessPass->AddEffect("Blit",std::make_shared<BlitMaterial>());
 
-    //// 添加Pass到RenderPassManager（用于依赖关系管理）
+    //// Add Pass to RenderPassManager (for dependency management)
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     //te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);
     //te::RenderPassManager::GetInstance().AddPass(postProcessPass);
 
-    // 启用多Pass渲染
+    // Enable multi-pass rendering
     g_renderer->SetMultiPassEnabled(true);
 }
 
@@ -101,7 +101,7 @@ int main()
         return -1;
     }
 
-    // 创建渲染器
+    // Create renderer
     std::cout << "Creating renderer..." << std::endl;
     g_renderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
     if (!g_renderer)
@@ -119,17 +119,17 @@ int main()
     
     std::cout << "Renderer created and initialized successfully" << std::endl;
 
-    // 创建RenderView和RenderContext
+    // Create RenderView and RenderContext
     g_RenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
     g_RenderContext = std::make_shared<RenderContext>();
     g_renderer->SetRenderContext(g_RenderContext);
 
-    // 创建相机
+    // Create camera
     g_camera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     g_camera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
     g_RenderContext->AttachCamera(g_camera);
 
-    // 创建光源
+    // Create light
     if (!g_light)
     {
         g_light = std::make_shared<Light>();
@@ -139,7 +139,7 @@ int main()
     g_light->SetColor(glm::vec3(1.0f, 1.0f, 1.0f));
     g_RenderContext->PushAttachLight(g_light);
 
-    // 创建几何体
+    // Create geometry
     if (!g_sphere)
     {
         g_sphere = std::make_shared<Sphere>();
@@ -148,7 +148,7 @@ int main()
     material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
     g_sphere->SetMaterial(material);
 
-    // 设置多Pass渲染
+    // Setup multi-pass rendering
     setupMultiPassRendering();
 
     // render loop
@@ -164,10 +164,10 @@ int main()
         g_renderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         g_renderer->Clear(0x3);
 
-        // 执行多Pass渲染
+        // Execute multi-pass rendering
         if (g_renderer->IsMultiPassEnabled())
         {
-            // 创建渲染命令
+            // Create render commands
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
             sphereCommand.material = g_sphere->GetMaterial();
@@ -180,13 +180,13 @@ int main()
 
             commands.push_back(sphereCommand);
             
-            // 使用RenderPassManager执行Pass（有正确的依赖关系管理）
+            // Use RenderPassManager to execute Pass (with correct dependency management)
             te::RenderPassManager::GetInstance().ExecuteAll(commands);
             //g_renderer->ExecuteRenderPasses(commands);
         }
         else
         {
-            // 传统单Pass渲染
+            // Traditional single-pass rendering
             //g_renderer->DrawBackgroud();
             g_renderer->DrawMesh(g_sphere->GetVertices(),
                                g_sphere->GetIndices(),
