@@ -74,7 +74,7 @@ std::optional<te::AaBB> Mesh::GetAABB(bool update)
 {
     if (update || !mAabb)
     {
-        int vSize = mVertices.size();
+        int vSize = int(mVertices.size());
         if (!(mAabb) && (vSize > 0))
         {
             mAabb = te::AaBB();

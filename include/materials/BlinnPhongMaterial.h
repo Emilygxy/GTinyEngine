@@ -8,7 +8,7 @@ public:
                        const std::string& fs_path = "resources/shaders/common/phong.fs");
     ~BlinnPhongMaterial();
 
-    // 重写 UpdateUniform 方法，添加 Blinn-Phong 切换
+    // re-write UpdateUniform(), switch Blinn-Phong
     void UpdateUniform() override;
 
 private:

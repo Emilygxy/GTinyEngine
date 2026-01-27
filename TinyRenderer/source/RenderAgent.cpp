@@ -272,7 +272,7 @@ void RenderAgent::Render()
 
                 commands.push_back(sphereCommand);
 
-                // use RenderPassManager to execute Pass（with correct dependency management）
+                // use RenderPassManager to execute Pass (with correct dependency management)
                 te::RenderPassManager::GetInstance().ExecuteAll(commands);
             }
             else
@@ -376,7 +376,7 @@ void RenderAgent::SetupMultiPassRendering()
 
     postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
 
-    // add Pass to RenderPassManager（for dependency management）
+    // add Pass to RenderPassManager (for dependency management)
     // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);

@@ -12,7 +12,7 @@ public:
 	void UnBind() override;
 	void OnPerFrameUpdate() override {}
 
-    // 重写 UpdateUniform 方法，添加 custom properties
+    // Override UpdateUniform method to add custom properties
     void UpdateUniform() override;
 
     // properties

@@ -9,41 +9,41 @@
 
 namespace te
 {
-    // 渲染目标类型
+    // Render target type
     enum class RenderTargetType
     {
-        Color,      // 颜色缓冲区
-        Depth,      // 深度缓冲区
-        Stencil,    // 模板缓冲区
-        ColorDepth, // 颜色+深度
-        ColorDepthStencil // 颜色+深度+模板
+        Color,      // Color buffer
+        Depth,      // Depth buffer
+        Stencil,    // Stencil buffer
+        ColorDepth, // Color + Depth
+        ColorDepthStencil // Color + Depth + Stencil
     };
 
-    // 渲染目标格式
+    // Render target format
     enum class RenderTargetFormat
     {
-        RGB8,       // 8位RGB
-        RGBA8,      // 8位RGBA
-        RGB16F,     // 16位浮点RGB
-        RGBA16F,    // 16位浮点RGBA
-        RGB32F,     // 32位浮点RGB
-        RGBA32F,    // 32位浮点RGBA
-        Depth24,    // 24位深度
-        Depth32F,   // 32位浮点深度
-        Depth24Stencil8 // 24位深度+8位模板
+        RGB8,       // 8-bit RGB
+        RGBA8,      // 8-bit RGBA
+        RGB16F,     // 16-bit floating point RGB
+        RGBA16F,    // 16-bit floating point RGBA
+        RGB32F,     // 32-bit floating point RGB
+        RGBA32F,    // 32-bit floating point RGBA
+        Depth24,    // 24-bit depth
+        Depth32F,   // 32-bit floating point depth
+        Depth24Stencil8 // 24-bit depth + 8-bit stencil
     };
 
-    // 渲染目标描述
+    // Render target description
     struct RenderTargetDesc
     {
-        std::string name;                    // 目标名称
-        RenderTargetType type;               // 目标类型
-        RenderTargetFormat format;           // 数据格式
-        uint32_t width = 0;                  // 宽度
-        uint32_t height = 0;                 // 高度
-        bool generateMipmaps = false;        // 是否生成Mipmap
-        GLenum wrapMode = GL_CLAMP_TO_EDGE;  // 包装模式
-        GLenum filterMode = GL_LINEAR;       // 过滤模式
+        std::string name;                    // Target name
+        RenderTargetType type;               // Target type
+        RenderTargetFormat format;           // Data format
+        uint32_t width = 0;                  // Width
+        uint32_t height = 0;                 // Height
+        bool generateMipmaps = false;        // Whether to generate mipmaps
+        GLenum wrapMode = GL_CLAMP_TO_EDGE;  // Wrap mode
+        GLenum filterMode = GL_LINEAR;       // Filter mode
         
         RenderTargetDesc() = default;
         RenderTargetDesc(const std::string& n, RenderTargetType t, RenderTargetFormat f, 
@@ -51,7 +51,7 @@ namespace te
             : name(n), type(t), format(f), width(w), height(h) {}
     };
 
-    // 渲染目标
+    // Render target
     class RenderTarget
     {
     public:
@@ -61,19 +61,19 @@ namespace te
         bool Initialize(const RenderTargetDesc& desc);
         void Shutdown();
 
-        // 获取资源
+        // Get resources
         GLuint GetTextureHandle() const { return mTextureHandle; }
         GLuint GetFramebufferHandle() const { return mFramebufferHandle; }
         const RenderTargetDesc& GetDesc() const { return mDesc; }
 
-        // 绑定/解绑
+        // Bind/Unbind
         void Bind();
         void Unbind();
 
-        // 检查完整性
+        // Check completeness
         bool IsComplete() const;
 
-        // 设置视口
+        // Set viewport
         void SetViewport();
         void Update(const RenderTargetDesc& desc);
 
@@ -90,7 +90,7 @@ namespace te
         bool mInitialized = false;
     };
 
-    // 多重渲染目标（MRT）
+    // Multiple render targets (MRT)
     class MultiRenderTarget
     {
     public:
@@ -100,28 +100,28 @@ namespace te
         bool Initialize(uint32_t width, uint32_t height);
         void Shutdown();
 
-        // 添加渲染目标
+        // Add render target
         bool AddRenderTarget(const RenderTargetDesc& desc);
         void RemoveRenderTarget(const std::string& name);
 
-        // 获取渲染目标
+        // Get render target
         std::shared_ptr<RenderTarget> GetRenderTarget(const std::string& name) const;
         std::shared_ptr<RenderTarget> GetRenderTarget(size_t index) const;
 
-        // 绑定/解绑
+        // Bind/Unbind
         void Bind();
         void Unbind();
 
-        // 设置绘制缓冲区
+        // Set draw buffers
         void SetDrawBuffers(const std::vector<std::string>& targetNames);
 
-        // 检查完整性
+        // Check completeness
         bool IsComplete() const;
 
-        // 设置视口
+        // Set viewport
         void SetViewport();
 
-        // 获取尺寸
+        // Get dimensions
         uint32_t GetWidth() const { return mWidth; }
         uint32_t GetHeight() const { return mHeight; }
         void Resize(uint32_t width, uint32_t height);
@@ -138,21 +138,21 @@ namespace te
         bool mInitialized = false;
     };
 
-    // FrameBuffer管理器
+    // FrameBuffer manager
     class FrameBufferManager
     {
     public:
         static FrameBufferManager& GetInstance();
 
-        // 创建/销毁FrameBuffer
+        // Create/Destroy FrameBuffer
         std::shared_ptr<MultiRenderTarget> CreateFrameBuffer(const std::string& name, 
                                                            uint32_t width, uint32_t height);
         void DestroyFrameBuffer(const std::string& name);
 
-        // 获取FrameBuffer
+        // Get FrameBuffer
         std::shared_ptr<MultiRenderTarget> GetFrameBuffer(const std::string& name) const;
 
-        // 清理所有FrameBuffer
+        // Clear all FrameBuffers
         void Clear();
 
     private:
