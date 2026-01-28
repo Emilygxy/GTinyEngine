@@ -10,6 +10,9 @@
 
 namespace vk
 {
+    //define the default window size
+    constexpr VkExtent2D defaultWindowSize = { 1280, 720 };
+
     class GraphicsBase 
     {
     private:
@@ -60,13 +63,18 @@ namespace vk
         // save the creation information of the swapchain to rebuild the swapchain
         VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
         // this function is called by CreateSwapchain(...) and RecreateSwapchain()
-        VkResult CreateSwapchain_Internal() 
-        {
-            /*to be filled in Ch1-4*/
-            return VkResult();
-        }
+        VkResult CreateSwapchain_Internal();
 
         uint32_t apiVersion = VK_API_VERSION_1_0;
+
+        //
+        std::vector<void(*)()> callbacks_createSwapchain;
+        std::vector<void(*)()> callbacks_destroySwapchain;
+        static void ExecuteCallbacks(std::vector<void(*)()> callbacks);
+
+        std::vector<void(*)()> callbacks_createDevice;
+        std::vector<void(*)()> callbacks_destroyDevice;
+
 
     public:
         //static function
@@ -80,6 +88,9 @@ namespace vk
         VkInstance Instance() const {
             return instance;
         }
+
+        void Terminate();
+
         const std::vector<const char*>& InstanceLayers() const {
             return instanceLayers;
         }
@@ -222,30 +233,43 @@ namespace vk
         {
             return swapchainCreateInfo;
         }
-        VkResult GetSurfaceFormats() 
-        {
-            /*to be filled in Ch1-4*/
-        }
-        VkResult SetSurfaceFormat(VkSurfaceFormatKHR surfaceFormat) 
-        {
-            /*to be filled in Ch1-4*/
-        }
+        VkResult GetSurfaceFormats();
+
+        VkResult SetSurfaceFormat(VkSurfaceFormatKHR surfaceFormat);
+
         //this function is used to create the swapchain
-        VkResult CreateSwapchain(bool limitFrameRate = true, VkSwapchainCreateFlagsKHR flags = 0) 
-        {
-            /*to be filled in Ch1-4*/
-        }
-        //this function is used to recreate the swapchain
-        VkResult RecreateSwapchain()
-        {
-            /*to be filled in Ch1-4*/
-        }
+        VkResult CreateSwapchain(bool limitFrameRate = true, VkSwapchainCreateFlagsKHR flags = 0);
+
+        // this function is used to recreate the swapchain, in the case of enable/diable HDR or resize windows
+        VkResult RecreateSwapchain();
 
         //
         uint32_t ApiVersion() const {
             return apiVersion;
         }
         VkResult UseLatestApiVersion();
+
+        //
+        void AddCallback_CreateSwapchain(void(*function)()) 
+        {
+            callbacks_createSwapchain.push_back(function);
+        }
+        void AddCallback_DestroySwapchain(void(*function)()) 
+        {
+            callbacks_destroySwapchain.push_back(function);
+        }
+        void AddCallback_CreateDevice(void(*function)()) 
+        {
+            callbacks_createDevice.push_back(function);
+        }
+        void AddCallback_DestroyDevice(void(*function)()) 
+        {
+            callbacks_destroyDevice.push_back(function);
+        }
+
+        VkResult WaitIdle() const;
+
+        VkResult RecreateDevice(VkDeviceCreateFlags flags = 0);
     };
     inline GraphicsBase GraphicsBase::singleton;
 }
