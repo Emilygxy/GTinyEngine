@@ -20,10 +20,17 @@ if(MSVC)
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/bin/Debug")
 endif()
 
+# 包含辅助函数
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake)
+include(SetSourceGroup)
+
 # #收集文件
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h )
 
+# 为源文件和头文件设置 source_group
+set_source_group_for_files("${SOURCES}")
+set_source_group_for_files("${HEADERS}")
 
 #生成可执行程序
 add_executable(VulkanHelloWorld

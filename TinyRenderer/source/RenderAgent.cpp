@@ -18,7 +18,7 @@
 
 #include "RenderView.h"
 #include "framework/RenderContext.h"
-#include "framework/RenderPass.h"
+#include "framework/RenderPassManager.h"
 #include "framework/RenderCommandQueue.h"
 #include "framework/FrameSync.h"
 #include "framework/RenderThread.h"
@@ -272,7 +272,7 @@ void RenderAgent::Render()
 
                 commands.push_back(sphereCommand);
 
-                // use RenderPassManager to execute Pass（with correct dependency management）
+                // use RenderPassManager to execute Pass (with correct dependency management)
                 te::RenderPassManager::GetInstance().ExecuteAll(commands);
             }
             else
@@ -318,7 +318,8 @@ void RenderAgent::PostRender()
 
     // Terminate ImGui
     GUIManager::GetInstance().EndRender();
-    
+    te::RenderPassManager::GetInstance().GenerateVisualization("rendergraph.dot");
+
     mpRenderer->Shutdown();
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
@@ -376,13 +377,13 @@ void RenderAgent::SetupMultiPassRendering()
 
     postProcessPass->AddEffect("Blit", std::make_shared<BlitMaterial>());
 
-    // add Pass to RenderPassManager（for dependency management）
+    // add Pass to RenderPassManager (for dependency management)
     // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);
     te::RenderPassManager::GetInstance().AddPass(postProcessPass);
-
+    te::RenderPassManager::GetInstance().EnableRenderGraph(true);
     // enable multi-pass rendering
     mpRenderer->SetMultiPassEnabled(true);
 }

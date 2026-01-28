@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.8)
 project(GTinyEngine)
 
+# 包含辅助函数
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(SetSourceGroup)
+
 # 设置输出目录（确保所有配置都输出到 bin/ 目录）
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 function(get_config_output_path OUT_VAR)
@@ -17,7 +21,8 @@ set(VULKAN_SDK_VALUE "${CMAKE_SOURCE_DIR}/VulkanSDK/1.3.275.0/Bin")
 configure_file(configuration/SetVulkanEnv.bat.in configuration/SetVulkanEnv.bat @ONLY)
 message(STATUS "若未安装Vulkan环境, 请运行 ${CMAKE_BINARY_DIR}/configuration/SetVulkanEnv.bat 以设置Vulkan环境变量")
 
-add_library(imgui
+# 收集 imgui 源文件
+set(IMGUI_SOURCES
 	#ImGui Core
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/imgui.cpp
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/imgui_demo.cpp
@@ -31,6 +36,11 @@ add_library(imgui
 	#ImGui Extras
 	${CMAKE_SOURCE_DIR}/3rdParty/imgui/misc/cpp/imgui_stdlib.cpp
 )
+
+add_library(imgui ${IMGUI_SOURCES})
+
+# 为 imgui 文件设置 source_group
+set_source_group_for_files("${IMGUI_SOURCES}")
 
 set_target_properties(imgui
     PROPERTIES
@@ -73,6 +83,10 @@ file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/math/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader/*.h
                   )
+
+# 为源文件和头文件设置 source_group
+set_source_group_for_files("${SOURCES}")
+set_source_group_for_files("${HEADERS}")
 
 # configure root dir for cpp
 configure_file(configuration/root_dir.h.in configuration/root_dir.h)

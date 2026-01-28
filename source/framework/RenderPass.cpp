@@ -9,14 +9,67 @@
 #include "materials/SkyboxMaterial.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
-#include <algorithm>
-#include <unordered_set>
 #include "framework/RenderContext.h"
 
 namespace te
 {
     // RenderPass Implementation
     RenderPass::RenderPass() = default;
+
+    void RenderPass::SetConfig(const RenderPassConfig& config)
+    {
+        // Check if dependencies changed by comparing dependency sets
+        // (order doesn't matter for dependency graph, but content does)
+        bool dependenciesChanged = false;
+        
+        if (mConfig.dependencies.size() != config.dependencies.size())
+        {
+            dependenciesChanged = true;
+        }
+        else
+        {
+            // Create sets of dependency names for comparison
+            std::unordered_set<std::string> oldDeps, newDeps;
+            for (const auto& dep : mConfig.dependencies)
+            {
+                oldDeps.insert(dep.passName);
+            }
+            for (const auto& dep : config.dependencies)
+            {
+                newDeps.insert(dep.passName);
+            }
+            
+            // Check if sets are different
+            if (oldDeps != newDeps)
+            {
+                dependenciesChanged = true;
+            }
+            else
+            {
+                // Check if required flags changed for any dependency
+                for (const auto& newDep : config.dependencies)
+                {
+                    auto it = std::find_if(mConfig.dependencies.begin(), mConfig.dependencies.end(),
+                        [&newDep](const RenderPassDependency& oldDep) {
+                            return oldDep.passName == newDep.passName;
+                        });
+                    if (it != mConfig.dependencies.end() && it->required != newDep.required)
+                    {
+                        dependenciesChanged = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        mConfig = config;
+
+        // Notify callback if dependencies changed
+        if (dependenciesChanged && mConfigChangeCallback)
+        {
+            mConfigChangeCallback();
+        }
+    }
 
     bool RenderPass::Initialize(const std::shared_ptr<RenderView>& pView, const std::shared_ptr<RenderContext>& pContext)
     {
@@ -246,7 +299,7 @@ namespace te
         // Unbind textures
         for (size_t i = 0; i < mConfig.inputs.size(); ++i)
         {
-            glActiveTexture(GL_TEXTURE0 + i);
+            glActiveTexture(GL_TEXTURE0 + GLenum(i));
             glBindTexture(GL_TEXTURE_2D, 0);
         }
 
@@ -1058,174 +1111,5 @@ namespace te
         RestoreRenderSettings();
 
         OnPostExecute();
-    }
-
-    // RenderPassManager Implementation
-    RenderPassManager& RenderPassManager::GetInstance()
-    {
-        static RenderPassManager instance;
-        return instance;
-    }
-
-    bool RenderPassManager::AddPass(const std::shared_ptr<RenderPass>& pass)
-    {
-        if (!pass)
-            return false;
-
-        const std::string& name = pass->GetConfig().name;
-        
-        // check if pass with same name already exists
-        if (mPassIndexMap.find(name) != mPassIndexMap.end())
-        {
-            std::cout << "RenderPass with name '" << name << "' already exists" << std::endl;
-            return false;
-        }
-
-        // add to list
-        size_t index = mPasses.size();
-        mPasses.push_back(pass);
-        mPassIndexMap[name] = index;
-
-        return true;
-    }
-
-    void RenderPassManager::RemovePass(const std::string& name)
-    {
-        auto it = mPassIndexMap.find(name);
-        if (it == mPassIndexMap.end())
-            return;
-
-        size_t index = it->second;
-        mPasses.erase(mPasses.begin() + index);
-        mPassIndexMap.erase(it);
-
-        mPassIndexMap.clear();
-        for (size_t i = 0; i < mPasses.size(); ++i)
-        {
-            mPassIndexMap[mPasses[i]->GetConfig().name] = i;
-        }
-    }
-
-    std::shared_ptr<RenderPass> RenderPassManager::GetPass(const std::string& name) const
-    {
-        auto it = mPassIndexMap.find(name);
-        if (it == mPassIndexMap.end())
-            return nullptr;
-        
-        return mPasses[it->second];
-    }
-
-    void RenderPassManager::ExecuteAll(const std::vector<RenderCommand>& commands)
-    {
-        std::cout << "RenderPassManager::ExecuteAll called with " << commands.size() << " commands" << std::endl;
-        
-        // sort passes by dependencies
-        SortPassesByDependencies();
-
-        for (const auto& pass : mPasses)
-        {
-            if (!pass->IsEnabled())
-            {
-                std::cout << "Pass " << pass->GetConfig().name << " is disabled, skipping" << std::endl;
-                continue;
-            }
-
-            if (!pass->CheckDependencies(mPasses))
-            {
-                std::cout << "Pass " << pass->GetConfig().name << " dependencies not met, skipping" << std::endl;
-                continue;
-            }
-
-            std::cout << "Executing pass: " << pass->GetConfig().name << std::endl;
-
-            // Setup inputs texture
-            for (const auto& input : pass->GetConfig().inputs)
-            {
-                auto sourcePass = GetPass(input.sourcePass);
-                if (sourcePass)
-                {
-                    auto outputTarget = sourcePass->GetOutput(input.sourceTarget);
-                    if (outputTarget)
-                    {
-                        pass->SetInput(input.sourceTarget, outputTarget->GetTextureHandle());
-                        std::cout << "  Set input " << input.sourceTarget << " from " << input.sourcePass << ":" << input.sourceTarget << std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "  Failed to get output " << input.sourceTarget << " from " << input.sourcePass << std::endl;
-                    }
-                }
-                else
-                {
-                    std::cout << "  Source pass " << input.sourcePass << " not found" << std::endl;
-                }
-            }
-
-            //Prepare Pass
-            pass->Prepare();
-            //  Execute Pass
-            pass->Execute(commands);
-        }
-    }
-
-    void RenderPassManager::SortPassesByDependencies()
-    {
-        // simple topological sort implementation
-        std::vector<std::shared_ptr<RenderPass>> sortedPasses;
-        std::unordered_set<std::string> processedPasses;
-        
-        while (sortedPasses.size() < mPasses.size())
-        {
-            bool found = false;
-            
-            for (const auto& pass : mPasses)
-            {
-                const std::string& passName = pass->GetConfig().name;
-                
-                // if already processed, skip
-                if (processedPasses.find(passName) != processedPasses.end())
-                    continue;
-                
-                // check if all dependencies have been processed
-                bool canProcess = true;
-                for (const auto& dep : pass->GetConfig().dependencies)
-                {
-                    if (dep.required && processedPasses.find(dep.passName) == processedPasses.end())
-                    {
-                        canProcess = false;
-                        break;
-                    }
-                }
-                
-                if (canProcess)
-                {
-                    sortedPasses.push_back(pass);
-                    processedPasses.insert(passName);
-                    found = true;
-                    break;
-                }
-            }
-            
-            if (!found)
-            {
-                std::cout << "Circular dependency detected in RenderPasses" << std::endl;
-                break;
-            }
-        }
-        
-        mPasses = std::move(sortedPasses);
-        
-        // rebuild index map
-        mPassIndexMap.clear();
-        for (size_t i = 0; i < mPasses.size(); ++i)
-        {
-            mPassIndexMap[mPasses[i]->GetConfig().name] = i;
-        }
-    }
-
-    void RenderPassManager::Clear()
-    {
-        mPasses.clear();
-        mPassIndexMap.clear();
     }
 }
