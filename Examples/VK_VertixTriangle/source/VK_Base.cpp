@@ -1,5 +1,6 @@
 #include "VK_Base.h"
 #include <format>
+#include <fstream>
 #include "glm/glm.hpp"
 
 namespace vk
@@ -1077,4 +1078,53 @@ result_t Framebuffer::Create(VkFramebufferCreateInfo& createInfo)
     return result;
 }
 
+result_t pipelineLayout::Create(VkPipelineLayoutCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    VkResult result = vkCreatePipelineLayout(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ pipelineLayout ] ERROR\nFailed to create a pipeline layout!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t pipeline::Create(VkGraphicsPipelineCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    VkResult result = vkCreateGraphicsPipelines(GraphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ pipeline ] ERROR\nFailed to create a graphics pipeline!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t pipeline::Create(VkComputePipelineCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    VkResult result = vkCreateComputePipelines(GraphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ pipeline ] ERROR\nFailed to create a compute pipeline!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t shaderModule::Create(VkShaderModuleCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    VkResult result = vkCreateShaderModule(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ shader ] ERROR\nFailed to create a shader module!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t shaderModule::Create(const char* filepath)
+{
+    std::ifstream file(filepath, std::ios::ate | std::ios::binary);
+    if (!file) {
+       outStream << std::format("[ shader ] ERROR\nFailed to open the file: {}\n", filepath);
+       return VK_RESULT_MAX_ENUM; // no suitable error code, don't use VK_ERROR_UNKNOWN
+    }
+    size_t fileSize = size_t(file.tellg());
+    std::vector<uint32_t> binaries(fileSize / 4);
+    file.seekg(0);
+    file.read(reinterpret_cast<char*>(binaries.data()), fileSize);
+    file.close();
+    
+    return Create(fileSize, binaries.data());
+}
 }

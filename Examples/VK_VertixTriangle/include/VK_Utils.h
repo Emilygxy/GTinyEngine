@@ -19,8 +19,15 @@ namespace vk {
         result_t(VkResult result) :result(result) {}
         result_t(result_t&& other) noexcept :result(other.result) { other.result = VK_SUCCESS; }
         ~result_t() noexcept(false) {
-            if (uint32_t(result) < VK_RESULT_MAX_ENUM)
+            // Only throw if result is a valid error code
+            // VK_SUCCESS: success, don't throw
+            // VK_RESULT_MAX_ENUM: invalid/unspecified error code, don't throw
+            // Other values >= VK_RESULT_MAX_ENUM: invalid, don't throw
+            if (result == VK_SUCCESS)
                 return;
+            if (result == VK_RESULT_MAX_ENUM || uint32_t(result) >= VK_RESULT_MAX_ENUM)
+                return;
+            // Valid error code, throw exception
             if (callback_throw)
                 callback_throw(result);
             throw result;

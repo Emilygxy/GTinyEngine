@@ -486,4 +486,194 @@ namespace vk
         //Non-const Function
         result_t Create(VkFramebufferCreateInfo& createInfo);
     };
+
+    class pipelineLayout {
+        VkPipelineLayout handle = VK_NULL_HANDLE;
+    public:
+        pipelineLayout() = default;
+        pipelineLayout(VkPipelineLayoutCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        pipelineLayout(pipelineLayout&& other) noexcept { MoveHandle; }
+        ~pipelineLayout() { DestroyHandleBy(vkDestroyPipelineLayout); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Non-const Function
+        result_t Create(VkPipelineLayoutCreateInfo& createInfo);
+    };
+
+    struct graphicsPipelineCreateInfoPack {
+        VkGraphicsPipelineCreateInfo createInfo =
+        { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+        //Vertex Input
+        VkPipelineVertexInputStateCreateInfo vertexInputStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+        std::vector<VkVertexInputBindingDescription> vertexInputBindings;
+        std::vector<VkVertexInputAttributeDescription> vertexInputAttributes;
+        //Input Assembly
+        VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+        //Tessellation
+        VkPipelineTessellationStateCreateInfo tessellationStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO };
+        //Viewport
+        VkPipelineViewportStateCreateInfo viewportStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+        std::vector<VkViewport> viewports;
+        std::vector<VkRect2D> scissors;
+        uint32_t dynamicViewportCount = 1; // dynamic viewport/scissor will not use the above vectors, so the number of dynamic viewport and scissor is manually specified to these two variables
+        uint32_t dynamicScissorCount = 1;
+        //Rasterization
+        VkPipelineRasterizationStateCreateInfo rasterizationStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+        //Multisample
+        VkPipelineMultisampleStateCreateInfo multisampleStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+        //Depth & Stencil
+        VkPipelineDepthStencilStateCreateInfo depthStencilStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+        //Color Blend
+        VkPipelineColorBlendStateCreateInfo colorBlendStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+        std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
+        //Dynamic
+        VkPipelineDynamicStateCreateInfo dynamicStateCi =
+        { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+        std::vector<VkDynamicState> dynamicStates;
+        //--------------------
+        graphicsPipelineCreateInfoPack() {
+            SetCreateInfos();
+            // if not derived pipeline, createInfo.basePipelineIndex must not be 0, set to -1
+            createInfo.basePipelineIndex = -1;
+        }
+        // move constructor, all pointers need to be re-assigned
+        graphicsPipelineCreateInfoPack(const graphicsPipelineCreateInfoPack& other) noexcept {
+            createInfo = other.createInfo;
+            SetCreateInfos();
+    
+            vertexInputStateCi = other.vertexInputStateCi;
+            inputAssemblyStateCi = other.inputAssemblyStateCi;
+            tessellationStateCi = other.tessellationStateCi;
+            viewportStateCi = other.viewportStateCi;
+            rasterizationStateCi = other.rasterizationStateCi;
+            multisampleStateCi = other.multisampleStateCi;
+            depthStencilStateCi = other.depthStencilStateCi;
+            colorBlendStateCi = other.colorBlendStateCi;
+            dynamicStateCi = other.dynamicStateCi;
+    
+            shaderStages = other.shaderStages;
+            vertexInputBindings = other.vertexInputBindings;
+            vertexInputAttributes = other.vertexInputAttributes;
+            viewports = other.viewports;
+            scissors = other.scissors;
+            colorBlendAttachmentStates = other.colorBlendAttachmentStates;
+            dynamicStates = other.dynamicStates;
+            UpdateAllArrayAddresses();
+        }
+        //Getter, I didn't use the const modifier here
+        operator VkGraphicsPipelineCreateInfo& () { return createInfo; }
+        //Non-const Function
+        // This function is used to assign the address of the data in each vector to the corresponding member of each creation information, and change the corresponding count
+        void UpdateAllArrays() {
+            // Only update stageCount if shaderStages is not empty, otherwise leave it as set by the user
+            if (!shaderStages.empty())
+                createInfo.stageCount = uint32_t(shaderStages.size());
+            vertexInputStateCi.vertexBindingDescriptionCount = uint32_t(vertexInputBindings.size());
+            vertexInputStateCi.vertexAttributeDescriptionCount = uint32_t(vertexInputAttributes.size());
+            viewportStateCi.viewportCount = viewports.size() ? uint32_t(viewports.size()) : dynamicViewportCount;
+            viewportStateCi.scissorCount = scissors.size() ? uint32_t(scissors.size()) : dynamicScissorCount;
+            colorBlendStateCi.attachmentCount = uint32_t(colorBlendAttachmentStates.size());
+            dynamicStateCi.dynamicStateCount = uint32_t(dynamicStates.size());
+            UpdateAllArrayAddresses();
+        }
+    private:
+        // This function is used to assign the address of the creation information to the corresponding member of basePipelineIndex
+        void SetCreateInfos() {
+            createInfo.pVertexInputState = &vertexInputStateCi;
+            createInfo.pInputAssemblyState = &inputAssemblyStateCi;
+            createInfo.pTessellationState = &tessellationStateCi;
+            createInfo.pViewportState = &viewportStateCi;
+            createInfo.pRasterizationState = &rasterizationStateCi;
+            createInfo.pMultisampleState = &multisampleStateCi;
+            createInfo.pDepthStencilState = &depthStencilStateCi;
+            createInfo.pColorBlendState = &colorBlendStateCi;
+            createInfo.pDynamicState = &dynamicStateCi;
+        }
+        // This function is used to assign the address of the data in each vector to the corresponding member of each creation information, but does not change the count
+        void UpdateAllArrayAddresses() {
+            // Only set pStages if shaderStages is not empty, otherwise leave it as set by the user
+            if (!shaderStages.empty())
+                createInfo.pStages = shaderStages.data();
+            vertexInputStateCi.pVertexBindingDescriptions = vertexInputBindings.empty() ? nullptr : vertexInputBindings.data();
+            vertexInputStateCi.pVertexAttributeDescriptions = vertexInputAttributes.empty() ? nullptr : vertexInputAttributes.data();
+            viewportStateCi.pViewports = viewports.empty() ? nullptr : viewports.data();
+            viewportStateCi.pScissors = scissors.empty() ? nullptr : scissors.data();
+            colorBlendStateCi.pAttachments = colorBlendAttachmentStates.empty() ? nullptr : colorBlendAttachmentStates.data();
+            dynamicStateCi.pDynamicStates = dynamicStates.empty() ? nullptr : dynamicStates.data();
+        }
+    };
+
+    class pipeline {
+        VkPipeline handle = VK_NULL_HANDLE;
+    public:
+        pipeline() = default;
+        pipeline(VkGraphicsPipelineCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        pipeline(VkComputePipelineCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        pipeline(pipeline&& other) noexcept { MoveHandle; }
+        ~pipeline() { DestroyHandleBy(vkDestroyPipeline); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Non-const Function
+        result_t Create(VkGraphicsPipelineCreateInfo& createInfo);
+        result_t Create(VkComputePipelineCreateInfo& createInfo);
+    };
+
+    class shaderModule {
+        VkShaderModule handle = VK_NULL_HANDLE;
+    public:
+        shaderModule() = default;
+        shaderModule(VkShaderModuleCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        shaderModule(const char* filepath /*VkShaderModuleCreateFlags flags*/) {
+            Create(filepath);
+        }
+        shaderModule(size_t codeSize, const uint32_t* pCode /*VkShaderModuleCreateFlags flags*/) {
+            Create(codeSize, pCode);
+        }
+        shaderModule(shaderModule&& other) noexcept { MoveHandle; }
+        ~shaderModule() { DestroyHandleBy(vkDestroyShaderModule); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Const Function
+        VkPipelineShaderStageCreateInfo StageCreateInfo(VkShaderStageFlagBits stage, const char* entry = "main") const {
+            return {
+                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, //sType
+                nullptr,                                             //pNext
+                0,                                                   //flags
+                stage,                                               //stage
+                handle,                                              //module
+                entry,                                               //pName
+                nullptr                                              //pSpecializationInfo
+            };
+        }
+        //Non-const Function
+        result_t Create(VkShaderModuleCreateInfo& createInfo);
+        result_t Create(const char* filepath /*VkShaderModuleCreateFlags flags*/);
+        result_t Create(size_t codeSize, const uint32_t* pCode /*VkShaderModuleCreateFlags flags*/) {
+            VkShaderModuleCreateInfo createInfo = {
+                .codeSize = codeSize,
+                .pCode = pCode
+            };
+            return Create(createInfo);
+        }
+    };
 }

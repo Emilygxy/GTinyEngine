@@ -12,3 +12,26 @@ Learning link: https://easyvulkan.github.io/index.html
         renderPass.CmdBegin(commandBuffer, framebuffers[i], { {}, windowSize }, clearColor); 的std::vector 地方。
 - **原因**：问题在于初始化顺序：InitializeWindow() 先创建交换链并触发回调，但 CreateRpwf_Screen() 在之后才注册回调，导致 framebuffers 为空。
 - **优化**：在 CreateRpwf_Screen() 中，如果交换链已创建，注册回调后立即创建 framebuffers。
+
+## Ch2-3 创建管线并绘制三角形
+1. 根据教程coding，程序运行时，crash在shaderModule(const char* filepath /*VkShaderModuleCreateFlags flags*/) {
+            Create(filepath);
+        } 的~result_t()中。
+- **原因**：
+- result_t 析构函数检查 if (uint32_t(result) < VK_RESULT_MAX_ENUM)，当 result == VK_RESULT_MAX_ENUM 时条件为 false，会抛出异常;
+- 在 shaderModule(const char* filepath) 构造函数中，如果 Create(filepath) 返回 VK_RESULT_MAX_ENUM（文件打开失败），临时 result_t 对象在语句结束时析构，此时抛出异常,
+构造函数未捕获异常，导致程序崩溃。
+- **优化**：
+- 修改 result_t 的析构函数逻辑，将 VK_RESULT_MAX_ENUM 视为特殊情况，不抛出异常：
+VK_SUCCESS：成功，不抛出
+VK_RESULT_MAX_ENUM：无效/未指定的错误码，不抛出（关键修复）
+其他值 >= VK_RESULT_MAX_ENUM：无效，不抛出
+有效的错误码：抛出异常
+这样，当 shader 文件打开失败时，不会因 VK_RESULT_MAX_ENUM 而抛出异常，避免崩溃。
+
+2. 根据教程coding，程序运行时，运行程序时，crash在pipeline::Create()中的vkCreateGraphicsPipelines()调用中。
+- **原因**：
+- shader 文件没找到
+- **优化**：
+- 调整shader文件路径->放在项目输出bin目录下（***\GTinyEngine\build\bin\Debug\resources）就好了。
+- PS: GTinyEngine\build\resources\compiled_shaders目录是构建项目时编译shader的中间位置。
