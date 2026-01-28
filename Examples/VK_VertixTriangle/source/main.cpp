@@ -1,4 +1,6 @@
 #include "GlfwGeneral.h"
+#include "EasyVulkan.h"
+
 // learning link: https://easyvulkan.github.io/index.html
 using namespace easy_vk;
 
@@ -6,37 +8,36 @@ int main() {
     if (!InitializeWindow({ 1280, 720 }))
         return -1;
 
-    vk::fence fence(VK_FENCE_CREATE_SIGNALED_BIT);
-    vk::semaphore semaphore_imageIsAvailable;
-    vk::semaphore semaphore_ownershipIsTransfered;
+    const auto& [renderPass, framebuffers] = CreateRpwf_Screen();
 
-    vk::commandBuffer commandBuffer_graphics;
-    vk::commandBuffer commandBuffer_presentation;
-    vk::commandPool commandPool_graphics(vk::GraphicsBase::Base().QueueFamilyIndex_Graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    vk::commandPool commandPool_presentation(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, vk::GraphicsBase::Base().QueueFamilyIndex_Presentation());
-    commandPool_graphics.AllocateBuffers(commandBuffer_graphics);
-    commandPool_presentation.AllocateBuffers(commandBuffer_presentation);
+    fence fence;
+    semaphore semaphore_imageIsAvailable;
+    semaphore semaphore_renderingIsOver;
+
+    commandBuffer commandBuffer;
+    commandPool commandPool(vk::GraphicsBase::Base().QueueFamilyIndex_Graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    commandPool.AllocateBuffers(commandBuffer);
+
+    VkClearValue clearColor = { .color = { 1.f, 0.f, 0.f, 1.f } }; // red
 
     while (!glfwWindowShouldClose(pWindow)) {
         while (glfwGetWindowAttrib(pWindow, GLFW_ICONIFIED))
             glfwWaitEvents();
 
         vk::GraphicsBase::Base().SwapImage(semaphore_imageIsAvailable);
+        // because the framebuffer corresponds to the swapchain image obtained, get the swapchain image index
+        auto i = vk::GraphicsBase::Base().CurrentImageIndex();
 
-        // submit the command buffer to the graphics queue
-        commandBuffer_graphics.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        /*render commands, to be filled*/
-        vk::GraphicsBase::Base().CmdTransferImageOwnership(commandBuffer_graphics);
-        commandBuffer_graphics.End();
-        vk::GraphicsBase::Base().SubmitCommandBuffer_Graphics(commandBuffer_graphics, semaphore_imageIsAvailable);
+        commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        /* start the render pass */ 
+        renderPass.CmdBegin(commandBuffer, framebuffers[i], { {}, windowSize }, clearColor);
+        /* render commands, to be filled */
+        /* end the render pass */ 
+        renderPass.CmdEnd(commandBuffer);
+        commandBuffer.End();
 
-        // submit the command buffer to the presentation queue
-        commandBuffer_presentation.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        vk::GraphicsBase::Base().CmdTransferImageOwnership(commandBuffer_presentation);
-        commandBuffer_presentation.End();
-        vk::GraphicsBase::Base().SubmitCommandBuffer_Presentation(commandBuffer_presentation, VK_NULL_HANDLE, semaphore_ownershipIsTransfered, fence);
-
-        vk::GraphicsBase::Base().PresentImage(semaphore_ownershipIsTransfered);
+        vk::GraphicsBase::Base().SubmitCommandBuffer_Graphics(commandBuffer, semaphore_imageIsAvailable, semaphore_renderingIsOver, fence);
+        vk::GraphicsBase::Base().PresentImage(semaphore_renderingIsOver);
 
         glfwPollEvents();
         TitleFps();

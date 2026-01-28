@@ -1059,4 +1059,22 @@ result_t commandPool::AllocateBuffers(arrayRef<VkCommandBuffer> buffers, VkComma
     return result;
 }
 
+result_t RenderPass::Create(VkRenderPassCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    VkResult result = vkCreateRenderPass(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ renderPass ] ERROR\nFailed to create a render pass!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t Framebuffer::Create(VkFramebufferCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    VkResult result = vkCreateFramebuffer(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ framebuffer ] ERROR\nFailed to create a framebuffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
 }

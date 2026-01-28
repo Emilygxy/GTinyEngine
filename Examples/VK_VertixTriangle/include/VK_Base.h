@@ -414,7 +414,7 @@ namespace vk
             return AllocateBuffers( { &buffers[0].handle, buffers.Count() }, level);
         }
         void FreeBuffers(arrayRef<VkCommandBuffer> buffers) const {
-            vkFreeCommandBuffers(GraphicsBase::Base().Device(), handle, buffers.Count(), buffers.Pointer());
+            vkFreeCommandBuffers(GraphicsBase::Base().Device(), handle, uint32_t(buffers.Count()), buffers.Pointer());
             memset(buffers.Pointer(), 0, buffers.Count() * sizeof(VkCommandBuffer));
         }
         void FreeBuffers(arrayRef<commandBuffer> buffers) const {
@@ -430,5 +430,60 @@ namespace vk
             };
             return Create(createInfo);
         }
+    };
+
+    class RenderPass {
+        VkRenderPass handle = VK_NULL_HANDLE;
+    public:
+        RenderPass() = default;
+        RenderPass(VkRenderPassCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        RenderPass(RenderPass&& other) noexcept { MoveHandle; }
+        ~RenderPass() { DestroyHandleBy(vkDestroyRenderPass); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Const Function
+        void CmdBegin(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo& beginInfo, VkSubpassContents subpassContents = VK_SUBPASS_CONTENTS_INLINE) const {
+            beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            beginInfo.renderPass = handle;
+            vkCmdBeginRenderPass(commandBuffer, &beginInfo, subpassContents);
+        }
+        void CmdBegin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkRect2D renderArea, arrayRef<const VkClearValue> clearValues = {}, VkSubpassContents subpassContents = VK_SUBPASS_CONTENTS_INLINE) const {
+            VkRenderPassBeginInfo beginInfo = {
+                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                .renderPass = handle,
+                .framebuffer = framebuffer,
+                .renderArea = renderArea,
+                .clearValueCount = uint32_t(clearValues.Count()),
+                .pClearValues = clearValues.Pointer()
+            };
+            vkCmdBeginRenderPass(commandBuffer, &beginInfo, subpassContents);
+        }
+        void CmdNext(VkCommandBuffer commandBuffer, VkSubpassContents subpassContents = VK_SUBPASS_CONTENTS_INLINE) const {
+            vkCmdNextSubpass(commandBuffer, subpassContents);
+        }
+        void CmdEnd(VkCommandBuffer commandBuffer) const {
+            vkCmdEndRenderPass(commandBuffer);
+        }
+        //Non-const Function
+        result_t Create(VkRenderPassCreateInfo& createInfo);
+    };
+
+    class Framebuffer {
+        VkFramebuffer handle = VK_NULL_HANDLE;
+    public:
+        Framebuffer() = default;
+        Framebuffer(VkFramebufferCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        Framebuffer(Framebuffer&& other) noexcept { MoveHandle; }
+        ~Framebuffer() { DestroyHandleBy(vkDestroyFramebuffer); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Non-const Function
+        result_t Create(VkFramebufferCreateInfo& createInfo);
     };
 }
