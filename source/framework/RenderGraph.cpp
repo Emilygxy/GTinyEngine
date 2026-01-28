@@ -30,14 +30,14 @@ namespace te
         node.name = name;
         node.pass = pass;
         
-        // 从 RenderPass 配置中提取依赖关系
+        // Get dependencies from RenderPass configuration
         const auto& config = pass->GetConfig();
         for (const auto& dep : config.dependencies)
         {
             node.dependencies.push_back(dep.passName);
         }
         
-        // 从 RenderPass 配置中提取输入（作为 reads）
+        // Get inputs from RenderPass configuration (as reads)
         for (const auto& input : config.inputs)
         {
             ResourceUsage usage;
@@ -49,7 +49,7 @@ namespace te
             node.reads.push_back(usage);
         }
         
-        // 从 RenderPass 配置中提取输出（作为 writes）
+        // Get outputs from RenderPass configuration (as writes)
         for (const auto& output : config.outputs)
         {
             ResourceUsage usage;
@@ -61,7 +61,7 @@ namespace te
             node.writes.push_back(usage);
         }
         
-        // 设置执行函数
+        // set execution function
         node.executeFunc = [pass](const std::vector<RenderCommand>& commands) {
             if (pass->IsEnabled())
             {
@@ -162,11 +162,11 @@ namespace te
         auto compiledGraph = std::make_unique<CompiledGraph>();
         compiledGraph->resources = resources;
 
-        // 构建依赖图
+        // build dependency graph
         std::vector<std::vector<size_t>> adjacencyList(passes.size());
         BuildDependencyGraph(passes, adjacencyList);
 
-        // 拓扑排序
+        // topological sort
         compiledGraph->executionOrder = TopologicalSort(adjacencyList);
         
         if (compiledGraph->executionOrder.size() != passes.size())
@@ -175,17 +175,17 @@ namespace te
             return nullptr;
         }
 
-        // 按执行顺序重新排列 Pass
+        // reorder Passes by execution order
         compiledGraph->passes.resize(passes.size());
         for (size_t i = 0; i < compiledGraph->executionOrder.size(); ++i)
         {
             size_t originalIndex = compiledGraph->executionOrder[i];
             compiledGraph->passes[i] = passes[originalIndex];
-            // 更新 Pass 索引
+            // update Pass indices
             compiledGraph->passes[i].reads.clear();
             compiledGraph->passes[i].writes.clear();
             
-            // 重新添加 reads 和 writes，更新索引
+            // re-add reads and writes, update indices
             for (const auto& read : passes[originalIndex].reads)
             {
                 ResourceUsage usage = read;
@@ -200,22 +200,22 @@ namespace te
             }
         }
 
-        // 分析资源生命周期
+        // analyze resource lifetimes
         AnalyzeResourceLifetimes(compiledGraph->passes, 
                                  compiledGraph->executionOrder,
                                  compiledGraph->lifetimes);
 
-        // 资源别名分析
+        // analyze resource aliasing
         AnalyzeResourceAliasing(resources, 
                                 compiledGraph->lifetimes,
                                 compiledGraph->aliases);
 
-        // 生成资源分配
+        // generate resource allocations
         compiledGraph->allocations = GenerateResourceAllocations(
             compiledGraph->lifetimes,
             compiledGraph->aliases);
 
-        // 生成同步点
+        // generate sync points
         compiledGraph->syncPoints = GenerateSyncPoints(
             compiledGraph->passes,
             compiledGraph->executionOrder);
@@ -227,19 +227,19 @@ namespace te
         const std::vector<PassNode>& passes,
         std::vector<std::vector<size_t>>& adjacencyList)
     {
-        // 创建 Pass 名称到索引的映射
+        // create Pass name to index mapping
         std::unordered_map<std::string, size_t> nameToIndex;
         for (size_t i = 0; i < passes.size(); ++i)
         {
             nameToIndex[passes[i].name] = i;
         }
 
-        // 构建依赖图
+        // build dependency graph
         for (size_t i = 0; i < passes.size(); ++i)
         {
             const auto& pass = passes[i];
             
-            // 处理显式依赖
+            // handle explicit dependencies
             for (const auto& depName : pass.dependencies)
             {
                 auto it = nameToIndex.find(depName);
@@ -249,10 +249,10 @@ namespace te
                 }
             }
             
-            // 处理资源依赖（读取的资源必须来自写入该资源的 Pass）
+            // handle resource dependencies (read resources must come from Pass that writes to them)
             for (const auto& read : pass.reads)
             {
-                // 查找写入该资源的 Pass
+                // find Pass that writes to this resource
                 for (size_t j = 0; j < passes.size(); ++j)
                 {
                     if (i == j) continue;
@@ -276,7 +276,7 @@ namespace te
         size_t n = adjacencyList.size();
         std::vector<int> inDegree(n, 0);
         
-        // 计算入度
+        // calculate in-degree
         for (const auto& adjList : adjacencyList)
         {
             for (size_t v : adjList)
@@ -285,7 +285,7 @@ namespace te
             }
         }
         
-        // 使用队列进行拓扑排序
+        // use queue for topological sort
         std::queue<size_t> q;
         for (size_t i = 0; i < n; ++i)
         {
@@ -320,7 +320,7 @@ namespace te
         const std::vector<size_t>& executionOrder,
         std::unordered_map<std::string, ResourceLifetime>& lifetimes)
     {
-        // 初始化所有资源的生命周期
+        // initialize all resource lifetimes
         for (const auto& pass : passes)
         {
             for (const auto& read : pass.reads)
@@ -339,13 +339,13 @@ namespace te
             }
         }
 
-        // 分析每个 Pass 的资源使用
+        // analyze resource usage for each Pass
         for (size_t orderIdx = 0; orderIdx < executionOrder.size(); ++orderIdx)
         {
             size_t passIdx = executionOrder[orderIdx];
             const auto& pass = passes[passIdx];
             
-            // 分析读取的资源
+            // analyze read resources
             for (const auto& read : pass.reads)
             {
                 auto& lifetime = lifetimes[read.resourceName];
@@ -354,7 +354,7 @@ namespace te
                 lifetime.lastUse = orderIdx;
             }
             
-            // 分析写入的资源
+            // analyze written resources
             for (const auto& write : pass.writes)
             {
                 auto& lifetime = lifetimes[write.resourceName];
@@ -364,10 +364,10 @@ namespace te
             }
         }
 
-        // 标记可别名的资源
+        // mark resources that can be aliased
         for (auto& [name, lifetime] : lifetimes)
         {
-            lifetime.isAliasable = true;  // 默认可以别名，后续在别名分析中会进一步判断
+            lifetime.isAliasable = true;  // default is aliasable, will be further checked in aliasing analysis
         }
     }
 
@@ -376,7 +376,7 @@ namespace te
         const std::unordered_map<std::string, ResourceLifetime>& lifetimes,
         std::unordered_map<std::string, std::string>& aliases)
     {
-        // 按格式和尺寸分组资源
+        // group resources by format and size
         std::map<std::tuple<RenderTargetFormat, uint32_t, uint32_t>, 
                  std::vector<std::string>> resourceGroups;
         
@@ -393,12 +393,12 @@ namespace te
             resourceGroups[key].push_back(name);
         }
         
-        // 对每组资源，检查是否可以别名
+        // for each group of resources, check if they can be aliased
         for (auto& [key, resourceNames] : resourceGroups)
         {
             if (resourceNames.size() < 2) continue;
             
-            // 检查生命周期是否重叠
+            // check if lifetimes overlap
             for (size_t i = 0; i < resourceNames.size(); ++i)
             {
                 for (size_t j = i + 1; j < resourceNames.size(); ++j)
@@ -415,11 +415,11 @@ namespace te
                     const auto& lifetime1 = it1->second;
                     const auto& lifetime2 = it2->second;
                     
-                    // 如果生命周期不重叠，可以别名
+                    // if lifetimes do not overlap, can be aliased
                     if (lifetime1.lastUse < lifetime2.firstUse || 
                         lifetime2.lastUse < lifetime1.firstUse)
                     {
-                        // 将 name2 别名到 name1
+                        // alias name2 to name1
                         if (aliases.find(name2) == aliases.end())
                         {
                             aliases[name2] = name1;
@@ -436,10 +436,10 @@ namespace te
     {
         std::vector<SyncPoint> syncPoints;
         
-        // 跟踪每个资源的当前状态
+        // track current state of each resource
         std::unordered_map<std::string, ResourceState> resourceStates;
         
-        // 初始化资源状态
+        // initialize resource states
         for (const auto& pass : passes)
         {
             for (const auto& write : pass.writes)
@@ -456,7 +456,7 @@ namespace te
             SyncPoint sync;
             sync.passIndex = orderIdx;
             
-            // 检查读取的资源是否需要状态转换
+            // check if read resources need state transition
             for (const auto& read : pass.reads)
             {
                 auto currentState = resourceStates[read.resourceName];
@@ -469,7 +469,7 @@ namespace te
                 }
             }
             
-            // 更新写入资源的状态
+            // update written resource states
             for (const auto& write : pass.writes)
             {
                 resourceStates[write.resourceName] = write.outputState;
@@ -495,7 +495,7 @@ namespace te
             ResourceAllocation allocation;
             allocation.resourceName = name;
             
-            // 检查是否有别名
+            // check if there is an alias
             auto aliasIt = aliases.find(name);
             if (aliasIt != aliases.end())
             {
@@ -507,7 +507,7 @@ namespace te
             }
             
             allocation.createPassIndex = lifetime.firstUse;
-            allocation.destroyPassIndex = lifetime.lastUse + 1;  // 在最后使用后销毁
+            allocation.destroyPassIndex = lifetime.lastUse + 1;  // destroy after last use
             
             allocations.push_back(allocation);
         }
@@ -528,7 +528,7 @@ namespace te
             return;
         }
 
-        // 初始化资源状态
+        // initialize resource states
         for (const auto& [name, desc] : mCompiledGraph->resources)
         {
             mResourceStates[name] = desc.initialState;
@@ -548,7 +548,7 @@ namespace te
             return;
         }
 
-        // 跟踪每个 Pass 的资源创建/销毁
+        // track resource creation/destruction for each Pass
         std::unordered_map<std::string, bool> resourceCreated;
         
         for (size_t i = 0; i < mCompiledGraph->executionOrder.size(); ++i)
@@ -556,7 +556,7 @@ namespace te
             size_t passIdx = mCompiledGraph->executionOrder[i];
             const auto& pass = mCompiledGraph->passes[passIdx];
             
-            // 创建需要的资源
+            // create required resources
             for (const auto& read : pass.reads)
             {
                 if (!resourceCreated[read.resourceName])
@@ -582,7 +582,7 @@ namespace te
                 }
             }
             
-            // 插入同步点
+            // insert sync points
             for (const auto& sync : mCompiledGraph->syncPoints)
             {
                 if (sync.passIndex == i)
@@ -591,7 +591,7 @@ namespace te
                 }
             }
             
-            // 设置 Pass 的输入资源
+            // set Pass's input resources
             if (pass.pass)
             {
                 for (const auto& read : pass.reads)
@@ -599,7 +599,7 @@ namespace te
                     GLuint handle = GetResourceHandle(read.resourceName);
                     if (handle != 0)
                     {
-                        // 从配置中找到对应的输入名称
+                        // find corresponding input name in configuration
                         const auto& config = pass.pass->GetConfig();
                         for (const auto& input : config.inputs)
                         {
@@ -613,19 +613,19 @@ namespace te
                 }
             }
             
-            // 准备 Pass
+            // prepare Pass
             if (pass.pass)
             {
                 pass.pass->Prepare();
             }
             
-            // 执行 Pass
+            // execute Pass
             if (pass.executeFunc)
             {
                 pass.executeFunc(commands);
             }
             
-            // 销毁不再需要的资源
+            // destroy resources that are no longer needed
             for (const auto& allocation : mCompiledGraph->allocations)
             {
                 if (allocation.destroyPassIndex == i + 1)
@@ -639,7 +639,7 @@ namespace te
 
     GLuint RenderGraphExecutor::GetResourceHandle(const std::string& resourceName) const
     {
-        // 检查是否有别名
+        // check if there is an alias
         auto aliasIt = mCompiledGraph->aliases.find(resourceName);
         std::string actualName = (aliasIt != mCompiledGraph->aliases.end()) 
                                 ? aliasIt->second 
@@ -651,13 +651,13 @@ namespace te
 
     void RenderGraphExecutor::CreateResource(const std::string& name, const ResourceDesc& desc)
     {
-        // 检查是否已经有别名资源
+        // check if there is an alias resource
         auto aliasIt = mCompiledGraph->aliases.find(name);
         std::string actualName = (aliasIt != mCompiledGraph->aliases.end()) 
                                 ? aliasIt->second 
                                 : name;
         
-        // 如果别名资源已存在，直接使用
+        // if alias resource exists, use it
         if (aliasIt != mCompiledGraph->aliases.end())
         {
             auto it = mResources.find(actualName);
@@ -669,14 +669,14 @@ namespace te
             }
         }
         
-        // 创建新资源
+        // create new resource
         RenderTargetDesc targetDesc;
         targetDesc.name = actualName;
         targetDesc.width = desc.width;
         targetDesc.height = desc.height;
         targetDesc.format = desc.format;
         
-        // 根据格式确定类型
+        // determine type based on format
         switch (desc.format)
         {
         case RenderTargetFormat::Depth24:
@@ -706,20 +706,20 @@ namespace te
 
     void RenderGraphExecutor::DestroyResource(const std::string& name)
     {
-        // 检查是否有别名
+        // check if there is an alias
         auto aliasIt = mCompiledGraph->aliases.find(name);
         std::string actualName = (aliasIt != mCompiledGraph->aliases.end()) 
                                 ? aliasIt->second 
                                 : name;
         
-        // 如果资源被别名，不销毁（由主资源管理）
+        // if resource is aliased, do not destroy (managed by main resource)
         if (aliasIt != mCompiledGraph->aliases.end())
         {
             mResourceHandles.erase(name);
             return;
         }
         
-        // 检查是否还有其他资源使用这个实际资源
+        // check if there are other resources using this actual resource
         bool stillInUse = false;
         for (const auto& [aliasName, actual] : mCompiledGraph->aliases)
         {
@@ -746,29 +746,29 @@ namespace te
 
     void RenderGraphExecutor::InsertSyncPoint(const SyncPoint& sync)
     {
-        // OpenGL 中，同步主要是通过 glFinish 或 glMemoryBarrier
-        // 这里简化处理，在实际应用中可能需要更精细的同步
+        // in OpenGL, synchronization is mainly through glFinish or glMemoryBarrier
+        // here simplified, in actual application, more precise synchronization may be needed
         for (const auto& resourceName : sync.resources)
         {
             TransitionResource(resourceName, sync.fromState, sync.toState);
         }
         
-        // 插入内存屏障（如果需要）
+        // insert memory barrier (if needed)
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     }
 
     void RenderGraphExecutor::TransitionResource(const std::string& name, 
                                                   ResourceState from, ResourceState to)
     {
-        // OpenGL 中资源状态转换主要是概念性的
-        // 实际的状态转换在绑定资源时自动处理
-        // 这里主要是更新内部状态跟踪
+        // in OpenGL, resource state transition is mainly conceptual
+        // actual state transition is handled automatically when binding resources
+        // here mainly update internal state tracking
         mResourceStates[name] = to;
     }
 
     void RenderGraphExecutor::Clear()
     {
-        // 销毁所有资源
+        // destroy all resources
         for (auto& [name, target] : mResources)
         {
             target->Shutdown();
