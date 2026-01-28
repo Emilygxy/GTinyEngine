@@ -1,5 +1,8 @@
 # 记录实践过程中的坑
-Learning link: https://easyvulkan.github.io/index.html
+**Learning link:** https://easyvulkan.github.io/index.html
+**学习路径**：
+前两章是Step By Step入门教程，很长，初学者请耐心看完。 
+然后直接阅读Ch6和Ch7（建议先七后六），按要求阅读Ch3~5。
 
 ## Ch1-4 创建交换链
 1. 根据教程coding，CreateSwapchain 内先调 vkCreateSwapchainKHR，再调 CreateSwapchain_Internal（里面也调 vkCreateSwapchainKHR）实现设计不合理。
