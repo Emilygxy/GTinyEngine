@@ -76,7 +76,7 @@ public:
 #define DestroyHandleBy(Func)                                         \
     if (handle)                                                       \
     {                                                                 \
-        Func(graphicsBase::Base().Device(), handle, nullptr);         \
+        Func(GraphicsBase::Base().Device(), handle, nullptr);         \
         handle = VK_NULL_HANDLE;                                      \
     }
 

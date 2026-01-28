@@ -1,7 +1,6 @@
 #include "VK_Base.h"
 #include <format>
 #include "glm/glm.hpp"
-#include "VK_Utils.h"
 
 namespace vk
 {
@@ -792,6 +791,272 @@ VkResult GraphicsBase::RecreateDevice(VkDeviceCreateFlags flags)
 
     // create the new logical device
     return CreateDevice(flags);
+}
+
+VkResult GraphicsBase::SwapImage(VkSemaphore semaphore_imageIsAvailable)
+{
+    // Logic of the function:
+    // if the swapchain is rebuilt in the current frame, then destroy the swapchain in the next frame (this is why break is used after rebuilding the swapchain to execute the while again, rather than recursively calling SwapImage(...))
+
+    // destroy the old swapchain (if it exists)
+    if (swapchainCreateInfo.oldSwapchain && (swapchainCreateInfo.oldSwapchain != swapchain))
+    {
+        vkDestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
+        swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+    }
+
+    // get the image index of the swapchain
+    while (VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, semaphore_imageIsAvailable, VK_NULL_HANDLE, &currentImageIndex))
+    {
+        switch (result) 
+        {
+            case VK_SUBOPTIMAL_KHR:
+            case VK_ERROR_OUT_OF_DATE_KHR:
+                if (VkResult result = RecreateSwapchain())
+                    return result;
+                break; // note that after the swapchain is rebuilt, the image still needs to be obtained, through break recursion, again execute the condition judgment statement of the while
+            default:
+                outStream << std::format("[ GraphicsBase ] ERROR\nFailed to acquire the next image!\nError code: {}\n", int32_t(result));
+                return result;
+        }
+    }
+    return VK_SUCCESS;
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Graphics(VkSubmitInfo& submitInfo, VkFence fence) const
+{
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkResult result = vkQueueSubmit(queue_graphics, 1, &submitInfo, fence);
+    if (result)
+        outStream << std::format("[ graphicsBase ] ERROR\nFailed to submit the command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Graphics(VkCommandBuffer commandBuffer, VkSemaphore semaphore_imageIsAvailable, VkSemaphore semaphore_renderingIsOver, VkFence fence, VkPipelineStageFlags waitDstStage_imageIsAvailable) const
+{
+    VkSubmitInfo submitInfo = {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+    if (semaphore_imageIsAvailable)
+        submitInfo.waitSemaphoreCount = 1,
+        submitInfo.pWaitSemaphores = &semaphore_imageIsAvailable,
+        submitInfo.pWaitDstStageMask = &waitDstStage_imageIsAvailable;
+    if (semaphore_renderingIsOver)
+        submitInfo.signalSemaphoreCount = 1,
+        submitInfo.pSignalSemaphores = &semaphore_renderingIsOver;
+    return SubmitCommandBuffer_Graphics(submitInfo, fence);
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Graphics(VkCommandBuffer commandBuffer, VkFence fence) const
+{
+    VkSubmitInfo submitInfo = {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+    return SubmitCommandBuffer_Graphics(submitInfo, fence);
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Compute(VkSubmitInfo& submitInfo, VkFence fence) const
+{
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkResult result = vkQueueSubmit(queue_compute, 1, &submitInfo, fence);
+    if (result)
+        outStream << std::format("[ graphicsBase ] ERROR\nFailed to submit the command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Compute(VkCommandBuffer commandBuffer, VkFence fence) const
+{
+    VkSubmitInfo submitInfo = {
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+    return SubmitCommandBuffer_Compute(submitInfo, fence);
+}
+
+result_t GraphicsBase::PresentImage(VkPresentInfoKHR& presentInfo)
+{
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    switch (VkResult result = vkQueuePresentKHR(queue_presentation, &presentInfo)) {
+    case VK_SUCCESS:
+        return VK_SUCCESS;
+    case VK_SUBOPTIMAL_KHR:
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        // this will cause the loss of 1 frame. To keep this 1 frame, it is necessary to get the image index of the swapchain and present the image after rebuilding the swapchain, considering that the temporary synchronization object is also created when getting the image index of the swapchain, the code will be written more complicated,todo.
+        return RecreateSwapchain(); // return directly, note that this will cause the loss of 1 frame.
+    default:
+        outStream << std::format("[ graphicsBase ] ERROR\nFailed to queue the image for presentation!\nError code: {}\n", int32_t(result));
+        return result;
+    }
+}
+
+result_t GraphicsBase::PresentImage(VkSemaphore semaphore_renderingIsOver)
+{
+    VkPresentInfoKHR presentInfo = {
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain,
+        .pImageIndices = &currentImageIndex
+    };
+
+    if (semaphore_renderingIsOver)
+    {
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &semaphore_renderingIsOver;
+    }
+    return PresentImage(presentInfo);
+}
+
+result_t GraphicsBase::SubmitCommandBuffer_Presentation(VkCommandBuffer commandBuffer, VkSemaphore semaphore_renderingIsOver, VkSemaphore semaphore_ownershipIsTransfered, VkFence fence) const
+{
+    static constexpr VkPipelineStageFlags waitDstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &commandBuffer
+    };
+    if (semaphore_renderingIsOver)
+        submitInfo.waitSemaphoreCount = 1,
+        submitInfo.pWaitSemaphores = &semaphore_renderingIsOver,
+        submitInfo.pWaitDstStageMask = &waitDstStage;
+    if (semaphore_ownershipIsTransfered)
+        submitInfo.signalSemaphoreCount = 1,
+        submitInfo.pSignalSemaphores = &semaphore_ownershipIsTransfered;
+    VkResult result = vkQueueSubmit(queue_presentation, 1, &submitInfo, fence);
+    if (result)
+        outStream << std::format("[ graphicsBase ] ERROR\nFailed to submit the presentation command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+void GraphicsBase::CmdTransferImageOwnership(VkCommandBuffer commandBuffer) const
+{
+    VkImageMemoryBarrier imageMemoryBarrier_g2p = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = 0,
+        .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcQueueFamilyIndex = queueFamilyIndex_graphics,
+        .dstQueueFamilyIndex = queueFamilyIndex_presentation,
+        .image = swapchainImages[currentImageIndex],
+        .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+    };
+    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+        0, nullptr, 0, nullptr, 1, &imageMemoryBarrier_g2p);
+}
+
+fence::~fence()
+{
+    DestroyHandleBy(vkDestroyFence);
+}
+
+result_t fence::Wait() const
+{
+    VkResult result = vkWaitForFences(GraphicsBase::Base().Device(), 1, &handle, false, UINT64_MAX);
+    if (result)
+        outStream << std::format("[ fence ] ERROR\nFailed to wait for the fence!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t fence::Reset() const
+{
+    VkResult result = vkResetFences(GraphicsBase::Base().Device(), 1, &handle);
+    if (result)
+        outStream << std::format("[ fence ] ERROR\nFailed to reset the fence!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t fence::Status() const
+{
+    VkResult result = vkGetFenceStatus(GraphicsBase::Base().Device(), handle);
+    if (result < 0) //vkGetFenceStatus(...) succeeds with two results, so it cannot simply judge whether result is non-0
+        outStream << std::format("[ fence ] ERROR\nFailed to get the status of the fence!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t fence::Create(VkFenceCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkResult result = vkCreateFence(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ fence ] ERROR\nFailed to create a fence!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+commandPool::~commandPool()
+{
+    DestroyHandleBy(vkDestroyCommandPool);
+}
+
+result_t commandPool::Create(VkCommandPoolCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    VkResult result = vkCreateCommandPool(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ commandPool ] ERROR\nFailed to create a command pool!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+semaphore::~semaphore()
+{
+    DestroyHandleBy(vkDestroySemaphore);
+}
+
+result_t semaphore::Create(VkSemaphoreCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkResult result = vkCreateSemaphore(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ semaphore ] ERROR\nFailed to create a semaphore!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t commandBuffer::Begin(VkCommandBufferUsageFlags usageFlags, VkCommandBufferInheritanceInfo& inheritanceInfo) const
+{
+    inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = usageFlags,
+        .pInheritanceInfo = &inheritanceInfo
+    };
+    VkResult result = vkBeginCommandBuffer(handle, &beginInfo);
+    if (result)
+        outStream << std::format("[ commandBuffer ] ERROR\nFailed to begin a command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t commandBuffer::Begin(VkCommandBufferUsageFlags usageFlags) const
+{
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = usageFlags,
+    };
+    VkResult result = vkBeginCommandBuffer(handle, &beginInfo);
+    if (result)
+        outStream << std::format("[ commandBuffer ] ERROR\nFailed to begin a command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t commandBuffer::End() const
+{
+    VkResult result = vkEndCommandBuffer(handle);
+    if (result)
+        outStream << std::format("[ commandBuffer ] ERROR\nFailed to end a command buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+
+result_t commandPool::AllocateBuffers(arrayRef<VkCommandBuffer> buffers, VkCommandBufferLevel level) const 
+{
+    VkCommandBufferAllocateInfo allocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = handle,
+        .level = level,
+        .commandBufferCount = uint32_t(buffers.Count())
+    };
+    VkResult result = vkAllocateCommandBuffers(GraphicsBase::Base().Device(), &allocateInfo, buffers.Pointer());
+    if (result)
+        outStream << std::format("[ commandPool ] ERROR\nFailed to allocate command buffers!\nError code: {}\n", int32_t(result));
+    return result;
 }
 
 }
