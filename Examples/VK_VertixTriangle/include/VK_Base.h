@@ -7,11 +7,13 @@
 #include "vulkan/vulkan.h"
 #include <vector>
 #include <span>
+#include <iostream>
 
 namespace vk
 {
     //define the default window size
     constexpr VkExtent2D defaultWindowSize = { 1280, 720 };
+    inline auto& outStream = std::cout; // not constexpr, because std::cout has external linkage
 
     class GraphicsBase 
     {
