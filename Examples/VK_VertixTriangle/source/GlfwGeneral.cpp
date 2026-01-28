@@ -92,12 +92,16 @@ namespace easy_vk
             return false;
         }
 
+        if (GraphicsBase::Base().CreateSwapchain(limitFrameRate))
+            return false;
+
         return true;
     }
 
     void TerminateWindow()
     {
-        /*chapter 1-4*/
+        // ensure that Vulkan is not interacting with the window system's rendering engine
+        GraphicsBase::Base().WaitIdle();
         glfwTerminate();
     }
 
