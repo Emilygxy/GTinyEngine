@@ -48,11 +48,11 @@ void CreatePipeline() {
         pipelineCiPack.createInfo.renderPass = RenderPassAndFramebuffers().renderPass;
         pipelineCiPack.createInfo.subpass = 0; // Required field
         //Data comes from the 0th vertex buffer, input frequency is vertex by vertex
-        pipelineCiPack.vertexInputBindings.emplace_back(0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX);
+        pipelineCiPack.vertexInputBindings.emplace_back(0, static_cast<uint32_t>(sizeof(vertex)), VK_VERTEX_INPUT_RATE_VERTEX);
         //Location 0, data comes from the 0th vertex buffer, vec2 corresponds to VK_FORMAT_R32G32_SFLOAT, use offsetof to calculate the starting position of position in vertex
-        pipelineCiPack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vertex, position));
+        pipelineCiPack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(vertex, position)));
         //Location 1, data comes from the 0th vertex buffer, vec4 corresponds to VK_FORMAT_R32G32B32A32_SFLOAT, use offsetof to calculate the starting position of color in vertex
-        pipelineCiPack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, color));
+        pipelineCiPack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(vertex, color)));
 
         pipelineCiPack.inputAssemblyStateCi.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         pipelineCiPack.viewports.emplace_back(0.f, 0.f, float(windowSize.width), float(windowSize.height), 0.f, 1.f);
@@ -66,10 +66,9 @@ void CreatePipeline() {
         pipelineCiPack.colorBlendAttachmentStates.push_back({ .colorWriteMask = 0b1111 }); // mask RGBA
         pipelineCiPack.UpdateAllArrays();
         // Set shader stages after UpdateAllArrays to override the empty shaderStages vector
-        pipelineCiPack.createInfo.stageCount = 2;
+        pipelineCiPack.createInfo.stageCount = 2u;
         pipelineCiPack.createInfo.pStages = shaderStageCreateInfos_triangle;
         pipeline_triangle.Create(pipelineCiPack);
-
     };
     auto Destroy = [] {
         pipeline_triangle.~pipeline();
@@ -98,12 +97,20 @@ int main() {
     VkClearValue clearColor = { .color = { 1.f, 0.f, 0.f, 1.f } }; // red
 
     vertex vertices[] = {
-        { {  .0f, -.5f }, { 1, 0, 0, 1 } }, // Red
-        { { -.5f,  .5f }, { 0, 1, 0, 1 } }, // Green
-        { {  .5f,  .5f }, { 0, 0, 1, 1 } }  // Blue
+    { { -.5f, -.5f }, { 1, 1, 0, 1 } },
+    { {  .5f, -.5f }, { 1, 0, 0, 1 } },
+    { { -.5f,  .5f }, { 0, 1, 0, 1 } },
+    { {  .5f,  .5f }, { 0, 0, 1, 1 } }
     };
     vertexBuffer vertexBuffer(sizeof vertices);
     vertexBuffer.TransferData(vertices);
+
+    uint16_t indices[] = {
+    0, 1, 2,
+    1, 2, 3
+    };
+    indexBuffer indexBuffer(sizeof indices);
+    indexBuffer.TransferData(indices);
 
     while (!glfwWindowShouldClose(pWindow)) {
         while (glfwGetWindowAttrib(pWindow, GLFW_ICONIFIED))
@@ -116,8 +123,9 @@ int main() {
         renderPass.CmdBegin(commandBuffer, framebuffers[i], { {}, windowSize }, clearColor);
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer.Address(), &offset);
+        vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_triangle);
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
 
         renderPass.CmdEnd(commandBuffer);
         commandBuffer.End();
