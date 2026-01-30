@@ -1,6 +1,7 @@
 #include "GlfwGeneral.h"
 #include "EasyVulkan.h"
 #include <format>
+#include "glm/glm.hpp"
 
 // learning link: https://easyvulkan.github.io/index.html
 using namespace easy_vk;
@@ -8,6 +9,11 @@ using namespace vk;
 
 pipelineLayout pipelineLayout_triangle; //pipeline layout
 pipeline pipeline_triangle;             //pipeline
+
+struct vertex {
+    glm::vec2 position;
+    glm::vec4 color;
+};
 
 //This function calls easyVulkan::CreateRpwf_Screen() and stores the returned reference to a static variable
 const auto& RenderPassAndFramebuffers() {
@@ -21,8 +27,8 @@ void CreateLayout() {
 }
 //This function is used to create the pipeline
 void CreatePipeline() {
-    static shaderModule vert("resources/compiled_shaders/FirstTriangle.vert.spv");
-    static shaderModule frag("resources/compiled_shaders/FirstTriangle.frag.spv");
+    static shaderModule vert("resources/compiled_shaders/VertexBuffer_vert.spv");// FirstTriangle.vert.spv
+    static shaderModule frag("resources/compiled_shaders/VertexBuffer_frag.spv");// FirstTriangle.frag.spv
 
     // Verify shader modules were created successfully
     if (!vert || !frag) {
@@ -41,6 +47,13 @@ void CreatePipeline() {
         pipelineCiPack.createInfo.layout = pipelineLayout_triangle;
         pipelineCiPack.createInfo.renderPass = RenderPassAndFramebuffers().renderPass;
         pipelineCiPack.createInfo.subpass = 0; // Required field
+        //Data comes from the 0th vertex buffer, input frequency is vertex by vertex
+        pipelineCiPack.vertexInputBindings.emplace_back(0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX);
+        //Location 0, data comes from the 0th vertex buffer, vec2 corresponds to VK_FORMAT_R32G32_SFLOAT, use offsetof to calculate the starting position of position in vertex
+        pipelineCiPack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vertex, position));
+        //Location 1, data comes from the 0th vertex buffer, vec4 corresponds to VK_FORMAT_R32G32B32A32_SFLOAT, use offsetof to calculate the starting position of color in vertex
+        pipelineCiPack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, color));
+
         pipelineCiPack.inputAssemblyStateCi.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         pipelineCiPack.viewports.emplace_back(0.f, 0.f, float(windowSize.width), float(windowSize.height), 0.f, 1.f);
         pipelineCiPack.scissors.emplace_back(VkOffset2D{}, windowSize);
@@ -56,6 +69,7 @@ void CreatePipeline() {
         pipelineCiPack.createInfo.stageCount = 2;
         pipelineCiPack.createInfo.pStages = shaderStageCreateInfos_triangle;
         pipeline_triangle.Create(pipelineCiPack);
+
     };
     auto Destroy = [] {
         pipeline_triangle.~pipeline();
@@ -83,6 +97,14 @@ int main() {
 
     VkClearValue clearColor = { .color = { 1.f, 0.f, 0.f, 1.f } }; // red
 
+    vertex vertices[] = {
+        { {  .0f, -.5f }, { 1, 0, 0, 1 } }, // Red
+        { { -.5f,  .5f }, { 0, 1, 0, 1 } }, // Green
+        { {  .5f,  .5f }, { 0, 0, 1, 1 } }  // Blue
+    };
+    vertexBuffer vertexBuffer(sizeof vertices);
+    vertexBuffer.TransferData(vertices);
+
     while (!glfwWindowShouldClose(pWindow)) {
         while (glfwGetWindowAttrib(pWindow, GLFW_ICONIFIED))
             glfwWaitEvents();
@@ -92,7 +114,8 @@ int main() {
 
         commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         renderPass.CmdBegin(commandBuffer, framebuffers[i], { {}, windowSize }, clearColor);
-
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer.Address(), &offset);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_triangle);
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
