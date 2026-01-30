@@ -5,16 +5,21 @@
 //#include "glm/gtc/matrix_transform.hpp"
 //
 #include "vulkan/vulkan.h"
+#include "vulkan/utility/vk_format_utils.h"
 #include <vector>
 #include <span>
 #include <iostream>
 #include "VK_Utils.h"
+#include "VK_Format.h"
 
 namespace vk
 {
     //define the default window size
     constexpr VkExtent2D defaultWindowSize = { 1280, 720 };
     inline auto& outStream = std::cout; // not constexpr, because std::cout has external linkage
+
+    // Forward declaration
+    class GraphicsBasePlus;
 
     class GraphicsBase
     {
@@ -80,6 +85,8 @@ namespace vk
 
         // the current image index of the swapchain
         uint32_t currentImageIndex = 0;
+
+        GraphicsBasePlus* pPlus = nullptr; //=nullptr can be omitted, because it is a member of the singleton class, automatically zero initialized
 
     public:
         //static function
@@ -311,8 +318,16 @@ namespace vk
             VkFence fence = VK_NULL_HANDLE) const;
 
         void CmdTransferImageOwnership(VkCommandBuffer commandBuffer) const;
+
+        static GraphicsBasePlus& Plus() { return *singleton.pPlus; }
+        //*pPlus's Setter, only allow setting pPlus once
+        static void Plus(GraphicsBasePlus& plus) { if (!singleton.pPlus) singleton.pPlus = &plus; }
     };
     inline GraphicsBase GraphicsBase::singleton;
+
+    constexpr formatInfo FormatInfo(VkFormat format);
+    constexpr VkFormat Corresponding16BitFloatFormat(VkFormat format_32BitFloat);
+    const VkFormatProperties& FormatProperties(VkFormat format);
 
     class fence {
         VkFence handle = VK_NULL_HANDLE;
@@ -676,4 +691,218 @@ namespace vk
             return Create(createInfo);
         }
     };
+
+    class deviceMemory {
+        VkDeviceMemory handle = VK_NULL_HANDLE;
+        VkDeviceSize allocationSize = 0;            // The actual size of the allocated memory
+        VkMemoryPropertyFlags memoryProperties = 0; // The memory properties
+        //--------------------
+        // This function is used to adjust the range of non-host coherent memory region when mapping the memory region
+        VkDeviceSize AdjustNonCoherentMemoryRange(VkDeviceSize& size, VkDeviceSize& offset) const;
+    protected:
+        // Used for bufferMemory or imageMemory, defined here to save 8 bytes
+        class {
+            friend class bufferMemory;
+            friend class imageMemory;
+            bool value = false;
+            operator bool() const { return value; }
+            auto& operator=(bool value) { this->value = value; return *this; }
+        } areBound;
+    public:
+        deviceMemory() = default;
+        deviceMemory(VkMemoryAllocateInfo& allocateInfo) {
+            Allocate(allocateInfo);
+        }
+        deviceMemory(deviceMemory&& other) noexcept {
+            MoveHandle;
+            allocationSize = other.allocationSize;
+            memoryProperties = other.memoryProperties;
+            other.allocationSize = 0;
+            other.memoryProperties = 0;
+        }
+        ~deviceMemory() { DestroyHandleBy(vkFreeMemory); allocationSize = 0; memoryProperties = 0; }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        VkDeviceSize AllocationSize() const { return allocationSize; }
+        VkMemoryPropertyFlags MemoryProperties() const { return memoryProperties; }
+        //Const Function
+        // Map the host visible memory region
+        result_t MapMemory(void*& pData, VkDeviceSize size, VkDeviceSize offset = 0) const;
+        // Unmap the host visible memory region
+        result_t UnmapMemory(VkDeviceSize size, VkDeviceSize offset = 0) const;
+        // BufferData(...) is used to conveniently update the device memory region, suitable for the case of writing data to the memory region using memcpy(...) and immediately unmapping the memory region
+        result_t BufferData(const void* pData_src, VkDeviceSize size, VkDeviceSize offset = 0) const;
+        result_t BufferData(const auto& data_src) const 
+        {
+            return BufferData(&data_src, sizeof data_src);
+        }
+        // RetrieveData(...) is used to conveniently retrieve data from the device memory region, suitable for the case of retrieving data from the memory region using memcpy(...) and immediately unmapping the memory region
+        result_t RetrieveData(void* pData_dst, VkDeviceSize size, VkDeviceSize offset = 0) const;
+        //Non-const Function
+        result_t Allocate(VkMemoryAllocateInfo& allocateInfo);
+    };
+
+    class buffer {
+        VkBuffer handle = VK_NULL_HANDLE;
+    public:
+        buffer() = default;
+        buffer(VkBufferCreateInfo& createInfo) {
+            Create(createInfo);
+        }
+        buffer(buffer&& other) noexcept { MoveHandle; }
+        ~buffer() { DestroyHandleBy(vkDestroyBuffer); }
+        //Getter
+        DefineHandleTypeOperator;
+        DefineAddressFunction;
+        //Const Function
+        VkMemoryAllocateInfo MemoryAllocateInfo(VkMemoryPropertyFlags desiredMemoryProperties) const;
+        result_t BindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffset = 0) const;
+        //Non-const Function
+        result_t Create(VkBufferCreateInfo& createInfo);
+    };
+
+    class bufferMemory : buffer, deviceMemory {
+        public:
+            bufferMemory() = default;
+            bufferMemory(VkBufferCreateInfo& createInfo, VkMemoryPropertyFlags desiredMemoryProperties) {
+                Create(createInfo, desiredMemoryProperties);
+            }
+            bufferMemory(bufferMemory&& other) noexcept : buffer(std::move(other)), deviceMemory(std::move(other)) 
+            {
+                areBound = other.areBound;
+                other.areBound = false;
+            }
+            ~bufferMemory() { areBound = false; }
+            //Getter
+            // Don't define the conversion functions to VkBuffer and VkDeviceMemory, because in 32-bit mode, both of these types are aliases of uint64_t, which will cause conflicts (although, who the hell still uses 32-bit PCs!)
+            VkBuffer Buffer() const { return static_cast<const buffer&>(*this); }
+            const VkBuffer* AddressOfBuffer() const { return buffer::Address(); }
+            VkDeviceMemory Memory() const { return static_cast<const deviceMemory&>(*this); }
+            const VkDeviceMemory* AddressOfMemory() const { return deviceMemory::Address(); }
+            // If areBond is true, then the device memory has been successfully allocated, the buffer has been successfully created, and they have been successfully bound together
+            bool AreBound() const { return areBound; }
+            using deviceMemory::AllocationSize;
+            using deviceMemory::MemoryProperties;
+            //Const Function
+            using deviceMemory::MapMemory;
+            using deviceMemory::UnmapMemory;
+            using deviceMemory::BufferData;
+            using deviceMemory::RetrieveData;
+            //Non-const Function
+            // The following three functions are only used for the case where Create(...) may fail
+            result_t CreateBuffer(VkBufferCreateInfo& createInfo) 
+            {
+                return buffer::Create(createInfo);
+            }
+            result_t AllocateMemory(VkMemoryPropertyFlags desiredMemoryProperties) 
+            {
+                VkMemoryAllocateInfo allocateInfo = MemoryAllocateInfo(desiredMemoryProperties);
+                if (allocateInfo.memoryTypeIndex >= GraphicsBase::Base().PhysicalDeviceMemoryProperties().memoryTypeCount)
+                    return VK_RESULT_MAX_ENUM; // No suitable error code, don't use VK_ERROR_UNKNOWN
+                return Allocate(allocateInfo);
+            }
+            result_t BindMemory()
+            {
+                if (VkResult result = buffer::BindMemory(Memory()))
+                    return result;
+                areBound = true;
+                return VK_SUCCESS;
+            }
+            // Allocate device memory, create buffer, and bind
+            result_t Create(VkBufferCreateInfo& createInfo, VkMemoryPropertyFlags desiredMemoryProperties) 
+            {
+                VkResult result;
+                false || // This line is used to deal with the alignment of code in Visual Studio
+                    (result = CreateBuffer(createInfo)) || // Use || short-circuit execution
+                    (result = AllocateMemory(desiredMemoryProperties)) ||
+                    (result = BindMemory());
+                return result;
+            }
+        };
+
+        class bufferView 
+        {
+            VkBufferView handle = VK_NULL_HANDLE;
+        public:
+            bufferView() = default;
+            bufferView(VkBufferViewCreateInfo& createInfo) {
+                Create(createInfo);
+            }
+            bufferView(VkBuffer buffer, VkFormat format, VkDeviceSize offset = 0, VkDeviceSize range = 0 /*VkBufferViewCreateFlags flags*/) {
+                Create(buffer, format, offset, range);
+            }
+            bufferView(bufferView&& other) noexcept { MoveHandle; }
+            ~bufferView() { DestroyHandleBy(vkDestroyBufferView); }
+            //Getter
+            DefineHandleTypeOperator;
+            DefineAddressFunction;
+            //Non-const Function
+            result_t Create(VkBufferViewCreateInfo& createInfo);
+            result_t Create(VkBuffer buffer, VkFormat format, VkDeviceSize offset = 0, VkDeviceSize range = 0 /*VkBufferViewCreateFlags flags*/);
+        };
+
+        class image {
+            VkImage handle = VK_NULL_HANDLE;
+        public:
+            image() = default;
+            image(VkImageCreateInfo& createInfo) {
+                Create(createInfo);
+            }
+            image(image&& other) noexcept { MoveHandle; }
+            ~image() { DestroyHandleBy(vkDestroyImage); }
+            //Getter
+            DefineHandleTypeOperator;
+            DefineAddressFunction;
+            //Const Function
+            VkMemoryAllocateInfo MemoryAllocateInfo(VkMemoryPropertyFlags desiredMemoryProperties) const;
+            result_t BindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffset = 0) const;
+            //Non-const Function
+            result_t Create(VkImageCreateInfo& createInfo);
+        };
+
+        class GraphicsBasePlus
+        {
+            VkFormatProperties formatProperties[std::size(formatInfos_v1_0)] = {};
+            commandPool commandPool_graphics;
+            commandPool commandPool_presentation;
+            commandPool commandPool_compute;
+            commandBuffer commandBuffer_transfer; // Allocate from commandPool_graphics
+            commandBuffer commandBuffer_presentation;
+            // Static variable
+            static GraphicsBasePlus singleton;
+            //--------------------
+            GraphicsBasePlus();
+            GraphicsBasePlus(GraphicsBasePlus&&) = delete;
+            ~GraphicsBasePlus() = default;
+        public:
+            //Getter
+            const VkFormatProperties& FormatProperties(VkFormat format) const;
+            const commandPool& CommandPool_Graphics() const { return commandPool_graphics; }
+            const commandPool& CommandPool_Compute() const { return commandPool_compute; }
+            const commandBuffer& CommandBuffer_Transfer() const { return commandBuffer_transfer; }
+            //Const Function
+            result_t ExecuteCommandBuffer_Graphics(VkCommandBuffer commandBuffer) const 
+            {
+                fence fence;
+                VkSubmitInfo submitInfo = {
+                    .commandBufferCount = 1,
+                    .pCommandBuffers = &commandBuffer
+                };
+                VkResult result = GraphicsBase::Base().SubmitCommandBuffer_Graphics(submitInfo, fence);
+                if (!result)
+                    fence.Wait();
+                return result;
+            }
+            // This function is specifically used to submit the command buffer to the presentation queue for acquiring the ownership of the queue family of the swapchain image
+            result_t AcquireImageOwnership_Presentation(VkSemaphore semaphore_renderingIsOver, VkSemaphore semaphore_ownershipIsTransfered, VkFence fence = VK_NULL_HANDLE) const {
+                if (VkResult result = commandBuffer_presentation.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
+                    return result;
+                GraphicsBase::Base().CmdTransferImageOwnership(commandBuffer_presentation);
+                if (VkResult result = commandBuffer_presentation.End())
+                    return result;
+                return GraphicsBase::Base().SubmitCommandBuffer_Presentation(commandBuffer_presentation, semaphore_renderingIsOver, semaphore_ownershipIsTransfered, fence);
+            }
+        };
+        inline GraphicsBasePlus GraphicsBasePlus::singleton;
 }

@@ -1,6 +1,7 @@
 #include "VK_Base.h"
 #include <format>
 #include <fstream>
+#include <array>
 #include "glm/glm.hpp"
 
 namespace vk
@@ -1126,5 +1127,243 @@ result_t shaderModule::Create(const char* filepath)
     file.close();
     
     return Create(fileSize, binaries.data());
+}
+VkDeviceSize deviceMemory::AdjustNonCoherentMemoryRange(VkDeviceSize& size, VkDeviceSize& offset) const
+{
+    const VkDeviceSize& nonCoherentAtomSize = GraphicsBase::Base().PhysicalDeviceProperties().limits.nonCoherentAtomSize;
+    VkDeviceSize _offset = offset;
+    offset = offset / nonCoherentAtomSize * nonCoherentAtomSize;
+    size = std::min((size + _offset + nonCoherentAtomSize - 1) / nonCoherentAtomSize * nonCoherentAtomSize, allocationSize) - offset;
+    return _offset - offset;
+}
+result_t deviceMemory::MapMemory(void*& pData, VkDeviceSize size, VkDeviceSize offset) const
+{
+    VkDeviceSize inverseDeltaOffset;
+    if (!(memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+        inverseDeltaOffset = AdjustNonCoherentMemoryRange(size, offset);
+    if (VkResult result = vkMapMemory(GraphicsBase::Base().Device(), handle, offset, size, 0, &pData)) {
+        outStream << std::format("[ deviceMemory ] ERROR\nFailed to map the memory!\nError code: {}\n", int32_t(result));
+        return result;
+    }
+    if (!(memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        pData = static_cast<uint8_t*>(pData) + inverseDeltaOffset;
+        VkMappedMemoryRange mappedMemoryRange = {
+            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .memory = handle,
+            .offset = offset,
+            .size = size
+        };
+        if (VkResult result = vkInvalidateMappedMemoryRanges(GraphicsBase::Base().Device(), 1, &mappedMemoryRange)) {
+            outStream << std::format("[ deviceMemory ] ERROR\nFailed to flush the memory!\nError code: {}\n", int32_t(result));
+            return result;
+        }
+    }
+    return VK_SUCCESS;
+}
+result_t deviceMemory::UnmapMemory(VkDeviceSize size, VkDeviceSize offset) const
+{
+    if (!(memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        AdjustNonCoherentMemoryRange(size, offset);
+        VkMappedMemoryRange mappedMemoryRange = {
+            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .memory = handle,
+            .offset = offset,
+            .size = size
+        };
+        if (VkResult result = vkFlushMappedMemoryRanges(GraphicsBase::Base().Device(), 1, &mappedMemoryRange)) {
+            outStream << std::format("[ deviceMemory ] ERROR\nFailed to flush the memory!\nError code: {}\n", int32_t(result));
+            return result;
+        }
+    }
+    vkUnmapMemory(GraphicsBase::Base().Device(), handle);
+    return VK_SUCCESS;
+}
+result_t deviceMemory::BufferData(const void* pData_src, VkDeviceSize size, VkDeviceSize offset) const
+{
+    void* pData_dst;
+    if (VkResult result = MapMemory(pData_dst, size, offset))
+        return result;
+    memcpy(pData_dst, pData_src, size_t(size));
+    return UnmapMemory(size, offset);
+}
+result_t deviceMemory::RetrieveData(void* pData_dst, VkDeviceSize size, VkDeviceSize offset) const
+{
+    void* pData_src;
+    if (VkResult result = MapMemory(pData_src, size, offset))
+        return result;
+    memcpy(pData_dst, pData_src, size_t(size));
+    return UnmapMemory(size, offset);
+}
+result_t deviceMemory::Allocate(VkMemoryAllocateInfo& allocateInfo)
+{
+    if (allocateInfo.memoryTypeIndex >= GraphicsBase::Base().PhysicalDeviceMemoryProperties().memoryTypeCount) {
+        outStream << std::format("[ deviceMemory ] ERROR\nInvalid memory type index!\n");
+        return VK_RESULT_MAX_ENUM; // No suitable error code, don't use VK_ERROR_UNKNOWN
+    }
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    if (VkResult result = vkAllocateMemory(GraphicsBase::Base().Device(), &allocateInfo, nullptr, &handle)) {
+        outStream << std::format("[ deviceMemory ] ERROR\nFailed to allocate memory!\nError code: {}\n", int32_t(result));
+        return result;
+    }
+    // Record the actual size of the allocated memory
+    allocationSize = allocateInfo.allocationSize;
+    // Get the memory properties
+    memoryProperties = GraphicsBase::Base().PhysicalDeviceMemoryProperties().memoryTypes[allocateInfo.memoryTypeIndex].propertyFlags;
+    return VK_SUCCESS;
+}
+VkMemoryAllocateInfo buffer::MemoryAllocateInfo(VkMemoryPropertyFlags desiredMemoryProperties) const
+{
+    VkMemoryAllocateInfo memoryAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+    };
+    VkMemoryRequirements memoryRequirements;
+    vkGetBufferMemoryRequirements(GraphicsBase::Base().Device(), handle, &memoryRequirements);
+    memoryAllocateInfo.allocationSize = memoryRequirements.size;
+    memoryAllocateInfo.memoryTypeIndex = UINT32_MAX;
+    auto& physicalDeviceMemoryProperties = GraphicsBase::Base().PhysicalDeviceMemoryProperties();
+    for (size_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++)
+        if (memoryRequirements.memoryTypeBits & 1 << i &&
+            (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & desiredMemoryProperties) == desiredMemoryProperties) {
+            memoryAllocateInfo.memoryTypeIndex = uint32_t(i);
+            break;
+        }
+    // Don't check if the memory type index is successfully obtained here, because the memoryAllocateInfo will be returned out, and the external check will be performed
+    //if (memoryAllocateInfo.memoryTypeIndex == UINT32_MAX)
+    //    outStream << std::format("[ buffer ] ERROR\nFailed to find any memory type satisfies all desired memory properties!\n");
+    return memoryAllocateInfo;
+}
+result_t buffer::BindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffset) const
+{
+    VkResult result = vkBindBufferMemory(GraphicsBase::Base().Device(), handle, deviceMemory, memoryOffset);
+    if (result)
+        outStream << std::format("[ buffer ] ERROR\nFailed to attach the memory!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t buffer::Create(VkBufferCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    VkResult result = vkCreateBuffer(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ buffer ] ERROR\nFailed to create a buffer!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t bufferView::Create(VkBufferViewCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
+    VkResult result = vkCreateBufferView(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ bufferView ] ERROR\nFailed to create a buffer view!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t bufferView::Create(VkBuffer buffer, VkFormat format, VkDeviceSize offset, VkDeviceSize range)
+{
+    VkBufferViewCreateInfo createInfo = {
+        .buffer = buffer,
+        .format = format,
+        .offset = offset,
+        .range = range
+    };
+    return Create(createInfo);
+}
+VkMemoryAllocateInfo image::MemoryAllocateInfo(VkMemoryPropertyFlags desiredMemoryProperties) const
+{
+    VkMemoryAllocateInfo memoryAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+    };
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(GraphicsBase::Base().Device(), handle, &memoryRequirements);
+    memoryAllocateInfo.allocationSize = memoryRequirements.size;
+    auto GetMemoryTypeIndex = [](uint32_t memoryTypeBits, VkMemoryPropertyFlags desiredMemoryProperties) -> uint32_t {
+        auto& physicalDeviceMemoryProperties = GraphicsBase::Base().PhysicalDeviceMemoryProperties();
+        for (size_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++)
+            if (memoryTypeBits & 1 << i &&
+                (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & desiredMemoryProperties) == desiredMemoryProperties)
+                return uint32_t(i);
+        return UINT32_MAX;
+    };
+    memoryAllocateInfo.memoryTypeIndex = GetMemoryTypeIndex(memoryRequirements.memoryTypeBits, desiredMemoryProperties);
+    if (memoryAllocateInfo.memoryTypeIndex == UINT32_MAX &&
+        desiredMemoryProperties & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+        memoryAllocateInfo.memoryTypeIndex = GetMemoryTypeIndex(memoryRequirements.memoryTypeBits, desiredMemoryProperties & ~VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
+    // Don't check if the memory type index is successfully obtained here, because the memoryAllocateInfo will be returned out, and the external check will be performed
+    //if (memoryAllocateInfo.memoryTypeIndex == -1)
+    //    outStream << std::format("[ image ] ERROR\nFailed to find any memory type satisfies all desired memory properties!\n");
+    return memoryAllocateInfo;
+}
+result_t image::BindMemory(VkDeviceMemory deviceMemory, VkDeviceSize memoryOffset) const
+{
+    VkResult result = vkBindImageMemory(GraphicsBase::Base().Device(), handle, deviceMemory, memoryOffset);
+    if (result)
+        outStream << std::format("[ image ] ERROR\nFailed to attach the memory!\nError code: {}\n", int32_t(result));
+    return result;
+}
+result_t image::Create(VkImageCreateInfo& createInfo)
+{
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    VkResult result = vkCreateImage(GraphicsBase::Base().Device(), &createInfo, nullptr, &handle);
+    if (result)
+        outStream << std::format("[ image ] ERROR\nFailed to create an image!\nError code: {}\n", int32_t(result));
+    return result;
+}
+GraphicsBasePlus::GraphicsBasePlus()
+{
+    auto Initialize = [] {
+        if (GraphicsBase::Base().QueueFamilyIndex_Graphics() != VK_QUEUE_FAMILY_IGNORED)
+            singleton.commandPool_graphics.Create(GraphicsBase::Base().QueueFamilyIndex_Graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT),
+            singleton.commandPool_graphics.AllocateBuffers(singleton.commandBuffer_transfer);
+        if (GraphicsBase::Base().QueueFamilyIndex_Compute() != VK_QUEUE_FAMILY_IGNORED)
+            singleton.commandPool_compute.Create(GraphicsBase::Base().QueueFamilyIndex_Compute(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+        if (GraphicsBase::Base().QueueFamilyIndex_Presentation() != VK_QUEUE_FAMILY_IGNORED &&
+            GraphicsBase::Base().QueueFamilyIndex_Presentation() != GraphicsBase::Base().QueueFamilyIndex_Graphics() &&
+            GraphicsBase::Base().SwapchainCreateInfo().imageSharingMode == VK_SHARING_MODE_EXCLUSIVE)
+            singleton.commandPool_presentation.Create(GraphicsBase::Base().QueueFamilyIndex_Presentation(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT),
+            singleton.commandPool_presentation.AllocateBuffers(singleton.commandBuffer_presentation);
+        for (size_t i = 0; i < std::size(singleton.formatProperties); i++)
+            vkGetPhysicalDeviceFormatProperties(GraphicsBase::Base().PhysicalDevice(), VkFormat(i), &singleton.formatProperties[i]);
+    };
+    auto CleanUp = [] {
+        singleton.commandPool_graphics.~commandPool();
+        singleton.commandPool_presentation.~commandPool();
+        singleton.commandPool_compute.~commandPool();
+    };
+    GraphicsBase::Plus(singleton);
+    GraphicsBase::Base().AddCallback_CreateDevice(Initialize);
+    GraphicsBase::Base().AddCallback_DestroyDevice(CleanUp);
+}
+const VkFormatProperties& GraphicsBasePlus::FormatProperties(VkFormat format) const
+{
+#ifndef NDEBUG
+    if (uint32_t(format) >= std::size(formatInfos_v1_0))
+        outStream << std::format("[ FormatProperties ] ERROR\nThis function only supports definite formats provided by VK_VERSION_1_0.\n"),
+        abort();
+#endif
+    return formatProperties[format];
+}
+constexpr formatInfo FormatInfo(VkFormat format)
+{
+#ifndef NDEBUG
+    if (uint32_t(format) >= std::size(formatInfos_v1_0))
+        outStream << std::format("[ FormatInfo ] ERROR\nThis function only supports definite formats provided by VK_VERSION_1_0.\n"),
+        abort();
+#endif
+    return formatInfos_v1_0[format];
+}
+constexpr VkFormat Corresponding16BitFloatFormat(VkFormat format_32BitFloat)
+{
+    switch (format_32BitFloat) {
+    case VK_FORMAT_R32_SFLOAT:
+        return VK_FORMAT_R16_SFLOAT;
+    case VK_FORMAT_R32G32_SFLOAT:
+        return VK_FORMAT_R16G16_SFLOAT;
+    case VK_FORMAT_R32G32B32_SFLOAT:
+        return VK_FORMAT_R16G16B16_SFLOAT;
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return VK_FORMAT_R16G16B16A16_SFLOAT;
+    }
+    return format_32BitFloat;
+}
+const VkFormatProperties& FormatProperties(VkFormat format)
+{
+    return GraphicsBase::Plus().FormatProperties(format);
 }
 }
