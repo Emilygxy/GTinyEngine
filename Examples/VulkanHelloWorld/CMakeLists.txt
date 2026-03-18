@@ -31,6 +31,7 @@ add_executable(VulkanHelloWorld
     ${SOURCES}
 )
 
+# 将上级资源拷贝到work path中
 add_custom_command(TARGET VulkanHelloWorld POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/resources
   COMMENT "Creating resources directory for current config"

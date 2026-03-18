@@ -124,9 +124,10 @@ target_compile_definitions(GTinyEngine PUBLIC
 
 #生成可执行程序
 add_subdirectory(Examples/TestRenderer)
-add_subdirectory(Examples/VulkanHelloWorld)
-add_subdirectory(Examples/VulkanPractice1)
-add_subdirectory(TinyRenderer)
+add_subdirectory(Examples/Interaction3DOF)
+# add_subdirectory(Examples/VulkanHelloWorld)
+# add_subdirectory(Examples/VulkanPractice1)
+# add_subdirectory(TinyRenderer)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RESOURCE_OUTPUT_DIR}
