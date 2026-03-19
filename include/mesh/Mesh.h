@@ -1,72 +1,28 @@
 #pragma once
-#include "RenderObject.h"
-#include "mesh/Vertex.h"
+#include "Fragment.h"
 #include <optional>
-#include "mesh/AaBB.h"
 
-class Mesh : public RenderObject
+class Mesh : public FragmentsSource
 {
 
 public:
     Mesh(/* args */);
     ~Mesh();
 
-    std::vector<Vertex>& VerticesRef() noexcept
-    {
-        return mVertices;
-    }
+    void Draw(std::unordered_map<size_t, MeshCache>& meshCache, RenderStats& stats) override;
+    void OnPrepareRenderFrame() override;
 
-    std::vector<unsigned int>& IndicesRef() noexcept
-    {
-        return mIndices;
-    }
-
-    std::vector<Vertex> GetVertices() const noexcept
-    {
-        return mVertices;
-    }
-
-    std::vector<unsigned int> GetIndices() const noexcept
-    {
-        return mIndices;
-    }
-
-    void Draw() override;
-
-    std::optional<te::AaBB> GetAABB(bool update);
-    std::optional<te::AaBB> GetLocalAABB();
-    std::optional<te::AaBB> GetWorldAABB();
+    void DoGenerateMesh(const Vertex* vertices, uint32_t numVertices, const int* indices, uint32_t numIndices, bool hasUV);
 
     void SetLocalTransform(const glm::mat4& trn);
-    glm::mat4 GetLocalTransform() const noexcept
-    {
-        return mLocalTransform;
-    }
+    glm::mat4 GetLocalTransform() const noexcept;
     void SetWorldTransform(const glm::mat4& trn);
-    glm::mat4 GetWorldTransform() const noexcept
-    {
-        return mWorldTransform;
-    }
+    glm::mat4 GetWorldTransform() const noexcept;
 
-    void MarkHasUV(bool has);
+    std::optional<te::AaBB> GetWorldAABB();
 
-
-protected:
-    virtual void SetupMesh();
-    bool SubmitMesh();
-
-    std::vector<Vertex> mVertices;
-    std::vector<unsigned int> mIndices;
-    std::optional<te::AaBB> mAabb; /**< Optional axis-aligned bounding box. */
-
-private:
-    unsigned int mVAO, mVBO, mEBO = 0;
-    bool initialized = false;
-
-    bool mbHasUV = false;
-
-    glm::mat4 mWorldTransform{ glm::mat4(1.0) };
-    glm::mat4 mLocalTransform{ glm::mat4(1.0) };
+    static void SetupMeshBuffers(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, uint32_t& vao, uint32_t& vbo, uint32_t& ebo);
+    static void CleanupMeshBuffers(uint32_t vao, uint32_t vbo, uint32_t ebo);
 };
 
 

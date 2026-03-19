@@ -29,8 +29,8 @@ float Sphere::GetRadius() const noexcept
 }
 
 void Sphere::CreateSphere(int sectors, int stacks) {
-    mVertices.clear();
-    mIndices.clear();
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
     float kpi = (float) M_PI;
     float sectorStep = 2 * kpi / sectors;
     float stackStep = kpi / stacks;
@@ -50,9 +50,8 @@ void Sphere::CreateSphere(int sectors, int stacks) {
             vertex.position = /*m_Pos + */glm::vec3(x, y, z);
             vertex.normal = glm::normalize(glm::vec3(x, y, z));
             vertex.texCoords = glm::vec2((float)j / sectors, (float)i / stacks);
-            MarkHasUV(true);
 
-            mVertices.push_back(vertex);
+            vertices.push_back(vertex);
         }
     }
 
@@ -63,18 +62,18 @@ void Sphere::CreateSphere(int sectors, int stacks) {
 
         for (int j = 0; j < sectors; ++j, ++k1, ++k2) {
             if (i != 0) {
-                mIndices.push_back(k1);
-                mIndices.push_back(k2);
-                mIndices.push_back(k1 + 1);
+                indices.push_back(k1);
+                indices.push_back(k2);
+                indices.push_back(k1 + 1);
             }
 
             if (i != (stacks - 1)) {
-                mIndices.push_back(k1 + 1);
-                mIndices.push_back(k2);
-                mIndices.push_back(k2 + 1);
+                indices.push_back(k1 + 1);
+                indices.push_back(k2);
+                indices.push_back(k2 + 1);
             }
         }
     }
 
-    SetupMesh();
+    DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
 }

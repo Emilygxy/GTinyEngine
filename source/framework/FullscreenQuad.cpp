@@ -15,8 +15,8 @@ namespace te
 
     void FullscreenQuad::CreateFullscreenQuad()
     {
-        mVertices.clear();
-        mIndices.clear();
+        std::vector<Vertex> vertices;
+        std::vector<int> indices;
 
         Vertex quadVertices[6] = {
             // positions   // texCoords
@@ -32,15 +32,14 @@ namespace te
         // create vertices data
         // front (0, 1, 2, 3)
         for (int i = 0; i < 6; ++i) {
-            mVertices.push_back(quadVertices[i]);
-            mIndices.push_back(i);
+            vertices.push_back(quadVertices[i]);
+            indices.push_back(i);
         }
 
-        // set UV flag
-        MarkHasUV(true);
+        DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
 
-        // set mesh
-        SetupMesh();
+        //// set mesh
+        //SetupMesh();
     }
 
 }
