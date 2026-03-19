@@ -169,10 +169,8 @@ int main()
             // Create render commands
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
-            sphereCommand.material = g_sphere->GetMaterial();
-            sphereCommand.vertices = g_sphere->GetVertices();
-            sphereCommand.indices = g_sphere->GetIndices();
-            sphereCommand.transform = g_sphere->GetWorldTransform();
+            // Sphere inherits from BasicGeometry -> Mesh -> FragmentsSource
+            sphereCommand.fragmentsSource = std::dynamic_pointer_cast<FragmentsSource>(g_sphere);
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
             sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
@@ -187,10 +185,7 @@ int main()
         {
             // Traditional single-pass rendering
             //g_renderer->DrawBackgroud();
-            g_renderer->DrawMesh(g_sphere->GetVertices(),
-                               g_sphere->GetIndices(),
-                               g_sphere->GetMaterial(),
-                               g_sphere->GetWorldTransform());
+            g_renderer->DrawMesh(g_sphere);
         }
 
         // End Render Frame

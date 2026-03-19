@@ -305,9 +305,14 @@ namespace te
 
         for (const auto& command : mCandidateCommands)
         {
-            if (!command.material)
+            if (!command.fragmentsSource)
                 continue;
-            command.material->UnBind();
+            
+            auto pMaterial = command.fragmentsSource->GetMaterial();
+            if (pMaterial)
+            {
+                pMaterial->UnBind();
+            }
         }
     }
 
@@ -396,80 +401,103 @@ namespace te
         // Render all geometry to G-Buffer
         for (const auto& command : mCandidateCommands)
         {
-            if (!command.material || command.vertices.empty() || command.indices.empty())
+            if (!command.fragmentsSource)
                 continue;
 
-            // Get texture information from original material and set to geometry material
-            if (auto blinnPhongMaterial = std::dynamic_pointer_cast<BlinnPhongMaterial>(command.material))
+            // Process all fragments from the fragmentsSource
+            const auto& fragments = command.fragmentsSource->GetFragments();
+            for (const auto& frag : fragments)
             {
-                if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
+                if (!frag.IsReady())
+                    continue;
+
+                auto vertices = frag.mpGeometry->GetVertices();
+                auto indices = frag.mpGeometry->GetIndices();
+                auto transform = frag.mpGeometry->GetWorldTransform();
+
+                if (vertices.empty() || indices.empty())
+                    continue;
+
+                // Get material from fragmentsSource (shared_ptr) or use fragment's material pointer
+                auto pMaterial = command.fragmentsSource->GetMaterial();
+                if (!pMaterial)
+                    continue;
+
+                // Get texture information from original material and set to geometry material
+                if (auto blinnPhongMaterial = std::dynamic_pointer_cast<BlinnPhongMaterial>(pMaterial))
                 {
-                    pGeometryMat->SetDiffuseTexture(texture);
+                    if (auto texture = blinnPhongMaterial->GetDiffuseTexture())
+                    {
+                        pGeometryMat->SetDiffuseTexture(texture);
+                    }
                 }
-            }
-            else if (auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(command.material))
-            {
-                // For PBR materials, use albedo texture as diffuse texture for geometry pass
-                if (auto texture = pbrMaterial->GetAlbedoTexture())
+                else if (auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(pMaterial))
                 {
-                    pGeometryMat->SetDiffuseTexture(texture);
+                    // For PBR materials, use albedo texture as diffuse texture for geometry pass
+                    if (auto texture = pbrMaterial->GetAlbedoTexture())
+                    {
+                        pGeometryMat->SetDiffuseTexture(texture);
+                    }
+                    else
+                    {
+                        // If no texture, use albedo color as object color
+                        pGeometryMat->SetObjectColor(pbrMaterial->GetAlbedo());
+                    }
                 }
-                else
+                
+                // Use geometry material
+                pGeometryMat->OnApply();
+                
+                // Set transformation matrix
+                pGeometryMat->GetShader()->setMat4("model", transform);
+                
+                // Set camera matrices
+                if (auto pCamera = mpRenderContext->GetAttachedCamera())
                 {
-                    // If no texture, use albedo color as object color
-                    pGeometryMat->SetObjectColor(pbrMaterial->GetAlbedo());
+                    pGeometryMat->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+                    pGeometryMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
                 }
+                
+                // Update material uniforms
+                pGeometryMat->UpdateUniform();
+
+                // Bind material resources
+                pGeometryMat->OnBind();
+
+                // Create and bind VAO
+                GLuint VAO, VBO, EBO;
+                glGenVertexArrays(1, &VAO);
+                glGenBuffers(1, &VBO);
+                glGenBuffers(1, &EBO);
+
+                glBindVertexArray(VAO);
+                glBindBuffer(GL_ARRAY_BUFFER, VBO);
+                glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+
+                // Position attribute
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+                // Normal attribute
+                glEnableVertexAttribArray(1);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                // UV coordinate attribute
+                if (command.hasUV)
+                {
+                    glEnableVertexAttribArray(2);
+                    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+                }
+
+                // Draw
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
+
+                // Cleanup
+                glDeleteVertexArrays(1, &VAO);
+                glDeleteBuffers(1, &VBO);
+                glDeleteBuffers(1, &EBO);
             }
-            
-            // Use geometry material
-            pGeometryMat->OnApply();
-            
-            // Set transformation matrix
-            pGeometryMat->GetShader()->setMat4("model", command.transform);
-            
-            // Set camera matrices
-            if (auto pCamera = mpRenderContext->GetAttachedCamera())
-            {
-                pGeometryMat->GetShader()->setMat4("view", pCamera->GetViewMatrix());
-                pGeometryMat->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
-            }
-            
-            // Update material uniforms
-            pGeometryMat->UpdateUniform();
-
-            // Bind material resources
-            pGeometryMat->OnBind();
-
-            // Create and bind VAO
-            GLuint VAO, VBO, EBO;
-            glGenVertexArrays(1, &VAO);
-            glGenBuffers(1, &VBO);
-            glGenBuffers(1, &EBO);
-
-            glBindVertexArray(VAO);
-            glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
-
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
-
-            // Position attribute
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            // Normal attribute
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-            // UV coordinate attribute
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
-
-            // Draw
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
-
-            // Cleanup
-            glDeleteVertexArrays(1, &VAO);
-            glDeleteBuffers(1, &VBO);
-            glDeleteBuffers(1, &EBO);
         }
 
         // Unbind FrameBuffer
@@ -575,72 +603,94 @@ namespace te
         // Render all geometry
         for (const auto& command : mCandidateCommands)
         {
-            if (!command.material || command.vertices.empty() || command.indices.empty())
+            if (!command.fragmentsSource)
                 continue;
 
-            // Use original material from command (e.g., PBRMaterial, PhongMaterial, etc.)
-            auto pMaterial = command.material;
-            if (FindDependency("GeometryPass"))
+            // Process all fragments from the fragmentsSource
+            const auto& fragments = command.fragmentsSource->GetFragments();
+            for (const auto& frag : fragments)
             {
-                pMaterial->SetUseGeometryTarget(false); // GeometryTarget not use in base pass but for fullscreen pass!!
+                if (!frag.IsReady())
+                    continue;
+
+                auto vertices = frag.mpGeometry->GetVertices();
+                auto indices = frag.mpGeometry->GetIndices();
+                auto transform = frag.mpGeometry->GetWorldTransform();
+
+                if (vertices.empty() || indices.empty())
+                    continue;
+
+                // Get material from fragmentsSource (shared_ptr) or use fragment's material pointer
+                // Try to get shared_ptr from fragmentsSource first
+                auto pMaterial = command.fragmentsSource->GetMaterial();
+                if (!pMaterial)
+                    continue;
+
+                if (FindDependency("GeometryPass"))
+                {
+                    pMaterial->SetUseGeometryTarget(false); // GeometryTarget not use in base pass but for fullscreen pass!!
+                }
+
+                //attach light
+                if (auto pLight = mpRenderContext->GetDefaultLight())
+                {
+                    pMaterial->AttachedLight(pLight);
+                }
+
+                pMaterial->OnApply();
+
+                // Set transformation matrix
+                pMaterial->GetShader()->setMat4("model", transform);
+
+                // Set camera matrices
+                if (auto pCamera = mpRenderContext->GetAttachedCamera())
+                {
+                    pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+                    pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+                }
+
+                // Bind material resources first
+                pMaterial->OnBind();
+
+                // Update material uniforms
+                pMaterial->UpdateUniform();
+
+                // Create and bind VAO
+                GLuint VAO, VBO, EBO;
+                glGenVertexArrays(1, &VAO);
+                glGenBuffers(1, &VBO);
+                glGenBuffers(1, &EBO);
+
+                glBindVertexArray(VAO);
+                glBindBuffer(GL_ARRAY_BUFFER, VBO);
+                glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
+
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+
+                // Position attribute
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+                // Normal attribute
+                glEnableVertexAttribArray(1);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+                // UV coordinate attribute
+                if (command.hasUV)
+                {
+                    glEnableVertexAttribArray(2);
+                    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+                }
+
+                // Draw
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
+
+                // Cleanup
+                glDeleteVertexArrays(1, &VAO);
+                glDeleteBuffers(1, &VBO);
+                glDeleteBuffers(1, &EBO);
+
+                pMaterial->UnBind();
             }
-
-            //attach light
-            if (auto pLight = mpRenderContext->GetDefaultLight())
-            {
-                pMaterial->AttachedLight(pLight);
-            }
-
-            pMaterial->OnApply();
-
-            // Set transformation matrix
-            pMaterial->GetShader()->setMat4("model", command.transform);
-
-            // Set camera matrices
-            if (auto pCamera = mpRenderContext->GetAttachedCamera())
-            {
-                pMaterial->GetShader()->setMat4("view", pCamera->GetViewMatrix());
-                pMaterial->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
-            }
-
-            // Bind material resources first
-            pMaterial->OnBind();
-
-            // Update material uniforms
-            pMaterial->UpdateUniform();
-
-            // Create and bind VAO
-            GLuint VAO, VBO, EBO;
-            glGenVertexArrays(1, &VAO);
-            glGenBuffers(1, &VBO);
-            glGenBuffers(1, &EBO);
-
-            glBindVertexArray(VAO);
-            glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
-
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
-
-            // Position attribute
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-            // Normal attribute
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-            // UV coordinate attribute
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
-
-            // Draw
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
-
-            // Cleanup
-            glDeleteVertexArrays(1, &VAO);
-            glDeleteBuffers(1, &VBO);
-            glDeleteBuffers(1, &EBO);
-
-            pMaterial->UnBind();
         }
 
         // Unbind input textures
@@ -713,14 +763,7 @@ namespace te
         
         mQuadIndices = {0, 1, 2, 2, 3, 0};
 
-        RenderCommand fullScreenCommand;
-        fullScreenCommand.material = nullptr;
-        fullScreenCommand.vertices = mQuadVertices;
-        fullScreenCommand.indices = mQuadIndices;
-        fullScreenCommand.transform = glm::mat4(1.0f); //
-        fullScreenCommand.state = RenderMode::Opaque;
-        fullScreenCommand.hasUV = true;  // 
-        mCandidateCommands.emplace_back(fullScreenCommand);
+        // Note: PostProcessPass uses internal quad data directly, not through RenderCommand
     }
 
     void PostProcessPass::BindInputs()
@@ -802,44 +845,41 @@ namespace te
             // Bind material resources
             pMaterial->OnBind();
             
-            // Render fullscreen quad
-            for (const auto& command : mCandidateCommands)
-            {
-                if (command.vertices.empty() || command.indices.empty())
-                    continue;
+            // Render fullscreen quad using internal data
+            if (mQuadVertices.empty() || mQuadIndices.empty())
+                continue;
 
-                // postprocess material should not transform vertices, so we use the identity matrix
-                // Create and bind VAO
-                GLuint VAO, VBO, EBO;
-                glGenVertexArrays(1, &VAO);
-                glGenBuffers(1, &VBO);
-                glGenBuffers(1, &EBO);
+            // postprocess material should not transform vertices, so we use the identity matrix
+            // Create and bind VAO
+            GLuint VAO, VBO, EBO;
+            glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
+            glGenBuffers(1, &EBO);
 
-                glBindVertexArray(VAO);
-                glBindBuffer(GL_ARRAY_BUFFER, VBO);
-                glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+            glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, mQuadVertices.size() * sizeof(Vertex), &mQuadVertices[0], GL_STATIC_DRAW);
 
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-                glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, mQuadIndices.size() * sizeof(unsigned int), &mQuadIndices[0], GL_STATIC_DRAW);
 
-                // Position attribute
-                glEnableVertexAttribArray(0);
-                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-                // Normal attribute
-                glEnableVertexAttribArray(1);
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-                // UV coordinate attribute
-                glEnableVertexAttribArray(2);
-                glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
+            // Position attribute
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+            // Normal attribute
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+            // UV coordinate attribute
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
-                // Draw
-                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+            // Draw
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mQuadIndices.size()), GL_UNSIGNED_INT, 0);
 
-                // Cleanup
-                glDeleteVertexArrays(1, &VAO);
-                glDeleteBuffers(1, &VBO);
-                glDeleteBuffers(1, &EBO);
-            }
+            // Cleanup
+            glDeleteVertexArrays(1, &VAO);
+            glDeleteBuffers(1, &VBO);
+            glDeleteBuffers(1, &EBO);
         }
 
         // Unbind input textures
@@ -977,15 +1017,7 @@ namespace te
     void SkyboxPass::ApplyRenderCommand(const std::vector<RenderCommand>& commands)
     {
         RenderPass::ApplyRenderCommand(commands);
-
-        RenderCommand skycubeCommand;
-        skycubeCommand.material = mpOverMaterial;
-        skycubeCommand.vertices = mSkyboxVertices;
-        skycubeCommand.indices = mSkyboxIndices;
-        skycubeCommand.transform = glm::mat4(1.0f); //
-        skycubeCommand.state = RenderMode::Opaque;
-        skycubeCommand.hasUV = false;  // 
-        mCandidateCommands.emplace_back(skycubeCommand);
+        // Note: SkyboxPass uses internal skybox data directly, not through RenderCommand
     }
     
     void SkyboxPass::Execute(const std::vector<RenderCommand>& commands)
@@ -1029,16 +1061,14 @@ namespace te
         glDisable(GL_CULL_FACE);
 
         auto pSkyboxMat = std::dynamic_pointer_cast<SkyboxMaterial>(mpOverMaterial);
-        std::cout << "SkyboxPass: mCandidateCommands size: " << mCandidateCommands.size() << std::endl;
-        for (const auto& command : mCandidateCommands)
-        {
-            if (command.vertices.empty() || command.indices.empty())
-            {
-                std::cout << "SkyboxPass: Skipping command with empty vertices/indices" << std::endl;
-                continue;
-            }
-            std::cout << "SkyboxPass: Rendering skybox with " << command.vertices.size() << " vertices, " << command.indices.size() << " indices" << std::endl;
+        std::cout << "SkyboxPass: Rendering skybox with " << mSkyboxVertices.size() << " vertices, " << mSkyboxIndices.size() << " indices" << std::endl;
 
+        if (mSkyboxVertices.empty() || mSkyboxIndices.empty())
+        {
+            std::cout << "SkyboxPass: Skipping skybox with empty vertices/indices" << std::endl;
+        }
+        else
+        {
             // Use skybox material
             pSkyboxMat->OnApply(); // bind cubemap to GL_TEXTURE7
 
@@ -1056,7 +1086,6 @@ namespace te
             // Update material uniforms after binding
             pSkyboxMat->UpdateUniform(); // set u_skyboxMap = 0
 
-            //
             // Create and bind VAO
             GLuint VAO, VBO, EBO;
             glGenVertexArrays(1, &VAO);
@@ -1065,10 +1094,10 @@ namespace te
 
             glBindVertexArray(VAO);
             glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, mSkyboxVertices.size() * sizeof(Vertex), &mSkyboxVertices[0], GL_STATIC_DRAW);
 
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, mSkyboxIndices.size() * sizeof(unsigned int), &mSkyboxIndices[0], GL_STATIC_DRAW);
 
             // Position attribute
             glEnableVertexAttribArray(0);
@@ -1083,7 +1112,7 @@ namespace te
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
             // Draw
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mSkyboxIndices.size()), GL_UNSIGNED_INT, 0);
 
             // Cleanup
             glDeleteVertexArrays(1, &VAO);

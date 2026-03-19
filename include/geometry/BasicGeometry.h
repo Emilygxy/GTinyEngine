@@ -12,8 +12,6 @@ public:
 	BasicGeometry();
 	virtual ~BasicGeometry();
 
-protected:
-	
 private:
 	
 };

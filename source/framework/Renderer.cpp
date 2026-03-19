@@ -83,7 +83,7 @@ void OpenGLRenderer::Shutdown()
     // clean up cached mesh data
     for (auto& [hash, cache] : mMeshCache)
     {
-        CleanupMeshBuffers(cache.vao, cache.vbo, cache.ebo);
+        Mesh::CleanupMeshBuffers(cache.vao, cache.vbo, cache.ebo);
     }
     mMeshCache.clear();
 }
@@ -107,25 +107,90 @@ void OpenGLRenderer::EndFrame()
 
 void OpenGLRenderer::DrawMesh(const RenderCommand& command)
 {
-   DrawMesh(command.vertices, command.indices, command.material, command.transform);
+    if(!command.fragmentsSource || !command.fragmentsSource->GetDefaultFragment().IsReady())
+        return;
+
+    // apply render state
+    ApplyRenderState(command.state);
+
+    auto& frag = command.fragmentsSource->GetDefaultFragment();
+    if (!frag.IsReady())
+        return;
+
+    // get data from fragment
+    auto material = command.fragmentsSource->GetMaterial();
+    auto vertices = frag.mpGeometry->GetVertices();
+    auto indices = frag.mpGeometry->GetIndices();
+    auto transform = frag.mpGeometry->GetWorldTransform();
+
+    // set material
+    material->OnApply();
+
+    // set transform matrix
+    material->GetShader()->setMat4("model", transform);
+
+    // set camera and light parameters
+    if (auto pCamera = mpRenderContext->GetAttachedCamera())
+    {
+        material->GetShader()->setMat4("view", pCamera->GetViewMatrix());
+        material->GetShader()->setMat4("projection", pCamera->GetProjectionMatrix());
+    }
+
+    if (auto pLight = mpRenderContext->GetDefaultLight())
+    {
+        material->GetShader()->setVec3("u_lightPos", pLight->GetPosition());
+        material->GetShader()->setVec3("u_lightColor", pLight->GetColor());
+    }
+
+    // update material uniform
+    material->UpdateUniform();
+
+    // bind material resources
+    material->OnBind();
+
+    // calculate mesh hash for caching
+    size_t meshHash = std::hash<std::string>{}(std::string((char*)vertices.data(), vertices.size() * sizeof(Vertex))) ^
+        std::hash<std::string>{}(std::string((char*)indices.data(), indices.size() * sizeof(unsigned int)));
+
+    // find or create cached mesh data
+    auto it = mMeshCache.find(meshHash);
+    if (it == mMeshCache.end())
+    {
+        MeshCache cache;
+        Mesh::SetupMeshBuffers(vertices, indices, cache.vao, cache.vbo, cache.ebo);
+        cache.vertexCount = vertices.size();
+        cache.indexCount = indices.size();
+        mMeshCache[meshHash] = cache;
+        it = mMeshCache.find(meshHash);
+    }
+
+    // bind VAO and draw
+    glBindVertexArray(it->second.vao);
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(it->second.indexCount), GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+
+    // update stats
+    mStats.drawCalls++;
+    mStats.triangles += uint32_t(indices.size()) / 3;
+    mStats.vertices += uint32_t(vertices.size());
 }
 
-void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices, 
-                            const std::vector<unsigned int>& indices,
-                            const std::shared_ptr<MaterialBase>& material,
-                            const glm::mat4& transform)
+void OpenGLRenderer::DrawMesh(const std::shared_ptr<Mesh> pMesh)
 {
-   if (!material || vertices.empty() || indices.empty() || (!mpRenderContext))
-       return;
+    if (!pMesh || (!pMesh->IsReady()))
+    {
+        return;
+    }
 
-   // apply render state
-   ApplyRenderState(RenderMode::Opaque);
+    // apply render state
+    ApplyRenderState(RenderMode::Opaque);
 
+    auto material = pMesh->GetMaterial();
    // set material
    material->OnApply();
    
    // set transform matrix
-   material->GetShader()->setMat4("model", transform);
+   material->GetShader()->setMat4("model", pMesh->GetWorldTransform());
    
    // set camera and light parameters
    if (auto pCamera = mpRenderContext->GetAttachedCamera())
@@ -146,31 +211,8 @@ void OpenGLRenderer::DrawMesh(const std::vector<Vertex>& vertices,
    // bind material resources
    material->OnBind();
 
-   // calculate mesh hash for caching
-   size_t meshHash = std::hash<std::string>{}(std::string((char*)vertices.data(), vertices.size() * sizeof(Vertex))) ^
-                    std::hash<std::string>{}(std::string((char*)indices.data(), indices.size() * sizeof(unsigned int)));
-
-   // find or create cached mesh data
-   auto it = mMeshCache.find(meshHash);
-   if (it == mMeshCache.end())
-   {
-       MeshCache cache;
-       SetupMeshBuffers(vertices, indices, cache.vao, cache.vbo, cache.ebo);
-       cache.vertexCount = vertices.size();
-       cache.indexCount = indices.size();
-       mMeshCache[meshHash] = cache;
-       it = mMeshCache.find(meshHash);
-   }
-
-   // bind VAO and draw
-   glBindVertexArray(it->second.vao);
-   glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(it->second.indexCount), GL_UNSIGNED_INT, 0);
-   glBindVertexArray(0);
-
-   // update stats
-   mStats.drawCalls++;
-   mStats.triangles += uint32_t(indices.size()) / 3;
-   mStats.vertices += uint32_t(vertices.size());
+   // will update stats
+   pMesh->Draw(mMeshCache, mStats);
 }
 
 void OpenGLRenderer::DrawMeshes(const std::vector<RenderCommand>& commands)
@@ -199,44 +241,6 @@ void OpenGLRenderer::Clear(uint32_t flags)
     if (flags & 0x4) glFlags |= GL_STENCIL_BUFFER_BIT;
     
     glClear(glFlags);
-}
-
-void OpenGLRenderer::SetupMeshBuffers(const std::vector<Vertex>& vertices, 
-                                     const std::vector<unsigned int>& indices,
-                                     uint32_t& vao, uint32_t& vbo, uint32_t& ebo)
-{
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(1, &vbo);
-    glGenBuffers(1, &ebo);
-
-    glBindVertexArray(vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
-
-    // position attribute
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-
-    // normal attribute
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-
-    // UV attribute
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
-
-    glBindVertexArray(0);
-}
-
-void OpenGLRenderer::CleanupMeshBuffers(uint32_t vao, uint32_t vbo, uint32_t ebo)
-{
-    glDeleteVertexArrays(1, &vao);
-    glDeleteBuffers(1, &vbo);
-    glDeleteBuffers(1, &ebo);
 }
 
 void OpenGLRenderer::ApplyRenderState(RenderMode state)

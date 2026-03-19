@@ -61,8 +61,8 @@ int Torus::getNumMinor() const
 
 void Torus::CreateTorus(float majorRadius, float minorRadius, int majorSegments, int minorSegments)
 {
-    mVertices.clear();
-    mIndices.clear();
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
     float kpi = (float)M_PI;
 
     // generate vert
@@ -95,7 +95,7 @@ void Torus::CreateTorus(float majorRadius, float minorRadius, int majorSegments,
             vertex.normal = glm::normalize(glm::vec3(nx, ny, nz));
             vertex.texCoords = glm::vec2(u, v);
 
-            mVertices.push_back(vertex);
+            vertices.push_back(vertex);
         }
     }
 
@@ -106,16 +106,16 @@ void Torus::CreateTorus(float majorRadius, float minorRadius, int majorSegments,
             int next = current + minorSegments + 1;
 
             // first tri
-            mIndices.push_back(current);
-            mIndices.push_back(next);
-            mIndices.push_back(current + 1);
+            indices.push_back(current);
+            indices.push_back(next);
+            indices.push_back(current + 1);
 
             // second tri
-            mIndices.push_back(next);
-            mIndices.push_back(next + 1);
-            mIndices.push_back(current + 1);
+            indices.push_back(next);
+            indices.push_back(next + 1);
+            indices.push_back(current + 1);
         }
     }
 
-    SetupMesh();
+    DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
 }

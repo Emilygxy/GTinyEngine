@@ -4,9 +4,10 @@
 #include <vector>
 #include <unordered_map>
 #include <glm/glm.hpp>
-#include "mesh/Vertex.h"
 #include "materials/BaseMaterial.h"
 #include "framework/RenderPassFlag.h"
+#include "Fragment.h"
+#include "mesh/Mesh.h"
 
 class Camera;
 class Light;
@@ -33,24 +34,13 @@ enum class RenderMode
 // with renderobject
 struct RenderCommand
 {
-    std::shared_ptr<MaterialBase> material;
-    std::vector<Vertex> vertices;
-    std::vector<unsigned int> indices;
-    glm::mat4 transform;
+    std::shared_ptr<FragmentsSource> fragmentsSource{ nullptr };
+
     RenderMode state;
     bool hasUV;
     RenderPassFlag renderpassflag;
     
-    RenderCommand() : transform(1.0f), state(RenderMode::Opaque), hasUV(false), renderpassflag(RenderPassFlag::None) {}
-};
-
-struct RenderStats
-{
-    uint32_t drawCalls = 0;
-    uint32_t triangles = 0;
-    uint32_t vertices = 0;
-    
-    void Reset() { drawCalls = 0; triangles = 0; vertices = 0; }
+    RenderCommand() : state(RenderMode::Opaque), hasUV(false), renderpassflag(RenderPassFlag::None) {}
 };
 
 class IRenderer
@@ -67,10 +57,7 @@ public:
     
     // core rendering api
     virtual void DrawMesh(const RenderCommand& command) = 0;
-    virtual void DrawMesh(const std::vector<Vertex>& vertices, 
-                         const std::vector<unsigned int>& indices,
-                         const std::shared_ptr<MaterialBase>& material,
-                         const glm::mat4& transform = glm::mat4(1.0f)) = 0;
+    virtual void DrawMesh(const std::shared_ptr<Mesh> pMesh) = 0;
     
     // batch rendering
     virtual void DrawMeshes(const std::vector<RenderCommand>& commands) = 0;
@@ -118,10 +105,11 @@ public:
     void EndFrame() override;
     
     void DrawMesh(const RenderCommand& command) override;
-    void DrawMesh(const std::vector<Vertex>& vertices, 
+    /*void DrawMesh(const std::vector<Vertex>& vertices, 
                  const std::vector<unsigned int>& indices,
                  const std::shared_ptr<MaterialBase>& material,
-                 const glm::mat4& transform = glm::mat4(1.0f)) override;
+                 const glm::mat4& transform = glm::mat4(1.0f)) override;*/
+    void DrawMesh(const std::shared_ptr<Mesh> pMesh) override;
     
     void DrawMeshes(const std::vector<RenderCommand>& commands) override;
 
@@ -144,10 +132,6 @@ public:
 
     void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
 private:
-    void SetupMeshBuffers(const std::vector<Vertex>& vertices, 
-                         const std::vector<unsigned int>& indices,
-                         uint32_t& vao, uint32_t& vbo, uint32_t& ebo);
-    void CleanupMeshBuffers(uint32_t vao, uint32_t vbo, uint32_t ebo);
     void ApplyRenderState(RenderMode state);
     
     RenderStats mStats;
@@ -163,12 +147,6 @@ private:
     uint32_t mCurrentEBO = 0;
     RenderMode mCurrentState = RenderMode::Opaque;
     
-    // cache
-    struct MeshCache
-    {
-        uint32_t vao, vbo, ebo;
-        size_t vertexCount, indexCount;
-    };
     std::unordered_map<size_t, MeshCache> mMeshCache;
 
     std::shared_ptr<RenderContext> mpRenderContext{ nullptr };

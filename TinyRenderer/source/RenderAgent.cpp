@@ -208,10 +208,11 @@ void RenderAgent::Render()
             // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
             RenderCommand sphereCommand;
-            sphereCommand.material = mpGeometry->GetMaterial();
+            sphereCommand.fragmentsSource = mpGeometry;
+           /* sphereCommand.material = mpGeometry->GetMaterial();
             sphereCommand.vertices = mpGeometry->GetVertices();
             sphereCommand.indices = mpGeometry->GetIndices();
-            sphereCommand.transform = mpGeometry->GetWorldTransform();
+            sphereCommand.transform = mpGeometry->GetWorldTransform();*/
             sphereCommand.state = RenderMode::Opaque;
             sphereCommand.hasUV = true;
             sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
@@ -262,10 +263,11 @@ void RenderAgent::Render()
                 // create render command
                 std::vector<RenderCommand> commands;
                 RenderCommand sphereCommand;
-                sphereCommand.material = mpGeometry->GetMaterial();
-                sphereCommand.vertices = mpGeometry->GetVertices();
-                sphereCommand.indices = mpGeometry->GetIndices();
-                sphereCommand.transform = mpGeometry->GetWorldTransform();
+                sphereCommand.fragmentsSource = mpGeometry;
+                /*fragmentsSource.material = mpGeometry->GetMaterial();
+                fragmentsSource.vertices = mpGeometry->GetVertices();
+                fragmentsSource.indices = mpGeometry->GetIndices();
+                fragmentsSource.transform = mpGeometry->GetWorldTransform();*/
                 sphereCommand.state = RenderMode::Opaque;
                 sphereCommand.hasUV = true;
                 sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
@@ -278,10 +280,7 @@ void RenderAgent::Render()
             else
             {
                 // traditional single Pass rendering
-                mpRenderer->DrawMesh(mpGeometry->GetVertices(),
-                    mpGeometry->GetIndices(),
-                    mpGeometry->GetMaterial(),
-                    mpGeometry->GetWorldTransform());
+                mpRenderer->DrawMesh(mpGeometry);
             }
 
             //mpRenderer->DrawBackgroud();
@@ -639,13 +638,20 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
 
 bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t)
 {
-    if (!pGeometry) {
+    if (!pGeometry) 
+    {
         return false;
     }
 
     // Get vertices and indices from geometry
-    std::vector<Vertex> vertices = pGeometry->GetVertices();
-    std::vector<unsigned int> indices = pGeometry->GetIndices();
+    auto cur_frag = pGeometry->GetDefaultFragment();
+    if (!cur_frag.IsReady())
+    {
+        return false;
+    }
+
+    std::vector<Vertex> vertices = cur_frag.mpGeometry->GetVertices();
+    std::vector<unsigned int> indices = cur_frag.mpGeometry->GetIndices();
     
     if (vertices.empty() || indices.empty() || indices.size() % 3 != 0) {
         return false;

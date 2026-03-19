@@ -143,20 +143,18 @@ private:
 
     void RenderSphere()
     {
+        mpSphere->SetMaterial(mpBlinnPhongMaterial);
+        mpSphere->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
         // Render sphere using unified DrawMesh interface
-        mpGLRenderer->DrawMesh(mpSphere->GetVertices(),
-                           mpSphere->GetIndices(), 
-                           mpBlinnPhongMaterial,
-                           glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, 0.0f)));
+        mpGLRenderer->DrawMesh(mpSphere);
     }
 
     void RenderTorus()
     {
+        mpSphere->SetMaterial(mpBlinnPhongMaterial);
+        mpSphere->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 0.0f, 0.0f)));
         // Render torus using unified DrawMesh interface
-        mpGLRenderer->DrawMesh(mpTorus->GetVertices(),
-                           mpTorus->GetIndices(), 
-                           mpBlinnPhongMaterial,
-                           glm::translate(glm::mat4(1.0f), glm::vec3(1.5f, 0.0f, 0.0f)));
+        mpGLRenderer->DrawMesh(mpTorus);
     }
 
     void DisplayStats()

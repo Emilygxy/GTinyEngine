@@ -51,10 +51,18 @@ namespace te
             pEffect->OnBind();
         }
 
-        for (const auto& command : mCandidateCommands)
+        // Render fullscreen quad using internal data
+        if (!mQuad)
+            return;
+
+        auto currentFrag = mQuad->GetDefaultFragment();
+        if (currentFrag.IsReady())
         {
-            if (command.vertices.empty() || command.indices.empty())
-                continue;
+            auto vertices = currentFrag.mpGeometry->GetVertices();
+            auto indices = currentFrag.mpGeometry->GetIndices();
+
+            if (vertices.empty() || indices.empty())
+                return;
 
             // postprocess material should not transform vertices, so we use the identity matrix
             // Create and bind VAO
@@ -65,10 +73,10 @@ namespace te
 
             glBindVertexArray(VAO);
             glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, command.vertices.size() * sizeof(Vertex), &command.vertices[0], GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
 
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, command.indices.size() * sizeof(unsigned int), &command.indices[0], GL_STATIC_DRAW);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 
             // Position attribute
             glEnableVertexAttribArray(0);
@@ -81,25 +89,25 @@ namespace te
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 
             // Draw
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indices.size()), GL_UNSIGNED_INT, 0);
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
 
             // Cleanup
             glDeleteVertexArrays(1, &VAO);
             glDeleteBuffers(1, &VBO);
             glDeleteBuffers(1, &EBO);
+            // Unbind input textures
+
+            // Unbind FrameBuffer (only if we have outputs)
+            if (mFrameBuffer)
+            {
+                mFrameBuffer->Unbind();
+            }
+
+            // Restore render settings
+            RestoreRenderSettings();
+
+            OnPostExecute();
         }
-        // Unbind input textures
-
-        // Unbind FrameBuffer (only if we have outputs)
-        if (mFrameBuffer)
-        {
-            mFrameBuffer->Unbind();
-        }
-
-        // Restore render settings
-        RestoreRenderSettings();
-
-        OnPostExecute();
     }
 
     void FullScreenPass::OnInitialize()
@@ -133,13 +141,6 @@ namespace te
             mQuad = std::make_shared<FullscreenQuad>();
         }
 
-        RenderCommand fullScreenCommand;
-        fullScreenCommand.material = nullptr;
-        fullScreenCommand.vertices = mQuad->GetVertices();
-        fullScreenCommand.indices = mQuad->GetIndices();
-        fullScreenCommand.transform = glm::mat4(1.0f); //
-        fullScreenCommand.state = RenderMode::Opaque;
-        fullScreenCommand.hasUV = true;  // 
-        mCandidateCommands.emplace_back(fullScreenCommand);
+        // Note: FullScreenPass uses internal quad data directly, not through RenderCommand
     }
 }

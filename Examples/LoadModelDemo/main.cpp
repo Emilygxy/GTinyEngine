@@ -172,17 +172,15 @@ int main()
             std::vector<RenderCommand> commands;
             for (const auto& mesh: g_modelloader->GetMeshList())
             {
-                RenderCommand meshCommand;
-                meshCommand.material = mesh->GetMaterial();
-                if (auto blinphong = std::dynamic_pointer_cast<BlinnPhongMaterial>(meshCommand.material))
+                // Set material if needed
+                if (auto blinphong = std::dynamic_pointer_cast<BlinnPhongMaterial>(mesh->GetMaterial()))
                 {
                     blinphong->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");
                     mesh->SetWorldTransform(glm::scale(glm::mat4(1.0f), glm::vec3(0.5f,0.5f,0.5f)));
                 }
 
-                meshCommand.vertices = mesh->GetVertices();
-                meshCommand.indices = mesh->GetIndices();
-                meshCommand.transform = mesh->GetWorldTransform();
+                RenderCommand meshCommand;
+                meshCommand.fragmentsSource = std::dynamic_pointer_cast<FragmentsSource>(mesh);
                 meshCommand.state = RenderMode::Opaque;
                 meshCommand.hasUV = true;
                 meshCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
@@ -200,10 +198,7 @@ int main()
             //g_renderer->DrawBackgroud();
             for (auto mesh : g_modelloader->GetMeshList())
             {
-                g_renderer->DrawMesh(mesh->GetVertices(),
-                    mesh->GetIndices(),
-                    mesh->GetMaterial(),
-                    mesh->GetWorldTransform());
+                g_renderer->DrawMesh(mesh);
             }
            
         }
