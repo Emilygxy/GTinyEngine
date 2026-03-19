@@ -90,9 +90,9 @@ void ModelLoader::processNode(aiNode* node, const aiScene* scene)
 std::shared_ptr<Mesh> ModelLoader::processMesh(aiMesh* mesh, const aiScene* scene)
 {
     // data to fill
-    std::shared_ptr<Mesh> pMesh = std::make_shared<Mesh>();
-    auto& vertices = pMesh->VerticesRef();
-    auto& indices = pMesh->IndicesRef();
+    auto pMesh = std::make_shared<Mesh>();
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
 
     // walk through each of the mesh's vertices
     for (unsigned int i = 0; i < mesh->mNumVertices; i++)
@@ -147,6 +147,9 @@ std::shared_ptr<Mesh> ModelLoader::processMesh(aiMesh* mesh, const aiScene* scen
         for (unsigned int j = 0; j < face.mNumIndices; j++)
             indices.push_back(face.mIndices[j]);
     }
+
+    pMesh->DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
+
     // process materials
     pMesh->SetMaterial(processMaterial(mesh, scene));
 

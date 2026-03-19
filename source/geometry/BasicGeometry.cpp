@@ -1,4 +1,5 @@
 #include "geometry/BasicGeometry.h"
+#include "Fragment.h"
 
 BasicGeometry::BasicGeometry() 
     : Mesh()
@@ -60,8 +61,8 @@ glm::vec3 Box::GetPosition() const noexcept
 
 void Box::CreateBox()
 {
-    mVertices.clear();
-    mIndices.clear();
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
     
     // calculate half size
     float w = m_Width * 0.5f;
@@ -108,7 +109,7 @@ void Box::CreateBox()
         vertex.position = positions[i];
         vertex.normal = normals[0];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // back (4, 5, 6, 7) - note that the vertex order should be counter-clockwise
@@ -117,7 +118,7 @@ void Box::CreateBox()
         vertex.position = positions[7 - i];  // reverse
         vertex.normal = normals[1];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // right (1, 5, 6, 2)
@@ -127,7 +128,7 @@ void Box::CreateBox()
         vertex.position = positions[rightFace[i]];
         vertex.normal = normals[2];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // left (4, 0, 3, 7)
@@ -137,7 +138,7 @@ void Box::CreateBox()
         vertex.position = positions[leftFace[i]];
         vertex.normal = normals[3];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // top (3, 2, 6, 7)
@@ -147,7 +148,7 @@ void Box::CreateBox()
         vertex.position = positions[topFace[i]];
         vertex.normal = normals[4];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // bottom (4, 7, 6, 5) - note that the vertex order should be counter-clockwise
@@ -157,7 +158,7 @@ void Box::CreateBox()
         vertex.position = positions[bottomFace[i]];
         vertex.normal = normals[5];
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
     
     // create index data (each face has 2 triangles)
@@ -165,21 +166,17 @@ void Box::CreateBox()
         int baseIndex = face * 4;
         
         // first triangle
-        mIndices.push_back(baseIndex + 0);
-        mIndices.push_back(baseIndex + 1);
-        mIndices.push_back(baseIndex + 2);
+        indices.push_back(baseIndex + 0);
+        indices.push_back(baseIndex + 1);
+        indices.push_back(baseIndex + 2);
         
         // second triangle
-        mIndices.push_back(baseIndex + 0);
-        mIndices.push_back(baseIndex + 2);
-        mIndices.push_back(baseIndex + 3);
+        indices.push_back(baseIndex + 0);
+        indices.push_back(baseIndex + 2);
+        indices.push_back(baseIndex + 3);
     }
     
-    // set UV flag
-    MarkHasUV(true);
-    
-    // set mesh
-    SetupMesh();
+    DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
 }
 
 //plane geometry
@@ -226,8 +223,8 @@ glm::vec3 Plane::GetPosition() const noexcept
 
 void Plane::CreatePlane()
 {
-    mVertices.clear();
-    mIndices.clear();
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
 
     // calculate half size
     float w = m_Width * 0.5f;
@@ -260,23 +257,22 @@ void Plane::CreatePlane()
         vertex.position = positions[i];
         vertex.normal = normal;
         vertex.texCoords = texCoords[i];
-        mVertices.push_back(vertex);
+        vertices.push_back(vertex);
     }
 
     // create index data (each face has 2 triangles)
     // first triangle
-    mIndices.push_back(0);
-    mIndices.push_back(1);
-    mIndices.push_back(2);
+    indices.push_back(0);
+    indices.push_back(1);
+    indices.push_back(2);
 
     // second triangle
-    mIndices.push_back(0);
-    mIndices.push_back(2);
-    mIndices.push_back(3);
+    indices.push_back(0);
+    indices.push_back(2);
+    indices.push_back(3);
 
-    // set UV flag
-    MarkHasUV(true);
+    DoGenerateMesh(vertices.data(), uint32_t(vertices.size()), indices.data(), uint32_t(indices.size()), true);
 
-    // set mesh
-    SetupMesh();
+    //// set mesh
+    //SetupMesh();
 }
