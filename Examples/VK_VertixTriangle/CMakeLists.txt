@@ -53,7 +53,7 @@ add_custom_command(TARGET VK_VertixTriangle POST_BUILD
 target_include_directories(VK_VertixTriangle PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/include/)
 
-target_link_libraries(VK_VertixTriangle PUBLIC ${ALL_LIBS})
+target_link_libraries(VK_VertixTriangle PRIVATE ${ALL_LIBS} GTVulkan)
 set_target_properties(VK_VertixTriangle
 	PROPERTIES 
     FOLDER "Examples/vulkan"

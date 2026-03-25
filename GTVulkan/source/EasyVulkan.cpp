@@ -1,4 +1,4 @@
-#include "EasyVulkan.h"
+#include "GTVulkan/EasyVulkan.h"
 
 const VkExtent2D& windowSize = GraphicsBase::Base().SwapchainCreateInfo().imageExtent;
 namespace easy_vk

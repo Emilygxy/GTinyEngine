@@ -1,4 +1,4 @@
-#include "GlfwGeneral.h"
+#include "GTVulkan/GlfwGeneral.h"
 #include <iostream>
 #include <format> // only support in C++20
 #include <sstream>
@@ -11,7 +11,7 @@ namespace easy_vk
 
     GLFWwindow* pWindow = nullptr;
 	GLFWmonitor* pMonitor = nullptr;
-	const char* windowTitle = "EasyVK";
+	const char* windowTitle = "GTinyEngine_VK";
     bool InitializeWindow(VkExtent2D size, bool fullScreen, bool isResizable, bool limitFrameRate)
     {
         if (!glfwInit()) {

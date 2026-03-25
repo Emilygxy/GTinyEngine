@@ -1,5 +1,5 @@
-#include "GlfwGeneral.h"
-#include "EasyVulkan.h"
+#include "GTVulkan/GlfwGeneral.h"
+#include "GTVulkan/EasyVulkan.h"
 #include <format>
 #include "glm/glm.hpp"
 
