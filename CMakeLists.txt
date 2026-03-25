@@ -163,6 +163,7 @@ target_compile_definitions(GTinyEngine PUBLIC
 )
 
 #生成可执行程序
+add_subdirectory(GTVulkan)
 add_subdirectory(Examples/TestRenderer)
 add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
