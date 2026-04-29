@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 
 struct GSVertex {
     glm::vec4 position;
@@ -44,13 +43,5 @@ struct GSRadixSortPushConstants {
     uint32_t g_shift;
     uint32_t g_num_workgroups;
     uint32_t g_num_blocks_per_workgroup;
-};
-
-struct GSCameraState {
-    glm::vec3 position = glm::vec3(0.0f, 0.0f, 3.0f);
-    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    float fov = 60.0f;
-    float nearPlane = 0.1f;
-    float farPlane = 100.0f;
 };
 

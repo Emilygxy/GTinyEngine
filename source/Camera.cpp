@@ -127,6 +127,7 @@ glm::vec3 Camera::GetEye() const noexcept
 void Camera::SetEye(glm::vec3 position)
 {
     mPosition = position;
+    mViewDirty = true;
 
     Notify(kEvent_PositionChanged);
 }
@@ -139,6 +140,7 @@ glm::vec3 Camera::GetTarget() const noexcept
 void Camera::SetTarget(glm::vec3 target)
 {
     mTarget = target;
+    mViewDirty = true;
 
     Notify(kEvent_OrientationChanged);
 }
@@ -151,6 +153,7 @@ glm::vec3 Camera::GetUp() const noexcept
 void Camera::SetUp(glm::vec3 up)
 {
     mUp = up;
+    mViewDirty = true;
     Notify(kEvent_OrientationChanged);
 }
 
@@ -162,6 +165,7 @@ glm::vec3 Camera::GetRight() const noexcept
 void Camera::SetRight(glm::vec3 right)
 {
     mRight = right;
+    mViewDirty = true;
 
     Notify(kEvent_OrientationChanged);
 }
@@ -187,6 +191,7 @@ glm::vec3 Camera::GetFront() const noexcept
 void Camera::SetFront(glm::vec3 front)
 {
     mFront = front;
+    mViewDirty = true;
 
     Notify(kEvent_OrientationChanged);
 }
@@ -425,7 +430,11 @@ void Camera_Event::ProcessMouseMovement(float xoffset, float yoffset, bool const
     {
         if (mpCamera->mPitch > 89.0f)
         {
-
+            mpCamera->mPitch = 89.0f;
+        }
+        if (mpCamera->mPitch < -89.0f)
+        {
+            mpCamera->mPitch = -89.0f;
         }
     }
 

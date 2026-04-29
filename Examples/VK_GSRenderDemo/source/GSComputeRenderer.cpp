@@ -1,4 +1,5 @@
 #include "GSComputeRenderer.h"
+#include "Camera.h"
 
 #include "GTVulkan/EasyVulkan.h"
 #include "GTVulkan/GlfwGeneral.h"
@@ -26,6 +27,11 @@ constexpr uint32_t kSortBlocksPerWorkgroup = 1;
 struct PreprocessResult {
     uint32_t numInstances = 0;
     bool prefixInPing = true;
+};
+
+enum class CameraControlMode {
+    FreeLook,
+    Orbit
 };
 
 struct StorageImage {
@@ -137,8 +143,25 @@ public:
         if (!InitializeWindow({1280, 720}, false, true, false)) {
             return false;
         }
+
+        if (!camera) {
+            camera = std::make_shared<Camera>(
+                glm::vec3(0.0f, 0.0f, 3.0f),
+                glm::vec3(0.0f, 1.0f, 0.0f),
+                -90.0f,
+                0.0f,
+                "GSComputeCamera");
+        }
+        if (!cameraEvent) {
+            cameraEvent = std::make_shared<Camera_Event>(camera);
+        }
+        lastFrameTime = glfwGetTime();
+        installInputCallbacks();
+
         vertices = inputVertices;
         fitCameraToScene();
+        captureResetState();
+        resetCameraToInitialFocus();
         lastExtent = windowSize;
         createCommandResources();
         createSyncResources();
@@ -155,9 +178,13 @@ public:
             while (glfwGetWindowAttrib(pWindow, GLFW_ICONIFIED)) {
                 glfwWaitEvents();
             }
+            const double currentFrameTime = glfwGetTime();
+            const float deltaTime = static_cast<float>(currentFrameTime - lastFrameTime);
+            lastFrameTime = currentFrameTime;
+            processKeyboardInput(deltaTime);
             drawFrame();
             glfwPollEvents();
-            TitleFps();
+            updateWindowTitleWithModeHint();
         }
         GraphicsBase::Base().WaitIdle();
     }
@@ -202,7 +229,28 @@ public:
 
 private:
     std::vector<GSVertex> vertices;
-    GSCameraState camera;
+    std::shared_ptr<Camera> camera{ nullptr };
+    std::shared_ptr<Camera_Event> cameraEvent{ nullptr };
+    CameraControlMode cameraControlMode = CameraControlMode::Orbit;
+    bool toggleModeKeyPressedLastFrame = false;
+    bool resetKeyPressedLastFrame = false;
+    bool leftMousePressed = false;
+    bool middleMousePressed = false;
+    bool hasLastCursorPos = false;
+    double lastCursorX = 0.0;
+    double lastCursorY = 0.0;
+    double lastFrameTime = 0.0;
+    glm::vec3 orbitTarget = glm::vec3(0.0f);
+    float orbitYaw = 0.0f;
+    float orbitPitch = 0.0f;
+    float orbitDistance = 3.0f;
+    glm::vec3 initialOrbitTarget = glm::vec3(0.0f);
+    float initialOrbitYaw = 0.0f;
+    float initialOrbitPitch = 0.0f;
+    float initialOrbitDistance = 3.0f;
+    float initialNearPlane = 0.1f;
+    float initialFarPlane = 100.0f;
+    float initialFov = 45.0f;
     VkExtent2D lastExtent{};
 
     commandPool commandPoolGraphics;
@@ -291,6 +339,217 @@ private:
         vkUpdateDescriptorSets(GraphicsBase::Base().Device(), 1, &wr, 0, nullptr);
     }
 
+    void installInputCallbacks() {
+        glfwSetWindowUserPointer(pWindow, this);
+        glfwSetCursorPosCallback(pWindow, [](GLFWwindow* window, double xpos, double ypos) {
+            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            if (self) {
+                self->onCursorPosition(xpos, ypos);
+            }
+        });
+        glfwSetMouseButtonCallback(pWindow, [](GLFWwindow* window, int button, int action, int mods) {
+            (void)mods;
+            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            if (self) {
+                self->onMouseButton(button, action);
+            }
+        });
+        glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset) {
+            (void)xoffset;
+            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            if (self) {
+                self->onMouseScroll(yoffset);
+            }
+        });
+    }
+
+    void processKeyboardInput(float deltaTime) {
+        if (!cameraEvent || !camera) {
+            return;
+        }
+        bool resetPressed = false;
+        const bool toggleModePressed = (glfwGetKey(pWindow, GLFW_KEY_TAB) == GLFW_PRESS);
+        if (toggleModePressed && !toggleModeKeyPressedLastFrame) {
+            if (cameraControlMode == CameraControlMode::FreeLook) {
+                syncOrbitFromCameraPose();
+                cameraControlMode = CameraControlMode::Orbit;
+            } else {
+                cameraControlMode = CameraControlMode::FreeLook;
+            }
+
+            resetPressed = true;   // Reset camera to initial focus when switching mode, for better user experience.
+        }
+        toggleModeKeyPressedLastFrame = toggleModePressed;
+
+        resetPressed |= (glfwGetKey(pWindow, GLFW_KEY_R) == GLFW_PRESS);
+        if (resetPressed && !resetKeyPressedLastFrame) {
+            resetCameraToInitialFocus();
+        }
+        resetKeyPressedLastFrame = resetPressed;
+
+        if (cameraControlMode == CameraControlMode::FreeLook) {
+            if (glfwGetKey(pWindow, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_UP) == GLFW_PRESS) {
+                cameraEvent->ProcessKeyboard(Camera_Movement::FORWARD, deltaTime);
+            }
+            if (glfwGetKey(pWindow, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                cameraEvent->ProcessKeyboard(Camera_Movement::BACKWARD, deltaTime);
+            }
+            if (glfwGetKey(pWindow, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                cameraEvent->ProcessKeyboard(Camera_Movement::LEFT, deltaTime);
+            }
+            if (glfwGetKey(pWindow, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                cameraEvent->ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
+            }
+            return;
+        }
+
+        const float orbitRotateSpeed = 60.0f * deltaTime;
+        const float orbitZoomSpeed = (std::max)(orbitDistance * 1.2f * deltaTime, 0.01f);
+        if (glfwGetKey(pWindow, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_UP) == GLFW_PRESS) {
+            orbitPitch += orbitRotateSpeed;
+        }
+        if (glfwGetKey(pWindow, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_DOWN) == GLFW_PRESS) {
+            orbitPitch -= orbitRotateSpeed;
+        }
+        if (glfwGetKey(pWindow, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_LEFT) == GLFW_PRESS) {
+            orbitYaw -= orbitRotateSpeed;
+        }
+        if (glfwGetKey(pWindow, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(pWindow, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+            orbitYaw += orbitRotateSpeed;
+        }
+        if (glfwGetKey(pWindow, GLFW_KEY_Q) == GLFW_PRESS) {
+            orbitDistance += orbitZoomSpeed;
+        }
+        if (glfwGetKey(pWindow, GLFW_KEY_E) == GLFW_PRESS) {
+            orbitDistance -= orbitZoomSpeed;
+        }
+        updateOrbitCameraPose();
+    }
+
+    void onMouseButton(int button, int action) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            leftMousePressed = (action == GLFW_PRESS);
+            hasLastCursorPos = false;
+        } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            middleMousePressed = (action == GLFW_PRESS);
+            hasLastCursorPos = false;
+        }
+    }
+
+    void onCursorPosition(double xpos, double ypos) {
+        if (!cameraEvent) {
+            return;
+        }
+        if (!hasLastCursorPos) {
+            lastCursorX = xpos;
+            lastCursorY = ypos;
+            hasLastCursorPos = true;
+            return;
+        }
+
+        const float xoffset = static_cast<float>(xpos - lastCursorX);
+        const float yoffset = static_cast<float>(ypos - lastCursorY);
+        lastCursorX = xpos;
+        lastCursorY = ypos;
+
+        if (leftMousePressed) {
+            if (cameraControlMode == CameraControlMode::Orbit) {
+                orbitYaw += xoffset * 0.15f;
+                orbitPitch += -yoffset * 0.15f;
+                updateOrbitCameraPose();
+            } else {
+                cameraEvent->ProcessMouseMovement(xoffset, -yoffset, true);
+            }
+        }
+        if (middleMousePressed) {
+            cameraEvent->ProcessMouseScroll(-yoffset * 0.05f);
+        }
+    }
+
+    void onMouseScroll(double yoffset) {
+        if (!cameraEvent) {
+            return;
+        }
+        cameraEvent->ProcessMouseScroll(static_cast<float>(yoffset));
+    }
+
+    void updateOrbitCameraPose() {
+        if (!camera) {
+            return;
+        }
+        orbitPitch = glm::clamp(orbitPitch, -89.0f, 89.0f);
+        orbitDistance = (std::max)(orbitDistance, 0.05f);
+        const float yawRad = glm::radians(orbitYaw);
+        const float pitchRad = glm::radians(orbitPitch);
+        glm::vec3 dir{};
+        dir.x = std::cos(pitchRad) * std::sin(yawRad);
+        dir.y = std::sin(pitchRad);
+        dir.z = std::cos(pitchRad) * std::cos(yawRad);
+        if (glm::length(dir) < 1e-6f) {
+            dir = glm::vec3(0.0f, 0.0f, 1.0f);
+        } else {
+            dir = glm::normalize(dir);
+        }
+        camera->SetEye(orbitTarget + dir * orbitDistance);
+        camera->SetTarget(orbitTarget);
+    }
+
+    void captureResetState() {
+        initialOrbitTarget = orbitTarget;
+        initialOrbitYaw = orbitYaw;
+        initialOrbitPitch = orbitPitch;
+        initialOrbitDistance = orbitDistance;
+        initialNearPlane = camera->GetNearPlane();
+        initialFarPlane = camera->GetFarPlane();
+        initialFov = camera->GetFov();
+    }
+
+    void resetCameraToInitialFocus() {
+        orbitTarget = initialOrbitTarget;
+        orbitYaw = initialOrbitYaw;
+        orbitPitch = initialOrbitPitch;
+        orbitDistance = initialOrbitDistance;
+        camera->SetNearPlane(initialNearPlane);
+        camera->SetFarPlane(initialFarPlane);
+        camera->SetFov(initialFov);
+        updateOrbitCameraPose();
+        if (cameraControlMode == CameraControlMode::FreeLook) {
+            // Keep orbit parameters consistent when user switches mode later.
+            syncOrbitFromCameraPose();
+        }
+    }
+
+    void updateWindowTitleWithModeHint() {
+        static double time0 = glfwGetTime();
+        static int frameCount = 0;
+        ++frameCount;
+        const double now = glfwGetTime();
+        double fps = 0.0;
+        if (now > time0) {
+            fps = static_cast<double>(frameCount) / (now - time0);
+        }
+        if (now - time0 >= 1.0) {
+            time0 = now;
+            frameCount = 0;
+        }
+        const char* modeName = (cameraControlMode == CameraControlMode::FreeLook) ? "FreeLook" : "Orbit";
+        std::string title = std::string(windowTitle) + " [" + modeName + "]  " + std::to_string(static_cast<int>(fps + 0.5));
+        title += " FPS";
+        glfwSetWindowTitle(pWindow, title.c_str());
+    }
+
+    void syncOrbitFromCameraPose() {
+        if (!camera) {
+            return;
+        }
+        orbitTarget = camera->GetTarget();
+        const glm::vec3 toEye = camera->GetEye() - orbitTarget;
+        orbitDistance = (std::max)(glm::length(toEye), 0.05f);
+        const glm::vec3 dir = toEye / orbitDistance;
+        orbitPitch = glm::degrees(std::asin(glm::clamp(dir.y, -1.0f, 1.0f)));
+        orbitYaw = glm::degrees(std::atan2(dir.x, dir.z));
+    }
+
     void fitCameraToScene() {
         if (vertices.empty()) {
             return;
@@ -309,12 +568,15 @@ private:
         const glm::vec3 center = (minP + maxP) * 0.5f;
         const float radius = glm::length(maxP - minP) * 0.5f;
         const float safeRadius = (std::max)(radius, 0.1f);
-        const float fovRad = glm::radians(camera.fov);
+        const float fovRad = glm::radians(camera->GetFov());
         const float distance = safeRadius / std::tan(fovRad * 0.5f) + safeRadius;
-        camera.position = center + glm::vec3(0.0f, 0.0f, distance);
-        camera.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-        camera.nearPlane = (std::max)(0.01f, distance - safeRadius * 4.0f);
-        camera.farPlane = distance + safeRadius * 4.0f;
+        orbitTarget = center;
+        orbitDistance = distance;
+        orbitYaw = 0.0f;
+        orbitPitch = 0.0f;
+        updateOrbitCameraPose();
+        camera->SetNearPlane((std::max)(0.01f, distance - safeRadius * 4.0f));
+        camera->SetFarPlane(distance + safeRadius * 4.0f);
     }
 
     void createCommandResources() {
@@ -533,14 +795,16 @@ void GSComputeRendererImpl::updateUniforms() {
     auto extent = windowSize;
     u.width = extent.width;
     u.height = extent.height;
-    u.camera_position = glm::vec4(camera.position, 1.0f);
-    auto rotation = glm::mat4_cast(camera.rotation);
-    auto translation = glm::translate(glm::mat4(1.0f), camera.position);
-    auto view = glm::inverse(translation * rotation);
-    const float tanFovX = std::tan(glm::radians(camera.fov) * 0.5f);
-    const float tanFovY = tanFovX * (static_cast<float>(extent.height) / static_cast<float>(extent.width));
+    const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+    const float tanFovY = std::tan(glm::radians(camera->GetFov()) * 0.5f);
+    const float tanFovX = tanFovY * aspect;
+    camera->SetAspectRatio(aspect);
+    const glm::mat4 view = camera->GetViewMatrix();
+    const glm::mat4 proj = camera->GetProjectionMatrix();
+
+    u.camera_position = glm::vec4(camera->GetEye(), 1.0f);
     u.view_mat = view;
-    u.proj_mat = glm::perspective(std::atan(tanFovY) * 2.0f, static_cast<float>(extent.width) / static_cast<float>(extent.height), camera.nearPlane, camera.farPlane) * view;
+    u.proj_mat = proj * view;
     u.view_mat[0][1] *= -1.0f; u.view_mat[1][1] *= -1.0f; u.view_mat[2][1] *= -1.0f; u.view_mat[3][1] *= -1.0f;
     u.view_mat[0][2] *= -1.0f; u.view_mat[1][2] *= -1.0f; u.view_mat[2][2] *= -1.0f; u.view_mat[3][2] *= -1.0f;
     u.proj_mat[0][1] *= -1.0f; u.proj_mat[1][1] *= -1.0f; u.proj_mat[2][1] *= -1.0f; u.proj_mat[3][1] *= -1.0f;
@@ -711,7 +975,12 @@ void GSComputeRendererImpl::drawFrame() {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_render);
     std::array<VkDescriptorSet, 2> renderSets{set_render0, set_render1[imageIndex]};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_render, 0, 2, renderSets.data(), 0, nullptr);
-    GSRenderPushConstants renderPC{windowSize.width, windowSize.height, camera.nearPlane, camera.farPlane};
+    GSRenderPushConstants renderPC{
+        windowSize.width,
+        windowSize.height,
+        camera->GetNearPlane(),
+        camera->GetFarPlane()
+    };
     vkCmdPushConstants(cmd, layout_render, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GSRenderPushConstants), &renderPC);
     vkCmdDispatch(cmd, ceilDiv(windowSize.width, kTileWidth), ceilDiv(windowSize.height, kTileHeight), 1);
     colorBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
