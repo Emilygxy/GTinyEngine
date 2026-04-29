@@ -169,6 +169,7 @@ add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/VulkanPractice2)
 add_subdirectory(Examples/VK_VertixTriangle)
+add_subdirectory(Examples/VK_GSRenderDemo)
 
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
