@@ -10,8 +10,8 @@ int main(int argc, char** argv) {
         plyPath = argv[1];
     }
     if (plyPath.empty()) {
-        const std::string defaultRel = "Examples/VK_GSRenderDemo/assets/cloudpoints/demo.ply";
-        const std::string altRel = "../../../Examples/VK_GSRenderDemo/assets/cloudpoints/demo.ply";
+        const std::string defaultRel = "Examples/VK_GSRenderDemo/assets/cloudpoints/sample_robot.ply";
+        const std::string altRel = "../../../Examples/VK_GSRenderDemo/assets/cloudpoints/sample_robot.ply";
         if (std::filesystem::exists(defaultRel)) {
             plyPath = defaultRel;
         } else if (std::filesystem::exists(altRel)) {
