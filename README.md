@@ -38,3 +38,12 @@ A Simple Game Engine Project
 ### 2026.01.27
 - 新增RenderGraph 功能，并实现可视化。例如TinyRender当前的渲染图示例:
 ![TinyRenderer RenderGraph](doc/rendergraph/tinyrenderer_rendergraph.png)
+
+### 2026.04.28
+- 集成3DGS的渲染（Vulkan实现）
+从.ply模型加载到GPU渲染的全链路实现，效果如下：
+![GS Demo](doc/articleImages/gs_demo.png)
+
+**TODO**
+- 混合传统管线的渲染
+- 搭建从模型训练到终端渲染的链路
