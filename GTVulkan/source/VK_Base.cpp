@@ -608,6 +608,10 @@ VkResult GraphicsBase::CreateSwapchain(bool limitFrameRate, VkSwapchainCreateFla
         swapchainCreateInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     else
         outStream  << std::format("[ GraphicsBase ] WARNING\nVK_IMAGE_USAGE_TRANSFER_DST_BIT isn't supported!\n");
+    if (surfaceCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT)
+        swapchainCreateInfo.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    else
+        outStream  << std::format("[ GraphicsBase ] WARNING\nVK_IMAGE_USAGE_STORAGE_BIT isn't supported by swapchain surface!\n");
 
     if (availableSurfaceFormats.empty())
     {
