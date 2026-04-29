@@ -792,17 +792,24 @@ void GSComputeRendererImpl::createOutputImagesAndRenderSets() {
 
 void GSComputeRendererImpl::updateUniforms() {
     GSUniformBufferCPU u{};
-    auto extent = windowSize;
+    const auto extent = windowSize;
     u.width = extent.width;
     u.height = extent.height;
-    const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    const float tanFovY = std::tan(glm::radians(camera->GetFov()) * 0.5f);
-    const float tanFovX = tanFovY * aspect;
-    camera->SetAspectRatio(aspect);
-    const glm::mat4 view = camera->GetViewMatrix();
-    const glm::mat4 proj = camera->GetProjectionMatrix();
-
     u.camera_position = glm::vec4(camera->GetEye(), 1.0f);
+
+    const glm::vec3 eye = camera->GetEye();
+    const glm::vec3 target = camera->GetTarget();
+    const glm::vec3 up = camera->GetUp();
+    const glm::mat4 view = glm::lookAt(eye, target, up);
+
+    const float tanFovX = std::tan(glm::radians(camera->GetFov()) * 0.5f);
+    const float tanFovY = tanFovX * static_cast<float>(extent.height) / static_cast<float>(extent.width);
+    const glm::mat4 proj = glm::perspective(
+        std::atan(tanFovY) * 2.0f,
+        static_cast<float>(extent.width) / static_cast<float>(extent.height),
+        camera->GetNearPlane(),
+        camera->GetFarPlane());
+
     u.view_mat = view;
     u.proj_mat = proj * view;
     u.view_mat[0][1] *= -1.0f; u.view_mat[1][1] *= -1.0f; u.view_mat[2][1] *= -1.0f; u.view_mat[3][1] *= -1.0f;
@@ -921,8 +928,12 @@ void GSComputeRendererImpl::drawFrame() {
     uint32_t tileX = ceilDiv(windowSize.width, kTileWidth);
     vkCmdPushConstants(cmd, layout_preprocessSort, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &tileX);
     vkCmdDispatch(cmd, groups, 1, 1);
-    auto bps = bufferBarrier(sortKBufferEven, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &bps, 0, nullptr);
+    std::array<VkBufferMemoryBarrier, 2> preSortBarriers{
+        bufferBarrier(sortKBufferEven, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+        bufferBarrier(sortVBufferEven, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)
+    };
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                         static_cast<uint32_t>(preSortBarriers.size()), preSortBarriers.data(), 0, nullptr);
     for (uint32_t i = 0; i < 8; ++i) {
         GSRadixSortPushConstants pc{numInstances, i * 8, sortInvocation, kSortBlocksPerWorkgroup};
         VkDescriptorSet histSet = (i % 2 == 0) ? set_hist_even : set_hist_odd;
@@ -938,8 +949,13 @@ void GSComputeRendererImpl::drawFrame() {
         vkCmdPushConstants(cmd, layout_sort, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GSRadixSortPushConstants), &pc);
         vkCmdDispatch(cmd, sortInvocation, 1, 1);
         VkBuffer outKey = (i % 2 == 0) ? static_cast<VkBuffer>(sortKBufferOdd) : static_cast<VkBuffer>(sortKBufferEven);
-        auto bo = bufferBarrier(outKey, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &bo, 0, nullptr);
+        VkBuffer outValue = (i % 2 == 0) ? static_cast<VkBuffer>(sortVBufferOdd) : static_cast<VkBuffer>(sortVBufferEven);
+        std::array<VkBufferMemoryBarrier, 2> sortOutputBarriers{
+            bufferBarrier(outKey, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            bufferBarrier(outValue, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)
+        };
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                             static_cast<uint32_t>(sortOutputBarriers.size()), sortOutputBarriers.data(), 0, nullptr);
     }
     vkCmdFillBuffer(cmd, tileBoundaryBuffer, 0, VK_WHOLE_SIZE, 0);
     auto tbFill = bufferBarrier(tileBoundaryBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);

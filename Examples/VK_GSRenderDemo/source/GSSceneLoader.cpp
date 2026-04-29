@@ -22,6 +22,8 @@ struct VertexStorage {
     glm::vec4 rotation;
 };
 
+static_assert(sizeof(VertexStorage) == 62 * sizeof(float), "Unexpected PLY vertex payload layout.");
+
 PlyHeader loadPlyHeader(std::ifstream& plyFile) {
     PlyHeader header{};
     std::string line;
@@ -75,7 +77,10 @@ std::vector<GSVertex> loadPlyVertices(const std::string& filename) {
             glm::exp(vs.scale.y),
             glm::exp(vs.scale.z),
             1.0f / (1.0f + std::exp(-vs.opacity)));
-        vertices[i].rotation = glm::normalize(vs.rotation);
+        // Keep the same convention as 3DGS + shader `rotationFromQuaternion`:
+        // payload stores quaternion as (w, x, y, z).
+        const glm::vec4 rotationWxyz(vs.rotation.x, vs.rotation.y, vs.rotation.z, vs.rotation.w);
+        vertices[i].rotation = glm::normalize(rotationWxyz);
         vertices[i].sh[0] = vs.shs[0];
         vertices[i].sh[1] = vs.shs[1];
         vertices[i].sh[2] = vs.shs[2];
@@ -94,7 +99,8 @@ std::vector<GSVertex> createFallbackScene() {
     GSVertex v{};
     v.position = glm::vec4(0.0f, 0.0f, -2.0f, 1.0f);
     v.scale_opacity = glm::vec4(100.0f, 100.0f, 100.0f, 0.8f);
-    v.rotation = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    // Identity quaternion in (w, x, y, z).
+    v.rotation = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
     for (int i = 0; i < 48; i++) {
         v.sh[i] = 0.0f;
     }

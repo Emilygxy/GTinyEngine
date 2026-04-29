@@ -166,7 +166,61 @@ Shader 源码：
 - **排序容量扩展**：当 `numInstances` 超出当前容量，需重建 sort/hist buffer 并刷新 descriptor。
 - **窗口 resize 重建**：需重建 tile boundary buffer 与 depth/normal 输出 image。
 - **纯 compute 输出**：swapchain image 与输出 storage image 依赖正确 layout barrier。
-- **Y 轴翻转约定**：`gs_preprocess.comp` 中屏幕投影使用 `uv.y = ndc2Pix(-ndc.y, height)`。原因是当前 `EasyVulkan + storage image -> swapchain present` 链路与原 `3DGS` 运行环境在屏幕原点方向约定上存在差异；若不翻转会出现“画面上下颠倒”。若后续替换呈现链路（例如改为 graphics pass / blit / 不同平台 WSI），请优先核对这一行，避免重复踩坑。
+- **Y 轴翻转约定**：不要在 `gs_preprocess.comp` 修改 `uv` 的坐标语义（避免影响 `aabb/tile/sort` 一致性）；统一在 `gs_render.comp` 的最终 `imageStore` 前做输出翻转（`out_uv.y = height - 1 - curr_uv.y`）。
+
+---
+
+## 炸毛问题复盘（根因与最终修复）
+
+### 现象
+
+- `.ply` 模型表面出现强烈噪点/飞刺（俗称“炸毛”）。
+- 在尝试通过 `preprocess` 阶段翻转 `uv.y` 修正画面方向时，炸毛会明显加重或复发。
+
+### 根本原因
+
+本问题本质是 **数据约定不一致 + 排序链路同步不完整** 的叠加结果，而不是单一 shader 数学公式错误。
+
+1. **排序阶段同步不完整（关键）**
+   - 在 radix sort 流程中，早期实现仅对 `sortK`（key）做了 barrier，遗漏了 `sortV`（payload/index）同步。
+   - 结果是 key/value 可能短暂失配：tile key 排序看似正确，但 payload 指向错误高斯，最终在 render 阶段混入错误 splat，表现为“炸毛”。
+
+2. **相机参数构建语义偏离 3DGS**
+   - `VK_GSRenderDemo` 最初使用 `Camera::GetProjectionMatrix()` 语义直接喂给 preprocess。
+   - 与 `3DGS` 的 `tan_fovx/tan_fovy + 手工构建 view/proj` 语义存在偏差，导致投影与协方差映射敏感度变差。
+
+3. **Y 翻转位置错误会破坏分桶一致性**
+   - `uv.y` 参与了 `aabb -> tile overlap -> preprocess_sort -> tile_boundary -> render` 全链路。
+   - 若在 `preprocess` 阶段用 `-ndc.y` 翻转，会改变分桶/排序坐标语义，容易与其余阶段约定不一致，触发或放大“炸毛”。
+
+### 最终解决方案
+
+1. **补齐排序同步（对齐 3DGS）**
+   - `preprocessSort` 后同时 barrier `sortKBufferEven` 与 `sortVBufferEven`。
+   - 每轮 radix sort 后同时 barrier 输出 `sortK` 与 `sortV`（Odd/Even）。
+
+2. **相机参数构建对齐 3DGS 计算语义**
+   - `updateUniforms()` 中改为显式构建：
+     - `view = lookAt(eye, target, up)`
+     - `tan_fovx = tan(fov/2)`
+     - `tan_fovy = tan_fovx * height / width`
+     - `proj = perspective(atan(tan_fovy)*2, aspect, near, far)`
+     - `proj_mat = proj * view`
+   - 并保留与 3DGS 一致的矩阵分量翻转处理。
+
+3. **仅在最终写屏阶段做 Y 翻转（关键实践）**
+   - 保持 `preprocess` 中 `uv` 与分桶/排序空间一致（不做 `-ndc.y`）。
+   - 在 `gs_render.comp` 写 `imageStore` 前做一次输出坐标翻转：
+     - `out_uv.y = height - 1 - curr_uv.y`
+   - 这样可同时保证：
+     - 不炸毛（分桶与排序稳定）
+     - 画面方向正确（不上下颠倒）
+
+### 经验结论（建议长期遵循）
+
+- **几何/分桶空间** 与 **最终显示空间** 要解耦：前者保持稳定一致，后者在最后一步做坐标适配。
+- 对所有“成对缓冲”（如 sort key/value）必须做对称同步，避免“看似排序正常，实际 payload 乱序”的隐蔽错误。
+- 修改 shader 后需确认运行时使用的是最新 `*.spv`，避免“源码已修复但二进制未更新”的假回归。
 
 ---
 
