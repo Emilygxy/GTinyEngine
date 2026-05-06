@@ -3,6 +3,7 @@
 #include "framework/RenderGraph.h"
 #include "framework/VulkanDeferredPipeline.h"
 #include <memory>
+#include <utility>
 
 enum class RendererBackend;
 
@@ -71,6 +72,8 @@ public:
     bool BuildVulkanDeferredGraph(VulkanDeferredPipeline* pipeline);
     void ExecuteVulkanGraph(VkCommandBuffer commandBuffer, const std::vector<RenderCommand>& commands);
     uint64_t GetVulkanResourceHandle(const std::string& name) const;
+    void SetVulkanPostProcessCallback(std::function<void(VkCommandBuffer)> callback) { mVulkanPostProcessCallback = std::move(callback); }
+    void SetVulkanPresentCallback(std::function<void(VkCommandBuffer)> callback) { mVulkanPresentCallback = std::move(callback); }
     void SetActiveBackend(ActiveBackend backend) { mActiveBackend = backend; }
     ActiveBackend GetActiveBackend() const { return mActiveBackend; }
     void SyncActiveBackend(RendererBackend backend);
@@ -103,6 +106,8 @@ private:
     VulkanDeferredPipeline* mpVulkanDeferredPipeline = nullptr;
     std::vector<VulkanPassNode> mVulkanPassNodes;
     std::unordered_map<std::string, uint64_t> mVulkanResourceHandles;
+    std::function<void(VkCommandBuffer)> mVulkanPostProcessCallback;
+    std::function<void(VkCommandBuffer)> mVulkanPresentCallback;
     ActiveBackend mActiveBackend = ActiveBackend::OpenGL;
     VkCommandBuffer mVulkanCommandBuffer = VK_NULL_HANDLE;
 };

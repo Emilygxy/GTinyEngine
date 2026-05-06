@@ -225,6 +225,8 @@ namespace te
         mExecutor.reset();
         mVulkanPassNodes.clear();
         mVulkanResourceHandles.clear();
+        mVulkanPostProcessCallback = {};
+        mVulkanPresentCallback = {};
         mpVulkanDeferredPipeline = nullptr;
         mVulkanCommandBuffer = VK_NULL_HANDLE;
     }
@@ -401,6 +403,28 @@ namespace te
             mpVulkanDeferredPipeline->LightingPass().Record(commandBuffer, mpVulkanDeferredPipeline->GeometryPass().GetGBuffer());
         };
         mVulkanPassNodes.push_back(std::move(lightingNode));
+
+        if (mVulkanPostProcessCallback) {
+            VulkanPassNode postProcessNode;
+            postProcessNode.name = "VkPostProcessPass";
+            postProcessNode.dependencies = { "VkLightingPass" };
+            postProcessNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
+                if (!mVulkanPostProcessCallback) return;
+                mVulkanPostProcessCallback(commandBuffer);
+            };
+            mVulkanPassNodes.push_back(std::move(postProcessNode));
+        }
+
+        if (mVulkanPresentCallback) {
+            VulkanPassNode presentNode;
+            presentNode.name = "VkPresentPass";
+            presentNode.dependencies = { mVulkanPostProcessCallback ? "VkPostProcessPass" : "VkLightingPass" };
+            presentNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
+                if (!mVulkanPresentCallback) return;
+                mVulkanPresentCallback(commandBuffer);
+            };
+            mVulkanPassNodes.push_back(std::move(presentNode));
+        }
 
         return true;
     }
