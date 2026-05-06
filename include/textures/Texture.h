@@ -26,6 +26,8 @@ public:
 	GLuint GetHandle();
 
 	void SetTexturePaths(const std::vector<std::string>& paths);
+	const std::vector<std::string>& GetTexturePaths() const { return mTexturePaths; }
+	std::string GetPrimaryTexturePath() const { return mTexturePaths.empty() ? std::string() : mTexturePaths[0]; }
 
 	bool IsValid();
 

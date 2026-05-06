@@ -2,6 +2,7 @@
 
 #include "framework/Renderer.h"
 #include "GTVulkan/VK_Deferred.h"
+#include "materials/BaseMaterial.h"
 #include <glm/glm.hpp>
 #include <unordered_map>
 
@@ -60,8 +61,9 @@ private:
     void DestroyPerObjectDescriptorResources();
     bool CreateTextureDescriptorResources();
     void DestroyTextureDescriptorResources();
-    bool CreateDefaultAlbedoTexture();
-    void DestroyDefaultAlbedoTexture();
+    bool CreateTextureFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, VkImage& outImage, VkDeviceMemory& outMemory, VkImageView& outView);
+    bool GetOrCreateMaterialTextureSet(const std::shared_ptr<MaterialBase>& material, VkDescriptorSet& outDescriptorSet);
+    void DestroyMaterialTextures();
     bool UpdateCameraUbo() const;
     bool UpdateModelUbo(const glm::mat4& model) const;
 
@@ -96,11 +98,15 @@ private:
     VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
     VkDescriptorSet descriptorSet_ = VK_NULL_HANDLE;
-    VkDescriptorSet textureDescriptorSet_ = VK_NULL_HANDLE;
-    VkImage albedoTextureImage_ = VK_NULL_HANDLE;
-    VkDeviceMemory albedoTextureMemory_ = VK_NULL_HANDLE;
-    VkImageView albedoTextureView_ = VK_NULL_HANDLE;
     VkSampler albedoTextureSampler_ = VK_NULL_HANDLE;
+
+    struct MaterialTextureEntry {
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+    };
+    std::unordered_map<MaterialBase*, MaterialTextureEntry> materialTextures_{};
 };
 
 } // namespace te

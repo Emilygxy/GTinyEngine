@@ -2,6 +2,7 @@
 
 #include "framework/Renderer.h"
 #include "GTVulkan/VK_Deferred.h"
+#include <array>
 #include <glm/glm.hpp>
 
 namespace te {
@@ -26,7 +27,11 @@ public:
     void SetRenderTargets(VkRenderPass renderPass, VkFramebuffer framebuffer);
     void SetPipeline(VkPipeline pipeline, VkPipelineLayout layout);
     VkDescriptorSetLayout GetDescriptorSetLayout() const { return descriptorSetLayout_; }
-    void SetLightingParams(const glm::vec3& lightDir, const glm::vec3& lightColor, const glm::vec3& cameraPos);
+    void SetLightingParams(const glm::vec3& dirLightDir,
+                           const glm::vec3& dirLightColor,
+                           const glm::vec3& cameraPos,
+                           const std::array<glm::vec4, 4>& pointLightPositions,
+                           const std::array<glm::vec4, 4>& pointLightColors);
 
     void Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer);
 
@@ -40,8 +45,10 @@ private:
 
 private:
     struct LightingUbo {
-        glm::vec4 lightDirection{ 0.0f, 1.0f, 0.0f, 0.0f };
-        glm::vec4 lightColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+        glm::vec4 dirLightDirection{ 0.0f, 1.0f, 0.0f, 0.0f };
+        glm::vec4 dirLightColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+        std::array<glm::vec4, 4> pointLightPositions{};
+        std::array<glm::vec4, 4> pointLightColors{};
         glm::vec4 cameraPos{ 0.0f, 0.0f, 2.0f, 1.0f };
     };
 

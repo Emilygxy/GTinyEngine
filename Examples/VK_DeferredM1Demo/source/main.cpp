@@ -5,6 +5,7 @@
 #include "mesh/Mesh.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -230,7 +231,23 @@ int main()
         }
         pipeline lightingPipeline = CreateLightingPipeline(screen.renderPass, lightingLayout);
         deferredPipeline.LightingPass().SetPipeline(lightingPipeline, lightingLayout);
-        deferredPipeline.LightingPass().SetLightingParams(glm::vec3(0.5f, 1.0f, 0.2f), glm::vec3(1.0f, 0.95f, 0.9f), glm::vec3(0.0f, 0.0f, 2.0f));
+        std::array<glm::vec4, 4> pointPositions = {
+            glm::vec4(-1.0f,  1.0f, 1.0f, 1.0f),
+            glm::vec4( 1.0f,  1.0f, 1.0f, 1.0f),
+            glm::vec4(-1.0f, -1.0f, 1.0f, 1.0f),
+            glm::vec4( 1.0f, -1.0f, 1.0f, 1.0f)
+        };
+        std::array<glm::vec4, 4> pointColors = {
+            glm::vec4(1.0f, 0.3f, 0.3f, 1.0f),
+            glm::vec4(0.3f, 1.0f, 0.3f, 1.0f),
+            glm::vec4(0.3f, 0.3f, 1.0f, 1.0f),
+            glm::vec4(1.0f, 1.0f, 0.3f, 1.0f)
+        };
+        deferredPipeline.LightingPass().SetLightingParams(glm::vec3(0.5f, 1.0f, 0.2f),
+                                                          glm::vec3(1.0f, 0.95f, 0.9f),
+                                                          glm::vec3(0.0f, 0.0f, 2.0f),
+                                                          pointPositions,
+                                                          pointColors);
 
         commandBuffer cmd;
         commandPool cmdPool(GraphicsBase::Base().QueueFamilyIndex_Graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -249,6 +266,16 @@ int main()
             GraphicsBase::Base().SwapImage(imageAvailable);
             const uint32_t imageIndex = GraphicsBase::Base().CurrentImageIndex();
             deferredPipeline.LightingPass().SetRenderTargets(screen.renderPass, screen.framebuffers[imageIndex]);
+
+            const float t = static_cast<float>(glfwGetTime());
+            for (size_t i = 0; i < commands.size(); ++i) {
+                auto mesh = std::dynamic_pointer_cast<Mesh>(commands[i].fragmentsSource);
+                if (!mesh) continue;
+                const float baseX = (i == 0) ? -0.6f : 0.6f;
+                glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(baseX, 0.0f, 0.0f));
+                model = glm::rotate(model, t * (i == 0 ? 1.0f : -1.3f), glm::vec3(0.0f, 0.0f, 1.0f));
+                mesh->SetWorldTransform(model);
+            }
 
             cmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
             deferredPipeline.RecordFrame(cmd, commands);

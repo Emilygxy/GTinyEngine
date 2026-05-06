@@ -1,8 +1,12 @@
 #include "framework/VulkanGeometryPass.h"
 
 #include "GTVulkan/EasyVulkan.h"
+#include "materials/PBRMaterial.h"
+#include "textures/Texture.h"
+#include "filesystem.h"
 #include "mesh/Vertex.h"
 #include <cstring>
+#include <stb_image.h>
 
 namespace te {
 
@@ -131,8 +135,10 @@ void VulkanGeometryPass::Record(VkCommandBuffer commandBuffer, const std::vector
                 if (pipelineLayout_ != VK_NULL_HANDLE && descriptorSet_ != VK_NULL_HANDLE) {
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
                 }
-                if (pipelineLayout_ != VK_NULL_HANDLE && textureDescriptorSet_ != VK_NULL_HANDLE) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 1, 1, &textureDescriptorSet_, 0, nullptr);
+                VkDescriptorSet materialSet = VK_NULL_HANDLE;
+                if (GetOrCreateMaterialTextureSet(command.fragmentsSource->GetMaterial(), materialSet) &&
+                    pipelineLayout_ != VK_NULL_HANDLE && materialSet != VK_NULL_HANDLE) {
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 1, 1, &materialSet, 0, nullptr);
                 }
                 vkCmdDrawIndexed(commandBuffer, meshBuffer.indexCount, 1, 0, 0, 0);
             }
@@ -428,10 +434,6 @@ void VulkanGeometryPass::DestroyPerObjectDescriptorResources()
         vkFreeMemory(vk::GraphicsBase::Base().Device(), modelUboMemory_, nullptr);
         modelUboMemory_ = VK_NULL_HANDLE;
     }
-    if (descriptorPool_ != VK_NULL_HANDLE) {
-        vkDestroyDescriptorPool(vk::GraphicsBase::Base().Device(), descriptorPool_, nullptr);
-        descriptorPool_ = VK_NULL_HANDLE;
-    }
     descriptorSet_ = VK_NULL_HANDLE;
     if (descriptorSetLayout_ != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(vk::GraphicsBase::Base().Device(), descriptorSetLayout_, nullptr);
@@ -441,10 +443,6 @@ void VulkanGeometryPass::DestroyPerObjectDescriptorResources()
 
 bool VulkanGeometryPass::CreateTextureDescriptorResources()
 {
-    if (!CreateDefaultAlbedoTexture()) {
-        return false;
-    }
-
     VkDescriptorSetLayoutBinding textureBinding{};
     textureBinding.binding = 0;
     textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -459,161 +457,21 @@ bool VulkanGeometryPass::CreateTextureDescriptorResources()
         return false;
     }
 
-    VkDescriptorPoolSize poolSizes[2]{};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = 2;
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = 1;
-
     if (descriptorPool_ == VK_NULL_HANDLE) {
+        VkDescriptorPoolSize poolSizes[2]{};
+        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSizes[0].descriptorCount = 2;
+        poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        poolSizes[1].descriptorCount = 256;
+
         VkDescriptorPoolCreateInfo poolCi{};
         poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolCi.maxSets = 2;
+        poolCi.maxSets = 256;
         poolCi.poolSizeCount = 2;
         poolCi.pPoolSizes = poolSizes;
         if (vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) != VK_SUCCESS) {
             return false;
         }
-    }
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = descriptorPool_;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &textureDescriptorSetLayout_;
-    if (vkAllocateDescriptorSets(vk::GraphicsBase::Base().Device(), &allocInfo, &textureDescriptorSet_) != VK_SUCCESS) {
-        return false;
-    }
-
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.sampler = albedoTextureSampler_;
-    imageInfo.imageView = albedoTextureView_;
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = textureDescriptorSet_;
-    write.dstBinding = 0;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.descriptorCount = 1;
-    write.pImageInfo = &imageInfo;
-    vkUpdateDescriptorSets(vk::GraphicsBase::Base().Device(), 1, &write, 0, nullptr);
-    return true;
-}
-
-void VulkanGeometryPass::DestroyTextureDescriptorResources()
-{
-    textureDescriptorSet_ = VK_NULL_HANDLE;
-    if (textureDescriptorSetLayout_ != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(vk::GraphicsBase::Base().Device(), textureDescriptorSetLayout_, nullptr);
-        textureDescriptorSetLayout_ = VK_NULL_HANDLE;
-    }
-    DestroyDefaultAlbedoTexture();
-}
-
-bool VulkanGeometryPass::CreateDefaultAlbedoTexture()
-{
-    const uint32_t pixels[4] = {
-        0xFFFFFFFFu, 0xFF2020FFu,
-        0xFF20FF20u, 0xFFFF2020u
-    };
-    constexpr VkDeviceSize imageSize = sizeof(pixels);
-
-    VkBuffer stagingBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-    if (!CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                      stagingBuffer, stagingMemory)) {
-        return false;
-    }
-
-    void* mapped = nullptr;
-    if (vkMapMemory(vk::GraphicsBase::Base().Device(), stagingMemory, 0, imageSize, 0, &mapped) != VK_SUCCESS) {
-        return false;
-    }
-    std::memcpy(mapped, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(vk::GraphicsBase::Base().Device(), stagingMemory);
-
-    VkImageCreateInfo imageCi{};
-    imageCi.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageCi.imageType = VK_IMAGE_TYPE_2D;
-    imageCi.extent = { 2, 2, 1 };
-    imageCi.mipLevels = 1;
-    imageCi.arrayLayers = 1;
-    imageCi.format = VK_FORMAT_R8G8B8A8_UNORM;
-    imageCi.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageCi.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageCi.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageCi.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageCi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    if (vkCreateImage(vk::GraphicsBase::Base().Device(), &imageCi, nullptr, &albedoTextureImage_) != VK_SUCCESS) {
-        return false;
-    }
-
-    VkMemoryRequirements memReq{};
-    vkGetImageMemoryRequirements(vk::GraphicsBase::Base().Device(), albedoTextureImage_, &memReq);
-    VkMemoryAllocateInfo allocCi{};
-    allocCi.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocCi.allocationSize = memReq.size;
-    allocCi.memoryTypeIndex = FindMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (vkAllocateMemory(vk::GraphicsBase::Base().Device(), &allocCi, nullptr, &albedoTextureMemory_) != VK_SUCCESS) {
-        return false;
-    }
-    if (vkBindImageMemory(vk::GraphicsBase::Base().Device(), albedoTextureImage_, albedoTextureMemory_, 0) != VK_SUCCESS) {
-        return false;
-    }
-
-    auto& transferCmd = vk::GraphicsBase::Plus().CommandBuffer_Transfer();
-    transferCmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-    VkImageMemoryBarrier toTransfer{};
-    toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    toTransfer.srcAccessMask = 0;
-    toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toTransfer.image = albedoTextureImage_;
-    toTransfer.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(transferCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                         0, nullptr, 0, nullptr, 1, &toTransfer);
-
-    VkBufferImageCopy copyRegion{};
-    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    copyRegion.imageSubresource.mipLevel = 0;
-    copyRegion.imageSubresource.baseArrayLayer = 0;
-    copyRegion.imageSubresource.layerCount = 1;
-    copyRegion.imageExtent = { 2, 2, 1 };
-    vkCmdCopyBufferToImage(transferCmd, stagingBuffer, albedoTextureImage_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-
-    VkImageMemoryBarrier toShaderRead{};
-    toShaderRead.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    toShaderRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    toShaderRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    toShaderRead.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    toShaderRead.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    toShaderRead.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toShaderRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    toShaderRead.image = albedoTextureImage_;
-    toShaderRead.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(transferCmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                         0, nullptr, 0, nullptr, 1, &toShaderRead);
-
-    transferCmd.End();
-    vk::GraphicsBase::Plus().ExecuteCommandBuffer_Graphics(transferCmd);
-
-    vkDestroyBuffer(vk::GraphicsBase::Base().Device(), stagingBuffer, nullptr);
-    vkFreeMemory(vk::GraphicsBase::Base().Device(), stagingMemory, nullptr);
-
-    VkImageViewCreateInfo viewCi{};
-    viewCi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewCi.image = albedoTextureImage_;
-    viewCi.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewCi.format = VK_FORMAT_R8G8B8A8_UNORM;
-    viewCi.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    if (vkCreateImageView(vk::GraphicsBase::Base().Device(), &viewCi, nullptr, &albedoTextureView_) != VK_SUCCESS) {
-        return false;
     }
 
     VkSamplerCreateInfo samplerCi{};
@@ -628,26 +486,231 @@ bool VulkanGeometryPass::CreateDefaultAlbedoTexture()
     if (vkCreateSampler(vk::GraphicsBase::Base().Device(), &samplerCi, nullptr, &albedoTextureSampler_) != VK_SUCCESS) {
         return false;
     }
+
+    // Create one default material entry so we always have a valid fallback texture set.
+    VkDescriptorSet defaultSet = VK_NULL_HANDLE;
+    return GetOrCreateMaterialTextureSet(nullptr, defaultSet);
+}
+
+bool VulkanGeometryPass::CreateTextureFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, VkImage& outImage, VkDeviceMemory& outMemory, VkImageView& outView)
+{
+    const VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4;
+
+    VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
+    if (!CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      stagingBuffer, stagingMemory)) {
+        return false;
+    }
+
+    void* mapped = nullptr;
+    if (vkMapMemory(vk::GraphicsBase::Base().Device(), stagingMemory, 0, imageSize, 0, &mapped) != VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, rgbaPixels, static_cast<size_t>(imageSize));
+    vkUnmapMemory(vk::GraphicsBase::Base().Device(), stagingMemory);
+
+    VkImageCreateInfo imageCi{};
+    imageCi.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageCi.imageType = VK_IMAGE_TYPE_2D;
+    imageCi.extent = { width, height, 1 };
+    imageCi.mipLevels = 1;
+    imageCi.arrayLayers = 1;
+    imageCi.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageCi.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageCi.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageCi.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageCi.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageCi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateImage(vk::GraphicsBase::Base().Device(), &imageCi, nullptr, &outImage) != VK_SUCCESS) {
+        return false;
+    }
+
+    VkMemoryRequirements memReq{};
+    vkGetImageMemoryRequirements(vk::GraphicsBase::Base().Device(), outImage, &memReq);
+    VkMemoryAllocateInfo allocCi{};
+    allocCi.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocCi.allocationSize = memReq.size;
+    allocCi.memoryTypeIndex = FindMemoryType(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(vk::GraphicsBase::Base().Device(), &allocCi, nullptr, &outMemory) != VK_SUCCESS) {
+        return false;
+    }
+    if (vkBindImageMemory(vk::GraphicsBase::Base().Device(), outImage, outMemory, 0) != VK_SUCCESS) {
+        return false;
+    }
+
+    auto& transferCmd = vk::GraphicsBase::Plus().CommandBuffer_Transfer();
+    transferCmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    VkImageMemoryBarrier toTransfer{};
+    toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    toTransfer.srcAccessMask = 0;
+    toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransfer.image = outImage;
+    toTransfer.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    vkCmdPipelineBarrier(transferCmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                         0, nullptr, 0, nullptr, 1, &toTransfer);
+
+    VkBufferImageCopy copyRegion{};
+    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageExtent = { width, height, 1 };
+    vkCmdCopyBufferToImage(transferCmd, stagingBuffer, outImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+    VkImageMemoryBarrier toShaderRead{};
+    toShaderRead.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    toShaderRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    toShaderRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    toShaderRead.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShaderRead.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShaderRead.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderRead.image = outImage;
+    toShaderRead.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    vkCmdPipelineBarrier(transferCmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                         0, nullptr, 0, nullptr, 1, &toShaderRead);
+
+    transferCmd.End();
+    vk::GraphicsBase::Plus().ExecuteCommandBuffer_Graphics(transferCmd);
+    vkDestroyBuffer(vk::GraphicsBase::Base().Device(), stagingBuffer, nullptr);
+    vkFreeMemory(vk::GraphicsBase::Base().Device(), stagingMemory, nullptr);
+
+    VkImageViewCreateInfo viewCi{};
+    viewCi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewCi.image = outImage;
+    viewCi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewCi.format = VK_FORMAT_R8G8B8A8_UNORM;
+    viewCi.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    return vkCreateImageView(vk::GraphicsBase::Base().Device(), &viewCi, nullptr, &outView) == VK_SUCCESS;
+}
+
+bool VulkanGeometryPass::GetOrCreateMaterialTextureSet(const std::shared_ptr<MaterialBase>& material, VkDescriptorSet& outDescriptorSet)
+{
+    MaterialBase* key = material.get();
+    if (auto it = materialTextures_.find(key); it != materialTextures_.end()) {
+        outDescriptorSet = it->second.descriptorSet;
+        return true;
+    }
+
+    std::array<uint32_t, 4> fallbackPixels = {
+        0xFF7F7FFFu, 0xFF5F5FFFu,
+        0xFF5F5FFFu, 0xFF7F7FFFu
+    };
+    std::vector<uint8_t> materialPixels;
+    uint32_t texWidth = 2;
+    uint32_t texHeight = 2;
+
+    auto tryLoadTexturePath = [&](const std::string& path) -> bool {
+        if (path.empty()) return false;
+        const std::string fullPath = FileSystem::getPath(path);
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+        stbi_uc* data = stbi_load(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+        if (!data || width <= 0 || height <= 0) {
+            if (data) stbi_image_free(data);
+            return false;
+        }
+        texWidth = static_cast<uint32_t>(width);
+        texHeight = static_cast<uint32_t>(height);
+        materialPixels.resize(static_cast<size_t>(texWidth) * static_cast<size_t>(texHeight) * 4);
+        std::memcpy(materialPixels.data(), data, materialPixels.size());
+        stbi_image_free(data);
+        return true;
+    };
+
+    bool loadedFromTexture = false;
+    if (auto pbr = std::dynamic_pointer_cast<PBRMaterial>(material)) {
+        if (auto tex = pbr->GetAlbedoTexture()) {
+            loadedFromTexture = tryLoadTexturePath(tex->GetPrimaryTexturePath());
+        }
+        if (!loadedFromTexture) {
+            const glm::vec3 albedo = pbr->GetAlbedo();
+            const uint8_t r = static_cast<uint8_t>(glm::clamp(albedo.r, 0.0f, 1.0f) * 255.0f);
+            const uint8_t g = static_cast<uint8_t>(glm::clamp(albedo.g, 0.0f, 1.0f) * 255.0f);
+            const uint8_t b = static_cast<uint8_t>(glm::clamp(albedo.b, 0.0f, 1.0f) * 255.0f);
+            const uint32_t rgba = uint32_t(r) | (uint32_t(g) << 8) | (uint32_t(b) << 16) | 0xFF000000u;
+            fallbackPixels = { rgba, rgba, rgba, rgba };
+        }
+    } else if (auto phong = std::dynamic_pointer_cast<PhongMaterial>(material)) {
+        if (auto tex = phong->GetDiffuseTexture()) {
+            loadedFromTexture = tryLoadTexturePath(tex->GetPrimaryTexturePath());
+        }
+    }
+
+    MaterialTextureEntry entry{};
+    if (loadedFromTexture) {
+        if (!CreateTextureFromPixels(materialPixels.data(), texWidth, texHeight, entry.image, entry.memory, entry.view)) {
+            return false;
+        }
+    } else {
+        if (!CreateTextureFromPixels(reinterpret_cast<const uint8_t*>(fallbackPixels.data()), 2, 2, entry.image, entry.memory, entry.view)) {
+            return false;
+        }
+    }
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = descriptorPool_;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &textureDescriptorSetLayout_;
+    if (vkAllocateDescriptorSets(vk::GraphicsBase::Base().Device(), &allocInfo, &entry.descriptorSet) != VK_SUCCESS) {
+        return false;
+    }
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.sampler = albedoTextureSampler_;
+    imageInfo.imageView = entry.view;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = entry.descriptorSet;
+    write.dstBinding = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.descriptorCount = 1;
+    write.pImageInfo = &imageInfo;
+    vkUpdateDescriptorSets(vk::GraphicsBase::Base().Device(), 1, &write, 0, nullptr);
+
+    materialTextures_.emplace(key, entry);
+    outDescriptorSet = entry.descriptorSet;
     return true;
 }
 
-void VulkanGeometryPass::DestroyDefaultAlbedoTexture()
+void VulkanGeometryPass::DestroyTextureDescriptorResources()
 {
+    DestroyMaterialTextures();
+    if (descriptorPool_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(vk::GraphicsBase::Base().Device(), descriptorPool_, nullptr);
+        descriptorPool_ = VK_NULL_HANDLE;
+    }
+    if (textureDescriptorSetLayout_ != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(vk::GraphicsBase::Base().Device(), textureDescriptorSetLayout_, nullptr);
+        textureDescriptorSetLayout_ = VK_NULL_HANDLE;
+    }
+}
+
+void VulkanGeometryPass::DestroyMaterialTextures()
+{
+    for (auto& [_, entry] : materialTextures_) {
+        if (entry.view != VK_NULL_HANDLE) {
+            vkDestroyImageView(vk::GraphicsBase::Base().Device(), entry.view, nullptr);
+        }
+        if (entry.image != VK_NULL_HANDLE) {
+            vkDestroyImage(vk::GraphicsBase::Base().Device(), entry.image, nullptr);
+        }
+        if (entry.memory != VK_NULL_HANDLE) {
+            vkFreeMemory(vk::GraphicsBase::Base().Device(), entry.memory, nullptr);
+        }
+    }
+    materialTextures_.clear();
     if (albedoTextureSampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(vk::GraphicsBase::Base().Device(), albedoTextureSampler_, nullptr);
         albedoTextureSampler_ = VK_NULL_HANDLE;
-    }
-    if (albedoTextureView_ != VK_NULL_HANDLE) {
-        vkDestroyImageView(vk::GraphicsBase::Base().Device(), albedoTextureView_, nullptr);
-        albedoTextureView_ = VK_NULL_HANDLE;
-    }
-    if (albedoTextureImage_ != VK_NULL_HANDLE) {
-        vkDestroyImage(vk::GraphicsBase::Base().Device(), albedoTextureImage_, nullptr);
-        albedoTextureImage_ = VK_NULL_HANDLE;
-    }
-    if (albedoTextureMemory_ != VK_NULL_HANDLE) {
-        vkFreeMemory(vk::GraphicsBase::Base().Device(), albedoTextureMemory_, nullptr);
-        albedoTextureMemory_ = VK_NULL_HANDLE;
     }
 }
 

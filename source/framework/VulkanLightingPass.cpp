@@ -45,10 +45,16 @@ void VulkanLightingPass::SetPipeline(VkPipeline pipeline, VkPipelineLayout layou
     pipelineLayout_ = layout;
 }
 
-void VulkanLightingPass::SetLightingParams(const glm::vec3& lightDir, const glm::vec3& lightColor, const glm::vec3& cameraPos)
+void VulkanLightingPass::SetLightingParams(const glm::vec3& dirLightDir,
+                                           const glm::vec3& dirLightColor,
+                                           const glm::vec3& cameraPos,
+                                           const std::array<glm::vec4, 4>& pointLightPositions,
+                                           const std::array<glm::vec4, 4>& pointLightColors)
 {
-    lightingParams_.lightDirection = glm::vec4(lightDir, 0.0f);
-    lightingParams_.lightColor = glm::vec4(lightColor, 1.0f);
+    lightingParams_.dirLightDirection = glm::vec4(dirLightDir, 0.0f);
+    lightingParams_.dirLightColor = glm::vec4(dirLightColor, 1.0f);
+    lightingParams_.pointLightPositions = pointLightPositions;
+    lightingParams_.pointLightColors = pointLightColors;
     lightingParams_.cameraPos = glm::vec4(cameraPos, 1.0f);
 }
 
