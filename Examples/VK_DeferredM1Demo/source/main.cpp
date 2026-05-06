@@ -39,7 +39,8 @@ RenderPass CreateGeometryRenderPass(VkFormat albedoFormat, VkFormat normalFormat
     attachments[3].format = depthFormat;
     attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
     attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    // Depth is sampled in lighting pass, so it must be stored.
+    attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     attachments[3].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -94,7 +95,9 @@ pipeline CreateGeometryPipeline(VkRenderPass renderPass, VkPipelineLayout layout
     ciPack.viewports.emplace_back(0.f, 0.f, float(windowSize.width), float(windowSize.height), 0.f, 1.f);
     ciPack.scissors.emplace_back(VkOffset2D{}, windowSize);
     ciPack.rasterizationStateCi.polygonMode = VK_POLYGON_MODE_FILL;
-    ciPack.rasterizationStateCi.cullMode = VK_CULL_MODE_BACK_BIT;
+    // Disable culling for now to avoid winding/clip-space convention mismatch
+    // while validating deferred pipeline bring-up.
+    ciPack.rasterizationStateCi.cullMode = VK_CULL_MODE_NONE;
     ciPack.rasterizationStateCi.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     ciPack.rasterizationStateCi.lineWidth = 1.0f;
     ciPack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -218,6 +221,7 @@ int main()
                                      glm::vec3(0.0f, 0.0f, 0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 proj = glm::perspective(glm::radians(60.0f), float(windowSize.width) / float(windowSize.height), 0.1f, 100.0f);
+        proj[1][1] *= -1.0f; // Vulkan clip-space Y convention
         deferredPipeline.GeometryPass().SetViewProjection(view, proj);
 
         // Align lighting pipeline layout with VulkanLightingPass descriptor set layout.
@@ -254,8 +258,9 @@ int main()
         cmdPool.AllocateBuffers(cmd);
 
         fence frameFence;
+        const uint32_t swapImageCount = static_cast<uint32_t>(screen.framebuffers.size());
         semaphore imageAvailable;
-        semaphore renderingOver;
+        std::vector<semaphore> renderingOverSemaphores(swapImageCount);
         std::vector<RenderCommand> commands = CreateSceneCommands();
 
         while (!glfwWindowShouldClose(pWindow)) {
@@ -281,6 +286,7 @@ int main()
             deferredPipeline.RecordFrame(cmd, commands);
             cmd.End();
 
+            auto& renderingOver = renderingOverSemaphores[imageIndex];
             GraphicsBase::Base().SubmitCommandBuffer_Graphics(cmd, imageAvailable, renderingOver, frameFence);
             GraphicsBase::Base().PresentImage(renderingOver);
             frameFence.WaitAndReset();
@@ -288,6 +294,11 @@ int main()
             glfwPollEvents();
             TitleFps();
         }
+
+        // Ensure present/submit work is fully retired before destroying semaphores
+        // and deferred pipeline owned Vulkan resources.
+        GraphicsBase::Base().WaitIdle();
+        deferredPipeline.Shutdown();
     }
 
     TerminateWindow();

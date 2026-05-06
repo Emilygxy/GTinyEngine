@@ -242,7 +242,7 @@ bool VulkanLightingPass::UpdateGBufferDescriptors(const vk::VulkanGBuffer& gbuff
 
     imageInfos[3].sampler = gbufferSampler_;
     imageInfos[3].imageView = gbuffer.DepthView();
-    imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 
     VkDescriptorBufferInfo lightingInfo{};
     lightingInfo.buffer = lightingUboBuffer_;
