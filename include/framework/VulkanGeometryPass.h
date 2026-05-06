@@ -65,7 +65,7 @@ private:
     bool GetOrCreateMaterialTextureSet(const std::shared_ptr<MaterialBase>& material, VkDescriptorSet& outDescriptorSet);
     void DestroyMaterialTextures();
     bool UpdateCameraUbo() const;
-    bool UpdateModelUbo(const glm::mat4& model) const;
+    bool UpdateModelUbo(const glm::mat4& model, uint32_t objectIndex, uint32_t& outDynamicOffset) const;
 
     bool RebuildFramebuffer();
     std::vector<VkClearValue> BuildClearValues() const;
@@ -94,6 +94,8 @@ private:
     mutable VkDeviceMemory cameraUboMemory_ = VK_NULL_HANDLE;
     mutable VkBuffer modelUboBuffer_ = VK_NULL_HANDLE;
     mutable VkDeviceMemory modelUboMemory_ = VK_NULL_HANDLE;
+    uint32_t modelUboStride_ = 0;
+    uint32_t modelUboCapacity_ = 0;
     VkDescriptorSetLayout descriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
     VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;

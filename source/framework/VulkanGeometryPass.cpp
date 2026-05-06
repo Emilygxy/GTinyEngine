@@ -107,6 +107,7 @@ void VulkanGeometryPass::Record(VkCommandBuffer commandBuffer, const std::vector
         // Minimal M1 draw path:
         // Upload each fragment mesh into transient host-visible buffers and draw with
         // a fixed Vertex layout { vec3 position, vec3 normal, vec2 texCoord }.
+        uint32_t drawObjectIndex = 0;
         for (const auto& command : commands) {
             if (!command.fragmentsSource) {
                 continue;
@@ -127,13 +128,17 @@ void VulkanGeometryPass::Record(VkCommandBuffer commandBuffer, const std::vector
                 if (!GetOrCreateMeshBuffer(vertices, indices, meshBuffer)) {
                     continue;
                 }
-                UpdateModelUbo(fragment.mpGeometry->GetWorldTransform());
+                uint32_t dynamicOffset = 0;
+                if (!UpdateModelUbo(fragment.mpGeometry->GetWorldTransform(), drawObjectIndex, dynamicOffset)) {
+                    continue;
+                }
+                ++drawObjectIndex;
 
                 VkDeviceSize vertexOffset = 0;
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, &meshBuffer.vertexBuffer, &vertexOffset);
                 vkCmdBindIndexBuffer(commandBuffer, meshBuffer.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
                 if (pipelineLayout_ != VK_NULL_HANDLE && descriptorSet_ != VK_NULL_HANDLE) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 1, &dynamicOffset);
                 }
                 VkDescriptorSet materialSet = VK_NULL_HANDLE;
                 if (GetOrCreateMaterialTextureSet(command.fragmentsSource->GetMaterial(), materialSet) &&
@@ -348,7 +353,10 @@ bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
                       cameraUboBuffer_, cameraUboMemory_)) {
         return false;
     }
-    if (!CreateBuffer(sizeof(ModelUbo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    const VkDeviceSize minAlignment = vk::GraphicsBase::Base().PhysicalDeviceProperties().limits.minUniformBufferOffsetAlignment;
+    modelUboStride_ = static_cast<uint32_t>((sizeof(ModelUbo) + minAlignment - 1) / minAlignment * minAlignment);
+    modelUboCapacity_ = 1024;
+    if (!CreateBuffer(static_cast<VkDeviceSize>(modelUboStride_) * modelUboCapacity_, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                       modelUboBuffer_, modelUboMemory_)) {
         return false;
@@ -360,7 +368,7 @@ bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
     bindings[0].descriptorCount = 1;
     bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     bindings[1].binding = 1;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -374,15 +382,19 @@ bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
 
     VkDescriptorPoolSize poolSizes[2]{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = 2;
+    poolSizes[0].descriptorCount = 1;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[1].descriptorCount = 1;
+    VkDescriptorPoolSize dynamicUboPoolSize{};
+    dynamicUboPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    dynamicUboPoolSize.descriptorCount = 1;
     if (descriptorPool_ == VK_NULL_HANDLE) {
         VkDescriptorPoolCreateInfo poolCi{};
         poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolCi.maxSets = 2;
-        poolCi.poolSizeCount = 2;
-        poolCi.pPoolSizes = poolSizes;
+        VkDescriptorPoolSize allPoolSizes[3] = { poolSizes[0], poolSizes[1], dynamicUboPoolSize };
+        poolCi.poolSizeCount = 3;
+        poolCi.pPoolSizes = allPoolSizes;
         if (vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) != VK_SUCCESS) {
             return false;
         }
@@ -409,7 +421,7 @@ bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
     writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[1].dstSet = descriptorSet_;
     writes[1].dstBinding = 1;
-    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     writes[1].descriptorCount = 1;
     writes[1].pBufferInfo = &modelInfo;
     vkUpdateDescriptorSets(vk::GraphicsBase::Base().Device(), 2, writes, 0, nullptr);
@@ -731,15 +743,21 @@ bool VulkanGeometryPass::UpdateCameraUbo() const
     return true;
 }
 
-bool VulkanGeometryPass::UpdateModelUbo(const glm::mat4& model) const
+bool VulkanGeometryPass::UpdateModelUbo(const glm::mat4& model, uint32_t objectIndex, uint32_t& outDynamicOffset) const
 {
     if (modelUboMemory_ == VK_NULL_HANDLE) {
         return false;
     }
+    if (modelUboStride_ == 0 || modelUboCapacity_ == 0) {
+        return false;
+    }
+    const uint32_t slot = objectIndex % modelUboCapacity_;
+    outDynamicOffset = slot * modelUboStride_;
+
     ModelUbo modelUbo{};
     modelUbo.model = model;
     void* mapped = nullptr;
-    if (vkMapMemory(vk::GraphicsBase::Base().Device(), modelUboMemory_, 0, sizeof(ModelUbo), 0, &mapped) != VK_SUCCESS) {
+    if (vkMapMemory(vk::GraphicsBase::Base().Device(), modelUboMemory_, outDynamicOffset, sizeof(ModelUbo), 0, &mapped) != VK_SUCCESS) {
         return false;
     }
     std::memcpy(mapped, &modelUbo, sizeof(ModelUbo));
