@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.8)
 project(GTinyEngine)
 
+# Keep all targets on a consistent baseline because GTinyEngine public headers
+# expose C++20 types (e.g. std::span from GTVulkan headers).
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # 包含辅助函数
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(SetSourceGroup)
@@ -156,6 +162,7 @@ set(ALL_LIBS
 	${VULKAN_LIB}
 	${THIRD_PARTY_LIB}
 	GTinyEngine
+	GTVulkan
 )
 
 # 设置资源目录路径（假设资源在项目根目录的 Resources/ 下）
