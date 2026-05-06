@@ -1,5 +1,7 @@
 #include "framework/VulkanLightingPass.h"
 
+#include <cstring>
+
 namespace te {
 
 bool VulkanLightingPass::Initialize(const VulkanLightingPassCreateInfo& createInfo)
@@ -43,6 +45,13 @@ void VulkanLightingPass::SetPipeline(VkPipeline pipeline, VkPipelineLayout layou
     pipelineLayout_ = layout;
 }
 
+void VulkanLightingPass::SetLightingParams(const glm::vec3& lightDir, const glm::vec3& lightColor, const glm::vec3& cameraPos)
+{
+    lightingParams_.lightDirection = glm::vec4(lightDir, 0.0f);
+    lightingParams_.lightColor = glm::vec4(lightColor, 1.0f);
+    lightingParams_.cameraPos = glm::vec4(cameraPos, 1.0f);
+}
+
 void VulkanLightingPass::Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer)
 {
     if (commandBuffer == VK_NULL_HANDLE || renderPass_ == VK_NULL_HANDLE || framebuffer_ == VK_NULL_HANDLE) {
@@ -65,7 +74,8 @@ void VulkanLightingPass::Record(VkCommandBuffer commandBuffer, const vk::VulkanG
     vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
     if (pipeline_ != VK_NULL_HANDLE) {
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-        if (descriptorSet_ != VK_NULL_HANDLE && pipelineLayout_ != VK_NULL_HANDLE && UpdateGBufferDescriptors(gbuffer)) {
+        if (descriptorSet_ != VK_NULL_HANDLE && pipelineLayout_ != VK_NULL_HANDLE &&
+            UpdateGBufferDescriptors(gbuffer) && UpdateLightingUbo()) {
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
         }
         // M1 skeleton: fullscreen triangle for deferred lighting.
@@ -84,17 +94,21 @@ std::vector<VkClearValue> VulkanLightingPass::BuildClearValues() const
 
 bool VulkanLightingPass::CreateDescriptorResources()
 {
-    VkDescriptorSetLayoutBinding bindings[4]{};
+    VkDescriptorSetLayoutBinding bindings[5]{};
     for (uint32_t i = 0; i < 4; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     }
+    bindings[4].binding = 4;
+    bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[4].descriptorCount = 1;
+    bindings[4].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutCi{};
     layoutCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutCi.bindingCount = 4;
+    layoutCi.bindingCount = 5;
     layoutCi.pBindings = bindings;
     if (vkCreateDescriptorSetLayout(vk::GraphicsBase::Base().Device(), &layoutCi, nullptr, &descriptorSetLayout_) != VK_SUCCESS) {
         return false;
@@ -103,12 +117,16 @@ bool VulkanLightingPass::CreateDescriptorResources()
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSize.descriptorCount = 4;
+    VkDescriptorPoolSize uboPoolSize{};
+    uboPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboPoolSize.descriptorCount = 1;
 
     VkDescriptorPoolCreateInfo poolCi{};
     poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolCi.maxSets = 1;
-    poolCi.poolSizeCount = 1;
-    poolCi.pPoolSizes = &poolSize;
+    VkDescriptorPoolSize poolSizes[2] = { poolSize, uboPoolSize };
+    poolCi.poolSizeCount = 2;
+    poolCi.pPoolSizes = poolSizes;
     if (vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) != VK_SUCCESS) {
         return false;
     }
@@ -119,6 +137,40 @@ bool VulkanLightingPass::CreateDescriptorResources()
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &descriptorSetLayout_;
     if (vkAllocateDescriptorSets(vk::GraphicsBase::Base().Device(), &allocInfo, &descriptorSet_) != VK_SUCCESS) {
+        return false;
+    }
+
+    VkBufferCreateInfo bufferCi{};
+    bufferCi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCi.size = sizeof(LightingUbo);
+    bufferCi.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    bufferCi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(vk::GraphicsBase::Base().Device(), &bufferCi, nullptr, &lightingUboBuffer_) != VK_SUCCESS) {
+        return false;
+    }
+    VkMemoryRequirements memReq{};
+    vkGetBufferMemoryRequirements(vk::GraphicsBase::Base().Device(), lightingUboBuffer_, &memReq);
+    const auto& memProps = vk::GraphicsBase::Base().PhysicalDeviceMemoryProperties();
+    uint32_t memoryTypeIndex = UINT32_MAX;
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
+        if ((memReq.memoryTypeBits & (1u << i)) != 0 &&
+            (memProps.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
+            (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            memoryTypeIndex = i;
+            break;
+        }
+    }
+    if (memoryTypeIndex == UINT32_MAX) {
+        return false;
+    }
+    VkMemoryAllocateInfo allocCi{};
+    allocCi.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocCi.allocationSize = memReq.size;
+    allocCi.memoryTypeIndex = memoryTypeIndex;
+    if (vkAllocateMemory(vk::GraphicsBase::Base().Device(), &allocCi, nullptr, &lightingUboMemory_) != VK_SUCCESS) {
+        return false;
+    }
+    if (vkBindBufferMemory(vk::GraphicsBase::Base().Device(), lightingUboBuffer_, lightingUboMemory_, 0) != VK_SUCCESS) {
         return false;
     }
 
@@ -143,6 +195,14 @@ void VulkanLightingPass::DestroyDescriptorResources()
     if (gbufferSampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(vk::GraphicsBase::Base().Device(), gbufferSampler_, nullptr);
         gbufferSampler_ = VK_NULL_HANDLE;
+    }
+    if (lightingUboBuffer_ != VK_NULL_HANDLE) {
+        vkDestroyBuffer(vk::GraphicsBase::Base().Device(), lightingUboBuffer_, nullptr);
+        lightingUboBuffer_ = VK_NULL_HANDLE;
+    }
+    if (lightingUboMemory_ != VK_NULL_HANDLE) {
+        vkFreeMemory(vk::GraphicsBase::Base().Device(), lightingUboMemory_, nullptr);
+        lightingUboMemory_ = VK_NULL_HANDLE;
     }
     if (descriptorPool_ != VK_NULL_HANDLE) {
         vkDestroyDescriptorPool(vk::GraphicsBase::Base().Device(), descriptorPool_, nullptr);
@@ -178,7 +238,12 @@ bool VulkanLightingPass::UpdateGBufferDescriptors(const vk::VulkanGBuffer& gbuff
     imageInfos[3].imageView = gbuffer.DepthView();
     imageInfos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkWriteDescriptorSet writes[4]{};
+    VkDescriptorBufferInfo lightingInfo{};
+    lightingInfo.buffer = lightingUboBuffer_;
+    lightingInfo.offset = 0;
+    lightingInfo.range = sizeof(LightingUbo);
+
+    VkWriteDescriptorSet writes[5]{};
     for (uint32_t i = 0; i < 4; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i].dstSet = descriptorSet_;
@@ -187,7 +252,27 @@ bool VulkanLightingPass::UpdateGBufferDescriptors(const vk::VulkanGBuffer& gbuff
         writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         writes[i].pImageInfo = &imageInfos[i];
     }
-    vkUpdateDescriptorSets(vk::GraphicsBase::Base().Device(), 4, writes, 0, nullptr);
+    writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[4].dstSet = descriptorSet_;
+    writes[4].dstBinding = 4;
+    writes[4].descriptorCount = 1;
+    writes[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[4].pBufferInfo = &lightingInfo;
+    vkUpdateDescriptorSets(vk::GraphicsBase::Base().Device(), 5, writes, 0, nullptr);
+    return true;
+}
+
+bool VulkanLightingPass::UpdateLightingUbo() const
+{
+    if (lightingUboMemory_ == VK_NULL_HANDLE) {
+        return false;
+    }
+    void* mapped = nullptr;
+    if (vkMapMemory(vk::GraphicsBase::Base().Device(), lightingUboMemory_, 0, sizeof(LightingUbo), 0, &mapped) != VK_SUCCESS) {
+        return false;
+    }
+    std::memcpy(mapped, &lightingParams_, sizeof(LightingUbo));
+    vkUnmapMemory(vk::GraphicsBase::Base().Device(), lightingUboMemory_);
     return true;
 }
 

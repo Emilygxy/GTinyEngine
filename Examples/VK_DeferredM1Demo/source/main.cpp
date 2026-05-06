@@ -4,6 +4,7 @@
 #include "framework/VulkanDeferredPipeline.h"
 #include "mesh/Mesh.h"
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <vector>
 
@@ -141,7 +142,8 @@ pipeline CreateLightingPipeline(VkRenderPass renderPass, VkPipelineLayout layout
 
 std::vector<RenderCommand> CreateSceneCommands()
 {
-    auto mesh = std::make_shared<Mesh>();
+    auto meshA = std::make_shared<Mesh>();
+    auto meshB = std::make_shared<Mesh>();
     const Vertex vertices[] = {
         { {-0.7f, -0.7f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f} },
         { { 0.7f, -0.7f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f} },
@@ -149,13 +151,20 @@ std::vector<RenderCommand> CreateSceneCommands()
         { {-0.7f,  0.7f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f} }
     };
     const int indices[] = { 0, 1, 2, 0, 2, 3 };
-    mesh->DoGenerateMesh(vertices, 4, indices, 6, true);
+    meshA->DoGenerateMesh(vertices, 4, indices, 6, true);
+    meshB->DoGenerateMesh(vertices, 4, indices, 6, true);
+    meshA->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-0.6f, 0.0f, 0.0f)));
+    meshB->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(0.6f, 0.0f, 0.0f)));
 
-    RenderCommand cmd;
-    cmd.fragmentsSource = mesh;
-    cmd.hasUV = true;
-    cmd.state = RenderMode::Opaque;
-    return { cmd };
+    RenderCommand cmdA;
+    cmdA.fragmentsSource = meshA;
+    cmdA.hasUV = true;
+    cmdA.state = RenderMode::Opaque;
+    RenderCommand cmdB;
+    cmdB.fragmentsSource = meshB;
+    cmdB.hasUV = true;
+    cmdB.state = RenderMode::Opaque;
+    return { cmdA, cmdB };
 }
 
 } // namespace
@@ -193,11 +202,22 @@ int main()
 
         pipelineLayout geometryLayout;
         {
+            VkDescriptorSetLayout setLayouts[2] = {
+                deferredPipeline.GeometryPass().GetDescriptorSetLayout(),
+                deferredPipeline.GeometryPass().GetTextureDescriptorSetLayout()
+            };
             VkPipelineLayoutCreateInfo layoutCi{};
+            layoutCi.setLayoutCount = 2;
+            layoutCi.pSetLayouts = setLayouts;
             geometryLayout.Create(layoutCi);
         }
         pipeline geometryPipeline = CreateGeometryPipeline(geometryRenderPass, geometryLayout);
         deferredPipeline.GeometryPass().SetPipeline(geometryPipeline, geometryLayout);
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f),
+                                     glm::vec3(0.0f, 0.0f, 0.0f),
+                                     glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 proj = glm::perspective(glm::radians(60.0f), float(windowSize.width) / float(windowSize.height), 0.1f, 100.0f);
+        deferredPipeline.GeometryPass().SetViewProjection(view, proj);
 
         // Align lighting pipeline layout with VulkanLightingPass descriptor set layout.
         pipelineLayout lightingLayout;
@@ -210,6 +230,7 @@ int main()
         }
         pipeline lightingPipeline = CreateLightingPipeline(screen.renderPass, lightingLayout);
         deferredPipeline.LightingPass().SetPipeline(lightingPipeline, lightingLayout);
+        deferredPipeline.LightingPass().SetLightingParams(glm::vec3(0.5f, 1.0f, 0.2f), glm::vec3(1.0f, 0.95f, 0.9f), glm::vec3(0.0f, 0.0f, 2.0f));
 
         commandBuffer cmd;
         commandPool cmdPool(GraphicsBase::Base().QueueFamilyIndex_Graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);

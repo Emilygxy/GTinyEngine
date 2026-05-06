@@ -2,6 +2,7 @@
 
 #include "framework/Renderer.h"
 #include "GTVulkan/VK_Deferred.h"
+#include <glm/glm.hpp>
 #include <unordered_map>
 
 namespace te {
@@ -31,8 +32,11 @@ public:
     const vk::VulkanGBuffer& GetGBuffer() const { return gbuffer_; }
     VkRenderPass GetRenderPass() const { return renderPass_; }
     vk::VulkanGBuffer& GetGBuffer() { return gbuffer_; }
+    VkDescriptorSetLayout GetDescriptorSetLayout() const { return descriptorSetLayout_; }
+    VkDescriptorSetLayout GetTextureDescriptorSetLayout() const { return textureDescriptorSetLayout_; }
     static VkVertexInputBindingDescription VertexBindingDescription();
     static std::array<VkVertexInputAttributeDescription, 3> VertexAttributeDescriptions();
+    void SetViewProjection(const glm::mat4& view, const glm::mat4& proj);
 
 private:
     struct VulkanMeshBuffer {
@@ -48,13 +52,32 @@ private:
     bool GetOrCreateMeshBuffer(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, VulkanMeshBuffer& outBuffer);
     void DestroyMeshBuffers();
     static void DestroyMeshBuffer(VulkanMeshBuffer& meshBuffer);
-    static bool CreateHostVisibleBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& outBuffer, VkDeviceMemory& outMemory);
-    static uint32_t FindHostVisibleMemoryType(uint32_t memoryTypeBits);
+    static bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& outBuffer, VkDeviceMemory& outMemory);
+    static uint32_t FindMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags requiredProperties);
+    static bool UploadDeviceLocalBuffer(const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& outBuffer, VkDeviceMemory& outMemory);
+
+    bool CreatePerObjectDescriptorResources();
+    void DestroyPerObjectDescriptorResources();
+    bool CreateTextureDescriptorResources();
+    void DestroyTextureDescriptorResources();
+    bool CreateDefaultAlbedoTexture();
+    void DestroyDefaultAlbedoTexture();
+    bool UpdateCameraUbo() const;
+    bool UpdateModelUbo(const glm::mat4& model) const;
 
     bool RebuildFramebuffer();
     std::vector<VkClearValue> BuildClearValues() const;
 
 private:
+    struct CameraUbo {
+        glm::mat4 view{ 1.0f };
+        glm::mat4 proj{ 1.0f };
+    };
+
+    struct ModelUbo {
+        glm::mat4 model{ 1.0f };
+    };
+
     vk::VulkanGBuffer gbuffer_{};
     VkRenderPass renderPass_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
@@ -62,6 +85,22 @@ private:
     VkExtent2D extent_{ 0, 0 };
     VkFormat depthFormat_ = VK_FORMAT_D32_SFLOAT;
     std::unordered_map<size_t, VulkanMeshBuffer> meshBuffers_{};
+
+    glm::mat4 view_{ 1.0f };
+    glm::mat4 proj_{ 1.0f };
+    mutable VkBuffer cameraUboBuffer_ = VK_NULL_HANDLE;
+    mutable VkDeviceMemory cameraUboMemory_ = VK_NULL_HANDLE;
+    mutable VkBuffer modelUboBuffer_ = VK_NULL_HANDLE;
+    mutable VkDeviceMemory modelUboMemory_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptorSetLayout_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout textureDescriptorSetLayout_ = VK_NULL_HANDLE;
+    VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
+    VkDescriptorSet descriptorSet_ = VK_NULL_HANDLE;
+    VkDescriptorSet textureDescriptorSet_ = VK_NULL_HANDLE;
+    VkImage albedoTextureImage_ = VK_NULL_HANDLE;
+    VkDeviceMemory albedoTextureMemory_ = VK_NULL_HANDLE;
+    VkImageView albedoTextureView_ = VK_NULL_HANDLE;
+    VkSampler albedoTextureSampler_ = VK_NULL_HANDLE;
 };
 
 } // namespace te
