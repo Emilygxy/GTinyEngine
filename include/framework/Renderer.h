@@ -153,3 +153,45 @@ private:
 
     std::shared_ptr<RenderView> mpRenderView{ nullptr };
 }; 
+
+class VulkanRenderer : public IRenderer
+{
+public:
+    VulkanRenderer();
+    ~VulkanRenderer() override;
+
+    bool Initialize() override;
+    void Shutdown() override;
+
+    void BeginFrame() override;
+    void EndFrame() override;
+
+    void DrawMesh(const RenderCommand& command) override;
+    void DrawMesh(const std::shared_ptr<Mesh> pMesh) override;
+    void DrawMeshes(const std::vector<RenderCommand>& commands) override;
+
+    void SetViewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height) override;
+    void SetClearColor(float r, float g, float b, float a) override;
+    void Clear(uint32_t flags) override;
+
+    const RenderStats& GetRenderStats() const override { return mStats; }
+    void ResetRenderStats() override { mStats.Reset(); }
+
+    void SetMultiPassEnabled(bool enabled) override { mMultiPassEnabled = enabled; }
+    bool IsMultiPassEnabled() const override { return mMultiPassEnabled; }
+    void AddRenderPass(const std::shared_ptr<te::RenderPass>& pass) override;
+    void RemoveRenderPass(const std::string& name) override;
+    std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const override;
+    void ExecuteRenderPasses(const std::vector<RenderCommand>& commands = {}) override;
+    void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+    RenderStats mStats;
+    bool mMultiPassEnabled{ true };
+    std::shared_ptr<RenderContext> mpRenderContext{ nullptr };
+    glm::vec4 mClearColor{ 0.1f, 0.1f, 0.1f, 1.0f };
+    uint16_t viewportWidth_{ 1280 };
+    uint16_t viewportHeight_{ 720 };
+};

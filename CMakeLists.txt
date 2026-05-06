@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.8)
 project(GTinyEngine)
 
+# Keep all targets on a consistent baseline because GTinyEngine public headers
+# expose C++20 types (e.g. std::span from GTVulkan headers).
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # 包含辅助函数
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(SetSourceGroup)
@@ -116,6 +122,7 @@ set(THIRD_PARTY_INCLUDE_DIR
 include_directories(
 	${GLFW_GLAD_INCLUDE_DIR}
 	${VULKAN_INCLUDE_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/GTVulkan/include
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_BINARY_DIR}/configuration
 	${THIRD_PARTY_INCLUDE_DIR})
@@ -145,13 +152,17 @@ set_target_properties(GTinyEngine
 )
 
 add_dependencies(GTinyEngine copy-runtime-files)
-target_compile_features(GTinyEngine PRIVATE cxx_std_17)
+target_compile_features(GTinyEngine PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options(GTinyEngine PRIVATE /FS /MP1)
+endif()
 
 set(ALL_LIBS
 	${GLFW_LIB}
 	${VULKAN_LIB}
 	${THIRD_PARTY_LIB}
 	GTinyEngine
+	GTVulkan
 )
 
 # 设置资源目录路径（假设资源在项目根目录的 Resources/ 下）
@@ -169,6 +180,7 @@ add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/VulkanPractice2)
 add_subdirectory(Examples/VK_VertixTriangle)
+add_subdirectory(Examples/VK_DeferredM1Demo)
 add_subdirectory(Examples/VK_GSRenderDemo)
 
 add_subdirectory(Examples/RendererDemo)

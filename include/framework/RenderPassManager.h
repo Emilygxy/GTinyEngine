@@ -1,7 +1,10 @@
 #pragma once
 #include "framework/RenderPass.h"
 #include "framework/RenderGraph.h"
+#include "framework/VulkanDeferredPipeline.h"
 #include <memory>
+
+enum class RendererBackend;
 
 namespace te
 {
@@ -11,6 +14,12 @@ class RenderGraphVisualizer;
 class RenderPassManager
 {
 public:
+    enum class ActiveBackend
+    {
+        OpenGL,
+        Vulkan
+    };
+
     static RenderPassManager& GetInstance();
     
     // ========== Legacy Interface (for backward compatibility) ==========
@@ -55,6 +64,17 @@ public:
     
     // generate visualization file (.dot format)
     bool GenerateVisualization(const std::string& filename);
+
+    // ========== Vulkan Graph Interface (M2) ==========
+    void EnableVulkanGraph(bool enable) { mUseVulkanGraph = enable; }
+    bool IsVulkanGraphEnabled() const { return mUseVulkanGraph; }
+    bool BuildVulkanDeferredGraph(VulkanDeferredPipeline* pipeline);
+    void ExecuteVulkanGraph(VkCommandBuffer commandBuffer, const std::vector<RenderCommand>& commands);
+    uint64_t GetVulkanResourceHandle(const std::string& name) const;
+    void SetActiveBackend(ActiveBackend backend) { mActiveBackend = backend; }
+    ActiveBackend GetActiveBackend() const { return mActiveBackend; }
+    void SyncActiveBackend(RendererBackend backend);
+    void SetVulkanCommandBuffer(VkCommandBuffer commandBuffer) { mVulkanCommandBuffer = commandBuffer; }
     
 private:
     RenderPassManager() = default;
@@ -72,5 +92,18 @@ private:
     std::unique_ptr<RenderGraphExecutor> mExecutor;
     uint32_t mResourceWidth = 1920;   // default resource width
     uint32_t mResourceHeight = 1080;  // default resource height
+
+    struct VulkanPassNode
+    {
+        std::string name;
+        std::vector<std::string> dependencies;
+        std::function<void(VkCommandBuffer, const std::vector<RenderCommand>&)> execute;
+    };
+    bool mUseVulkanGraph = false;
+    VulkanDeferredPipeline* mpVulkanDeferredPipeline = nullptr;
+    std::vector<VulkanPassNode> mVulkanPassNodes;
+    std::unordered_map<std::string, uint64_t> mVulkanResourceHandles;
+    ActiveBackend mActiveBackend = ActiveBackend::OpenGL;
+    VkCommandBuffer mVulkanCommandBuffer = VK_NULL_HANDLE;
 };
 }

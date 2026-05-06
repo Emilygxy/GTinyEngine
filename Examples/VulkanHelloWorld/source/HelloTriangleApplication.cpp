@@ -385,9 +385,14 @@ namespace vulkan
     void HelloTriangleApplication::createGraphicsPipeline()
     {
         std::filesystem::path cwd = std::filesystem::current_path();
-        std::cout << "Current Work path: " << cwd.generic_u8string().c_str() << std::endl;
-        auto vertShaderCode = readFile("resources/compiled_shaders/shader_base_vert.spv");
-        auto fragShaderCode = readFile("resources/compiled_shaders/shader_base_frag.spv");
+        std::cout << "Current Work path: " << cwd.generic_string() << std::endl;
+#ifdef VK_SHADER_RESOURCE_PATH
+        const std::string shaderRoot = VK_SHADER_RESOURCE_PATH;
+#else
+        const std::string shaderRoot = "resources/compiled_shaders/";
+#endif
+        auto vertShaderCode = readFile(shaderRoot + "shader_base_vert.spv");
+        auto fragShaderCode = readFile(shaderRoot + "shader_base_frag.spv");
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
