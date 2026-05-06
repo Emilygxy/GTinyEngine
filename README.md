@@ -47,3 +47,10 @@ A Simple Game Engine Project
 **TODO**
 - 混合传统管线的渲染
 - 搭建从模型训练到终端渲染的链路
+
+### 2026.05.07
+- Vulkan 实现延迟渲染 
+
+**TODO**
+- M2 接入 framework RenderGraph
+- M3 完善材质与后处理
