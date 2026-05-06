@@ -24,10 +24,15 @@ public:
 
     void SetRenderTargets(VkRenderPass renderPass, VkFramebuffer framebuffer);
     void SetPipeline(VkPipeline pipeline, VkPipelineLayout layout);
+    VkDescriptorSetLayout GetDescriptorSetLayout() const { return descriptorSetLayout_; }
 
-    void Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer) const;
+    void Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer);
 
 private:
+    bool CreateDescriptorResources();
+    void DestroyDescriptorResources();
+    bool UpdateGBufferDescriptors(const vk::VulkanGBuffer& gbuffer);
+
     std::vector<VkClearValue> BuildClearValues() const;
 
 private:
@@ -36,6 +41,11 @@ private:
     VkFramebuffer framebuffer_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
     VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
+
+    VkDescriptorSetLayout descriptorSetLayout_ = VK_NULL_HANDLE;
+    VkDescriptorPool descriptorPool_ = VK_NULL_HANDLE;
+    VkDescriptorSet descriptorSet_ = VK_NULL_HANDLE;
+    VkSampler gbufferSampler_ = VK_NULL_HANDLE;
 };
 
 } // namespace te

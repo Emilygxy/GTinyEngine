@@ -40,7 +40,7 @@ namespace te
 
         // Bind input textures
         // Use the effect material
-        if (auto& pEffect = mQuad->GetMaterial())
+        if (auto pEffect = mQuad->GetMaterial())
         {
             pEffect->OnApply();
 

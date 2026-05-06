@@ -146,7 +146,10 @@ set_target_properties(GTinyEngine
 )
 
 add_dependencies(GTinyEngine copy-runtime-files)
-target_compile_features(GTinyEngine PRIVATE cxx_std_17)
+target_compile_features(GTinyEngine PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options(GTinyEngine PRIVATE /FS /MP1)
+endif()
 
 set(ALL_LIBS
 	${GLFW_LIB}
@@ -170,6 +173,7 @@ add_subdirectory(Examples/VulkanHelloWorld)
 add_subdirectory(Examples/VulkanPractice1)
 add_subdirectory(Examples/VulkanPractice2)
 add_subdirectory(Examples/VK_VertixTriangle)
+add_subdirectory(Examples/VK_DeferredM1Demo)
 add_subdirectory(Examples/VK_GSRenderDemo)
 
 add_subdirectory(Examples/RendererDemo)
