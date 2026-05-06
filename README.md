@@ -51,6 +51,7 @@ A Simple Game Engine Project
 ### 2026.05.07
 - Vulkan 实现延迟渲染 
 - 接入 framework RenderGraph
+- 目前Vulkan MRT支持 geometry/lighting/postprocess/present pass，在此条件下，可以尝试实现GS混合传统管线的渲染
 
 **TODO**
 - M3 完善材质与后处理
