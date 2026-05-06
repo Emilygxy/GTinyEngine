@@ -50,7 +50,6 @@ A Simple Game Engine Project
 
 ### 2026.05.07
 - Vulkan 实现延迟渲染 
-
+- 接入 framework RenderGraph
 **TODO**
-- M2 接入 framework RenderGraph
 - M3 完善材质与后处理
