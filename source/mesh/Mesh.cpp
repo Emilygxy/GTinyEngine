@@ -131,7 +131,9 @@ void Mesh::Draw(std::unordered_map<size_t, MeshCache>& meshCache, RenderStats& s
             it = meshCache.find(meshHash);
         }
 
-        frag.mpGeometry->SubmitDrawCall();
+        glBindVertexArray(it->second.vao);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(it->second.indexCount), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
         stats.drawCalls++;
         stats.triangles += uint32_t(frag.mpGeometry->GetIndices().size()) / 3;

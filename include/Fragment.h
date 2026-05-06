@@ -49,6 +49,12 @@ public:
         return mWorldTransform;
     }
 
+    // Backend-agnostic validation: only checks CPU-side geometry data.
+    bool ValidateGeometryData() const noexcept;
+    // Explicit OpenGL upload path, should only be called by OpenGL backend.
+    bool EnsureOpenGLResources();
+    bool HasOpenGLResources() const noexcept { return initialized; }
+
     bool VarifyValidation();
     void SubmitDrawCall();
 
@@ -79,7 +85,7 @@ struct Fragment final
 
     bool IsReady() const
     {
-        return (mpGeometry != nullptr) && mpGeometry->VarifyValidation();
+        return (mpGeometry != nullptr) && mpGeometry->ValidateGeometryData();
     }
 
     bool mbPrimary{ false };

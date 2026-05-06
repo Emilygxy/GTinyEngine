@@ -107,9 +107,32 @@ void GeometryItem::SetupMesh()
     initialized = true;
 }
 
+bool GeometryItem::ValidateGeometryData() const noexcept
+{
+    if (mVertices.empty() || mIndices.empty())
+    {
+        return false;
+    }
+    // Keep validation backend-agnostic and cheap: only verify index list shape.
+    return (mIndices.size() % 3u) == 0u;
+}
+
+bool GeometryItem::EnsureOpenGLResources()
+{
+    if (!ValidateGeometryData())
+    {
+        return false;
+    }
+    if (!initialized)
+    {
+        SetupMesh();
+    }
+    return initialized;
+}
+
 bool GeometryItem::SubmitMesh()
 {
-    if (mVertices.empty())
+    if (!ValidateGeometryData())
     {
         return false;
     }
@@ -121,20 +144,15 @@ bool GeometryItem::SubmitMesh()
 
 bool GeometryItem::VarifyValidation()
 {
-    if (!initialized)
-    {
-        if (!SubmitMesh())
-        {
-            std::cout << "GeometryItem::VarifyValidation Fail to Varify Geometry, empty Geometry!" << std::endl;
-            return false;
-        }
-    }
-
-    return true;
+    return ValidateGeometryData();
 }
 
 void GeometryItem::SubmitDrawCall()
 {
+    if (!initialized)
+    {
+        return;
+    }
     glBindVertexArray(mVAO);
     glDrawElements(GL_TRIANGLES, GLsizei(mIndices.size()), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);

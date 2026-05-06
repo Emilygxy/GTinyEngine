@@ -2,9 +2,11 @@
 #include "framework/RenderPass.h"
 #include "framework/RenderGraph.h"
 #include "framework/RenderGraphVisualizer.h"
+#include "framework/Renderer.h"
 #include <unordered_set>
 #include <algorithm>
 #include <iostream>
+#include <queue>
 
 namespace te
 {
@@ -82,6 +84,18 @@ namespace te
     void RenderPassManager::ExecuteAll(const std::vector<RenderCommand>& commands)
     {
         std::cout << "RenderPassManager::ExecuteAll called with " << commands.size() << " commands" << std::endl;
+
+        // Unified dispatch entry: route to Vulkan graph when backend is Vulkan.
+        if (mActiveBackend == ActiveBackend::Vulkan && mUseVulkanGraph)
+        {
+            if (mVulkanCommandBuffer == VK_NULL_HANDLE)
+            {
+                std::cout << "RenderPassManager::ExecuteAll: Vulkan backend active but command buffer is null." << std::endl;
+                return;
+            }
+            ExecuteVulkanGraph(mVulkanCommandBuffer, commands);
+            return;
+        }
         
         // if RenderGraph is enabled, use RenderGraph to execute
         if (mUseRenderGraph && mExecutor)
@@ -209,6 +223,10 @@ namespace te
         mGraphBuilder.Clear();
         mCompiledGraph.reset();
         mExecutor.reset();
+        mVulkanPassNodes.clear();
+        mVulkanResourceHandles.clear();
+        mpVulkanDeferredPipeline = nullptr;
+        mVulkanCommandBuffer = VK_NULL_HANDLE;
     }
 
     bool RenderPassManager::CompileRenderGraph()
@@ -340,5 +358,116 @@ namespace te
         }
         
         return success;
+    }
+
+    bool RenderPassManager::BuildVulkanDeferredGraph(VulkanDeferredPipeline* pipeline)
+    {
+        mpVulkanDeferredPipeline = pipeline;
+        mVulkanPassNodes.clear();
+        mVulkanResourceHandles.clear();
+        if (!pipeline) {
+            return false;
+        }
+
+        VulkanPassNode geometryNode;
+        geometryNode.name = "VkGeometryPass";
+        geometryNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>& commands) {
+            if (!mpVulkanDeferredPipeline) return;
+            auto& geometry = mpVulkanDeferredPipeline->GeometryPass();
+            geometry.Record(commandBuffer, commands);
+
+            // Resource handoff: publish geometry outputs by graph resource names.
+            const auto& gbuffer = geometry.GetGBuffer();
+            mVulkanResourceHandles["albedo"] = reinterpret_cast<uint64_t>(gbuffer.ColorView(vk::GBufferSlot::Albedo));
+            mVulkanResourceHandles["normal"] = reinterpret_cast<uint64_t>(gbuffer.ColorView(vk::GBufferSlot::Normal));
+            mVulkanResourceHandles["material"] = reinterpret_cast<uint64_t>(gbuffer.ColorView(vk::GBufferSlot::Material));
+            mVulkanResourceHandles["depth"] = reinterpret_cast<uint64_t>(gbuffer.DepthView());
+        };
+        mVulkanPassNodes.push_back(std::move(geometryNode));
+
+        VulkanPassNode lightingNode;
+        lightingNode.name = "VkLightingPass";
+        lightingNode.dependencies = { "VkGeometryPass" };
+        lightingNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
+            if (!mpVulkanDeferredPipeline) return;
+            // Ensure required resources were produced in previous node.
+            if (mVulkanResourceHandles["albedo"] == 0 ||
+                mVulkanResourceHandles["normal"] == 0 ||
+                mVulkanResourceHandles["material"] == 0 ||
+                mVulkanResourceHandles["depth"] == 0) {
+                std::cout << "ExecuteVulkanGraph: missing GBuffer resources for lighting pass." << std::endl;
+                return;
+            }
+            mpVulkanDeferredPipeline->LightingPass().Record(commandBuffer, mpVulkanDeferredPipeline->GeometryPass().GetGBuffer());
+        };
+        mVulkanPassNodes.push_back(std::move(lightingNode));
+
+        return true;
+    }
+
+    void RenderPassManager::ExecuteVulkanGraph(VkCommandBuffer commandBuffer, const std::vector<RenderCommand>& commands)
+    {
+        if (!mUseVulkanGraph || mVulkanPassNodes.empty()) {
+            return;
+        }
+
+        std::unordered_map<std::string, size_t> nodeIndex;
+        for (size_t i = 0; i < mVulkanPassNodes.size(); ++i) {
+            nodeIndex[mVulkanPassNodes[i].name] = i;
+        }
+        std::vector<int> inDegree(mVulkanPassNodes.size(), 0);
+        std::vector<std::vector<size_t>> adj(mVulkanPassNodes.size());
+        for (size_t i = 0; i < mVulkanPassNodes.size(); ++i) {
+            for (const auto& dep : mVulkanPassNodes[i].dependencies) {
+                auto it = nodeIndex.find(dep);
+                if (it == nodeIndex.end()) continue;
+                adj[it->second].push_back(i);
+                inDegree[i]++;
+            }
+        }
+
+        std::queue<size_t> q;
+        for (size_t i = 0; i < inDegree.size(); ++i) {
+            if (inDegree[i] == 0) q.push(i);
+        }
+        std::vector<size_t> order;
+        while (!q.empty()) {
+            size_t u = q.front();
+            q.pop();
+            order.push_back(u);
+            for (size_t v : adj[u]) {
+                if (--inDegree[v] == 0) q.push(v);
+            }
+        }
+
+        for (size_t idx : order) {
+            if (mVulkanPassNodes[idx].execute) {
+                mVulkanPassNodes[idx].execute(commandBuffer, commands);
+            }
+        }
+    }
+
+    uint64_t RenderPassManager::GetVulkanResourceHandle(const std::string& name) const
+    {
+        auto it = mVulkanResourceHandles.find(name);
+        if (it == mVulkanResourceHandles.end()) {
+            return 0;
+        }
+        return it->second;
+    }
+
+    void RenderPassManager::SyncActiveBackend(RendererBackend backend)
+    {
+        switch (backend)
+        {
+        case RendererBackend::Vulkan:
+            mActiveBackend = ActiveBackend::Vulkan;
+            break;
+        case RendererBackend::OpenGL:
+        case RendererBackend::OpenGLES:
+        default:
+            mActiveBackend = ActiveBackend::OpenGL;
+            break;
+        }
     }
 }
