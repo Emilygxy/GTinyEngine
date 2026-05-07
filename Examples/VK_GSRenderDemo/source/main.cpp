@@ -1,4 +1,4 @@
-#include "GSRenderDemoApp.h"
+#include "GaussianSplat/GSRenderDemoApp.h"
 
 #include <filesystem>
 #include <iostream>

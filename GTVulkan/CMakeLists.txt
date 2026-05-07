@@ -21,8 +21,14 @@ set(VULKAN_INCLUDE_DIR ${VULKAN_DIR}/Include)
 set(VULKAN_LIB ${VULKAN_DIR}/Lib/vulkan-1.lib)
 
 #收集文件
-file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp)
-file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/GTVulkan/*.h )
+file(GLOB SOURCES  
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/GaussianSplat/*.cpp
+)
+file(GLOB HEADERS 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/GTVulkan/*.h 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/GaussianSplat/*.h 
+)
 
 # 为源文件和头文件设置 source_group
 set_source_group_for_files("${SOURCES}")

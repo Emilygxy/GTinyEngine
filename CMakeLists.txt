@@ -182,6 +182,7 @@ add_subdirectory(Examples/VulkanPractice2)
 add_subdirectory(Examples/VK_VertixTriangle)
 add_subdirectory(Examples/VK_DeferredM1Demo)
 add_subdirectory(Examples/VK_GSRenderDemo)
+add_subdirectory(Examples/VK_HybridGSRenderDemo)
 
 add_subdirectory(Examples/RendererDemo)
 add_subdirectory(Examples/MultiPassDemo)
