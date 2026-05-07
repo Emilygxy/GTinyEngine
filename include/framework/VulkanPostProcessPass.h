@@ -22,7 +22,7 @@ public:
     void SetRenderTargets(VkRenderPass renderPass, VkFramebuffer framebuffer);
     void SetPipeline(VkPipeline pipeline, VkPipelineLayout layout);
     VkDescriptorSetLayout GetDescriptorSetLayout() const { return descriptorSetLayout_; }
-    void SetToneMappingParams(float exposure, float gamma);
+    void SetToneMappingParams(float exposure, float gamma, bool fxaaEnabled = true);
     void Record(VkCommandBuffer commandBuffer, VkImageView inputView);
 
 private:

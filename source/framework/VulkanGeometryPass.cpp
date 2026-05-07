@@ -1,6 +1,7 @@
 #include "framework/VulkanGeometryPass.h"
 
 #include "GTVulkan/EasyVulkan.h"
+#include "materials/BaseMaterial.h"
 #include "materials/PBRMaterial.h"
 #include "textures/Texture.h"
 #include "filesystem.h"
@@ -9,6 +10,21 @@
 #include <stb_image.h>
 
 namespace te {
+
+namespace {
+
+glm::vec4 MaterialPushParams(const std::shared_ptr<MaterialBase>& material)
+{
+    if (auto pbr = std::dynamic_pointer_cast<PBRMaterial>(material)) {
+        return glm::vec4(pbr->GetRoughness(), pbr->GetMetallic(), pbr->GetAO(), 0.0f);
+    }
+    if (std::dynamic_pointer_cast<PhongMaterial>(material)) {
+        return glm::vec4(0.55f, 0.0f, 1.0f, 0.0f);
+    }
+    return glm::vec4(0.5f, 0.1f, 1.0f, 0.0f);
+}
+
+} // namespace
 
 bool VulkanGeometryPass::Initialize(const VulkanGeometryPassCreateInfo& createInfo)
 {
@@ -144,6 +160,10 @@ void VulkanGeometryPass::Record(VkCommandBuffer commandBuffer, const std::vector
                 if (GetOrCreateMaterialTextureSet(command.fragmentsSource->GetMaterial(), materialSet) &&
                     pipelineLayout_ != VK_NULL_HANDLE && materialSet != VK_NULL_HANDLE) {
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 1, 1, &materialSet, 0, nullptr);
+                }
+                if (pipelineLayout_ != VK_NULL_HANDLE) {
+                    const glm::vec4 matPush = MaterialPushParams(command.fragmentsSource->GetMaterial());
+                    vkCmdPushConstants(commandBuffer, pipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4), &matPush);
                 }
                 vkCmdDrawIndexed(commandBuffer, meshBuffer.indexCount, 1, 0, 0, 0);
             }

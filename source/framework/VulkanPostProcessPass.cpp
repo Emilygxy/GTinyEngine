@@ -46,10 +46,11 @@ void VulkanPostProcessPass::SetPipeline(VkPipeline pipeline, VkPipelineLayout la
     pipelineLayout_ = layout;
 }
 
-void VulkanPostProcessPass::SetToneMappingParams(float exposure, float gamma)
+void VulkanPostProcessPass::SetToneMappingParams(float exposure, float gamma, bool fxaaEnabled)
 {
     params_.params.x = exposure;
     params_.params.y = gamma;
+    params_.params.z = fxaaEnabled ? 1.0f : 0.0f;
 }
 
 void VulkanPostProcessPass::Record(VkCommandBuffer commandBuffer, VkImageView inputView)

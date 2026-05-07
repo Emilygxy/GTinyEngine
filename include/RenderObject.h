@@ -14,8 +14,16 @@ struct RenderStats
 	uint32_t drawCalls = 0;
 	uint32_t triangles = 0;
 	uint32_t vertices = 0;
+	// Last-frame Vulkan deferred graph nodes executed (geometry / lighting / post / present).
+	uint32_t vulkanGraphNodesExecuted = 0;
 
-	void Reset() { drawCalls = 0; triangles = 0; vertices = 0; }
+	void Reset()
+	{
+		drawCalls = 0;
+		triangles = 0;
+		vertices = 0;
+		vulkanGraphNodesExecuted = 0;
+	}
 };
 
 class RenderObject: public Object

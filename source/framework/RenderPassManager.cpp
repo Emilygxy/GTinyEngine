@@ -3,6 +3,7 @@
 #include "framework/RenderGraph.h"
 #include "framework/RenderGraphVisualizer.h"
 #include "framework/Renderer.h"
+#include "framework/VulkanGpuDebug.h"
 #include <unordered_set>
 #include <algorithm>
 #include <iostream>
@@ -464,9 +465,13 @@ namespace te
             }
         }
 
+        mLastVulkanGraphPassCount = 0;
         for (size_t idx : order) {
             if (mVulkanPassNodes[idx].execute) {
+                VulkanCmdDebugScopeBegin(commandBuffer, mVulkanPassNodes[idx].name.c_str());
                 mVulkanPassNodes[idx].execute(commandBuffer, commands);
+                VulkanCmdDebugScopeEnd(commandBuffer);
+                ++mLastVulkanGraphPassCount;
             }
         }
     }

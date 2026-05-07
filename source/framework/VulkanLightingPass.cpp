@@ -58,6 +58,12 @@ void VulkanLightingPass::SetLightingParams(const glm::vec3& dirLightDir,
     lightingParams_.cameraPos = glm::vec4(cameraPos, 1.0f);
 }
 
+void VulkanLightingPass::SetDeferredFrameMatrices(const glm::mat4& inverseViewProj, float zNear, float zFar, VkExtent2D extent)
+{
+    lightingParams_.inverseViewProj = inverseViewProj;
+    lightingParams_.clipInfo = glm::vec4(zNear, zFar, static_cast<float>(extent.width), static_cast<float>(extent.height));
+}
+
 void VulkanLightingPass::Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer)
 {
     if (commandBuffer == VK_NULL_HANDLE || renderPass_ == VK_NULL_HANDLE || framebuffer_ == VK_NULL_HANDLE) {

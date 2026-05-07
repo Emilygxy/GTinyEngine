@@ -799,9 +799,15 @@ bool VulkanRenderer::Initialize()
             impl.deferredPipeline.GeometryPass().GetDescriptorSetLayout(),
             impl.deferredPipeline.GeometryPass().GetTextureDescriptorSetLayout()
         };
+        VkPushConstantRange pushRange{};
+        pushRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushRange.offset = 0;
+        pushRange.size = static_cast<uint32_t>(sizeof(glm::vec4));
         VkPipelineLayoutCreateInfo layoutCi{};
         layoutCi.setLayoutCount = 2;
         layoutCi.pSetLayouts = setLayouts;
+        layoutCi.pushConstantRangeCount = 1;
+        layoutCi.pPushConstantRanges = &pushRange;
         impl.geometryLayout.Create(layoutCi);
     }
     impl.geometryPipeline = std::make_unique<vk::pipeline>(CreateDeferredGeometryPipeline(impl.extent, *impl.geometryRenderPass, impl.geometryLayout));
@@ -843,7 +849,7 @@ bool VulkanRenderer::Initialize()
     }
     impl.postProcessPipeline = std::make_unique<vk::pipeline>(CreatePostProcessPipeline(impl.extent, *impl.postProcessRenderPass, *impl.postProcessLayout));
     impl.postProcessPass.SetPipeline(*impl.postProcessPipeline, *impl.postProcessLayout);
-    impl.postProcessPass.SetToneMappingParams(1.0f, 2.2f);
+    impl.postProcessPass.SetToneMappingParams(1.0f, 2.2f, true);
 
     te::VulkanPresentPassCreateInfo presentCi{};
     presentCi.extent = impl.extent;
@@ -1016,6 +1022,18 @@ void VulkanRenderer::BeginFrame()
                                                                pointColors);
     }
 
+    {
+        const glm::mat4 vp = proj * view;
+        const glm::mat4 invVp = glm::inverse(vp);
+        float zNear = 0.1f;
+        float zFar = 100.0f;
+        if (mpRenderContext && mpRenderContext->GetAttachedCamera()) {
+            zNear = mpRenderContext->GetAttachedCamera()->GetNearPlane();
+            zFar = mpRenderContext->GetAttachedCamera()->GetFarPlane();
+        }
+        impl.deferredPipeline.LightingPass().SetDeferredFrameMatrices(invVp, zNear, zFar, impl.extent);
+    }
+
     impl.commandBuffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     if (impl.lightingTarget.image != VK_NULL_HANDLE) {
         if (impl.firstFrame) {
@@ -1047,8 +1065,10 @@ void VulkanRenderer::EndFrame()
 
     if (mMultiPassEnabled) {
         te::RenderPassManager::GetInstance().ExecuteAll(impl.pendingCommands);
+        mStats.vulkanGraphNodesExecuted = te::RenderPassManager::GetInstance().GetLastVulkanGraphPassCount();
     } else {
         impl.deferredPipeline.RecordFrame(impl.commandBuffer, impl.pendingCommands);
+        mStats.vulkanGraphNodesExecuted = 0;
     }
     impl.commandBuffer.End();
 

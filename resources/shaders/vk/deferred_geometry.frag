@@ -10,11 +10,17 @@ layout(location = 2) out vec4 outMaterial;
 
 layout(set = 1, binding = 0) uniform sampler2D uDiffuse;
 
+layout(push_constant) uniform MatPush {
+    layout(offset = 0) vec4 uMatParams;
+} matPush;
+
 void main() {
     vec3 albedo = texture(uDiffuse, vUV).rgb;
     vec3 n = normalize(vWorldNormal);
     outAlbedo = vec4(albedo, 1.0);
     outNormal = vec4(n * 0.5 + 0.5, 1.0);
-    outMaterial = vec4(0.5, 0.1, 1.0, 0.0); // roughness, metallic, ao, reserved
+    float roughness = clamp(matPush.uMatParams.x, 0.04, 1.0);
+    float metallic = clamp(matPush.uMatParams.y, 0.0, 1.0);
+    float ao = clamp(matPush.uMatParams.z, 0.0, 1.0);
+    outMaterial = vec4(roughness, metallic, ao, 0.0);
 }
-

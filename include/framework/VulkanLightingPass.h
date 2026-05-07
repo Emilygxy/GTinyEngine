@@ -33,6 +33,8 @@ public:
                            const std::array<glm::vec4, 4>& pointLightPositions,
                            const std::array<glm::vec4, 4>& pointLightColors);
 
+    void SetDeferredFrameMatrices(const glm::mat4& inverseViewProj, float zNear, float zFar, VkExtent2D extent);
+
     void Record(VkCommandBuffer commandBuffer, const vk::VulkanGBuffer& gbuffer);
 
 private:
@@ -50,6 +52,8 @@ private:
         std::array<glm::vec4, 4> pointLightPositions{};
         std::array<glm::vec4, 4> pointLightColors{};
         glm::vec4 cameraPos{ 0.0f, 0.0f, 2.0f, 1.0f };
+        glm::mat4 inverseViewProj{ 1.0f };
+        glm::vec4 clipInfo{ 0.1f, 100.0f, 1280.0f, 720.0f };
     };
 
     VkExtent2D extent_{ 0, 0 };

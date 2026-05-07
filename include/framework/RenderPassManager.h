@@ -78,7 +78,8 @@ public:
     ActiveBackend GetActiveBackend() const { return mActiveBackend; }
     void SyncActiveBackend(RendererBackend backend);
     void SetVulkanCommandBuffer(VkCommandBuffer commandBuffer) { mVulkanCommandBuffer = commandBuffer; }
-    
+    uint32_t GetLastVulkanGraphPassCount() const { return mLastVulkanGraphPassCount; }
+
 private:
     RenderPassManager() = default;
     ~RenderPassManager() = default;
@@ -110,5 +111,6 @@ private:
     std::function<void(VkCommandBuffer)> mVulkanPresentCallback;
     ActiveBackend mActiveBackend = ActiveBackend::OpenGL;
     VkCommandBuffer mVulkanCommandBuffer = VK_NULL_HANDLE;
+    uint32_t mLastVulkanGraphPassCount = 0;
 };
 }
