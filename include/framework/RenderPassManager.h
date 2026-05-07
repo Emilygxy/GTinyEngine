@@ -74,6 +74,11 @@ public:
     uint64_t GetVulkanResourceHandle(const std::string& name) const;
     void SetVulkanPostProcessCallback(std::function<void(VkCommandBuffer)> callback) { mVulkanPostProcessCallback = std::move(callback); }
     void SetVulkanPresentCallback(std::function<void(VkCommandBuffer)> callback) { mVulkanPresentCallback = std::move(callback); }
+    /** Runs on the same command buffer after deferred lighting (e.g. GS + compositor). Depends on VkLightingPass. */
+    void SetVulkanHybridAfterLightingCallback(std::function<void(VkCommandBuffer, uint32_t imageIndex)> callback) {
+        mVulkanHybridAfterLightingCallback = std::move(callback);
+    }
+    void SetVulkanCurrentSwapchainImageIndex(uint32_t index) { mVulkanCurrentSwapchainImageIndex = index; }
     void SetActiveBackend(ActiveBackend backend) { mActiveBackend = backend; }
     ActiveBackend GetActiveBackend() const { return mActiveBackend; }
     void SyncActiveBackend(RendererBackend backend);
@@ -109,6 +114,8 @@ private:
     std::unordered_map<std::string, uint64_t> mVulkanResourceHandles;
     std::function<void(VkCommandBuffer)> mVulkanPostProcessCallback;
     std::function<void(VkCommandBuffer)> mVulkanPresentCallback;
+    std::function<void(VkCommandBuffer, uint32_t)> mVulkanHybridAfterLightingCallback;
+    uint32_t mVulkanCurrentSwapchainImageIndex = 0;
     ActiveBackend mActiveBackend = ActiveBackend::OpenGL;
     VkCommandBuffer mVulkanCommandBuffer = VK_NULL_HANDLE;
     uint32_t mLastVulkanGraphPassCount = 0;

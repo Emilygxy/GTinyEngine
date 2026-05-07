@@ -1,4 +1,5 @@
 #include "GaussianSplat/GSComputeRenderer.h"
+#include "GaussianSplat/GSComputeSubsystem.h"
 #include "Camera.h"
 
 #include "GTVulkan/EasyVulkan.h"
@@ -18,7 +19,8 @@
 using namespace easy_vk;
 using namespace vk;
 
-namespace {
+namespace gt {
+namespace gs {
 
 constexpr uint32_t kTileWidth = 16;
 constexpr uint32_t kTileHeight = 16;
@@ -48,7 +50,7 @@ struct StorageImage {
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = VK_IMAGE_USAGE_STORAGE_BIT,
+            .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
@@ -137,9 +139,10 @@ VkDescriptorSet allocateDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayo
     return set;
 }
 
-class GSComputeRendererImpl {
+class GaussianSplatComputeEngine {
 public:
     bool initialize(const std::vector<GSVertex>& inputVertices) {
+        embeddedMode_ = false;
         if (!InitializeWindow({1280, 720}, false, true, false)) {
             return false;
         }
@@ -162,6 +165,28 @@ public:
         fitCameraToScene();
         captureResetState();
         resetCameraToInitialFocus();
+        lastExtent = windowSize;
+        createCommandResources();
+        createSyncResources();
+        createBuffers();
+        createDescriptorResources();
+        createPipelines();
+        precomputeCov3D();
+        createOutputImagesAndRenderSets();
+        return true;
+    }
+
+    /** Use when `GraphicsBase` + GLFW window already exist (e.g. VulkanRenderer). Does not create/destroy the window. */
+    bool initializeEmbedded(const std::vector<GSVertex>& inputVertices, const std::shared_ptr<Camera>& externalCamera) {
+        embeddedMode_ = true;
+        if (!pWindow || GraphicsBase::Base().Device() == VK_NULL_HANDLE) {
+            return false;
+        }
+        camera = externalCamera;
+        cameraEvent.reset();
+        lastFrameTime = glfwGetTime();
+
+        vertices = inputVertices;
         lastExtent = windowSize;
         createCommandResources();
         createSyncResources();
@@ -200,6 +225,10 @@ public:
         for (auto& img : normalOutputs) {
             img.destroy();
         }
+        for (auto& img : colorOutputs) {
+            img.destroy();
+        }
+        colorOutputs.clear();
         if (descriptorPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, descriptorPool, nullptr);
         for (auto layout : descriptorSetLayouts) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
@@ -224,7 +253,10 @@ public:
         imageAvailableSemaphores.clear();
         fenceRender.reset();
         fenceCompute.reset();
-        TerminateWindow();
+        if (!embeddedMode_) {
+            TerminateWindow();
+        }
+        embeddedMode_ = false;
     }
 
 private:
@@ -297,6 +329,9 @@ private:
 
     std::vector<StorageImage> depthOutputs;
     std::vector<StorageImage> normalOutputs;
+    std::vector<StorageImage> colorOutputs;
+    std::vector<uint8_t> embeddedSurfacePrimed;
+    bool embeddedMode_ = false;
     uint32_t sortBufferSizeMultiplier = 1;
 
     VkDescriptorSet set_precomp = VK_NULL_HANDLE;
@@ -342,21 +377,21 @@ private:
     void installInputCallbacks() {
         glfwSetWindowUserPointer(pWindow, this);
         glfwSetCursorPosCallback(pWindow, [](GLFWwindow* window, double xpos, double ypos) {
-            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            auto* self = static_cast<GaussianSplatComputeEngine*>(glfwGetWindowUserPointer(window));
             if (self) {
                 self->onCursorPosition(xpos, ypos);
             }
         });
         glfwSetMouseButtonCallback(pWindow, [](GLFWwindow* window, int button, int action, int mods) {
             (void)mods;
-            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            auto* self = static_cast<GaussianSplatComputeEngine*>(glfwGetWindowUserPointer(window));
             if (self) {
                 self->onMouseButton(button, action);
             }
         });
         glfwSetScrollCallback(pWindow, [](GLFWwindow* window, double xoffset, double yoffset) {
             (void)xoffset;
-            auto* self = static_cast<GSComputeRendererImpl*>(glfwGetWindowUserPointer(window));
+            auto* self = static_cast<GaussianSplatComputeEngine*>(glfwGetWindowUserPointer(window));
             if (self) {
                 self->onMouseScroll(yoffset);
             }
@@ -656,9 +691,26 @@ private:
     void ensureSortCapacity(uint32_t numInstances);
     void rebuildResizeDependentResources();
     void drawFrame();
+
+public:
+    PreprocessResult runPreprocessPassForHybrid() { return runPreprocessPass(); }
+    void pushUniformsToGpu() { updateUniforms(); }
+    void refreshForHybridPreprocess() {
+        rebuildResizeDependentResources();
+        updateUniforms();
+    }
+    void recordSortAndRenderIntoCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex, uint32_t numInstances, bool prefixInPing);
+    VkImageView gsColorImageView(uint32_t imageIndex) const {
+        return (imageIndex < colorOutputs.size()) ? colorOutputs[imageIndex].view : VK_NULL_HANDLE;
+    }
+    VkImageView gsDepthImageView(uint32_t imageIndex) const {
+        return (imageIndex < depthOutputs.size()) ? depthOutputs[imageIndex].view : VK_NULL_HANDLE;
+    }
+    bool isEmbedded() const { return embeddedMode_; }
+    void prepareSortedInstances(uint32_t numInstances) { ensureSortCapacity(numInstances == 0 ? 1u : numInstances); }
 };
 
-void GSComputeRendererImpl::createDescriptorResources() {
+void GaussianSplatComputeEngine::createDescriptorResources() {
     descriptorPool = createDescriptorPool();
     descriptorSetLayouts.resize(10, VK_NULL_HANDLE);
     descriptorSetLayouts[0] = createDescriptorSetLayout({{0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}});
@@ -723,7 +775,7 @@ void GSComputeRendererImpl::createDescriptorResources() {
     writeBuffer(set_render0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, sortVBufferEven, VK_WHOLE_SIZE);
 }
 
-void GSComputeRendererImpl::createPipelines() {
+void GaussianSplatComputeEngine::createPipelines() {
     auto createLayout = [&](const std::vector<VkDescriptorSetLayout>& sets, uint32_t pushSize, VkPipelineLayout& outLayout) {
         VkPushConstantRange pushRange{VK_SHADER_STAGE_COMPUTE_BIT, 0, pushSize};
         VkPipelineLayoutCreateInfo info{
@@ -753,7 +805,7 @@ void GSComputeRendererImpl::createPipelines() {
     pipeline_render = createComputePipeline("gs_render_comp.spv", layout_render);
 }
 
-void GSComputeRendererImpl::precomputeCov3D() {
+void GaussianSplatComputeEngine::precomputeCov3D() {
     auto& cmd = cmdBuffers[0];
     cmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_precomp);
@@ -767,18 +819,27 @@ void GSComputeRendererImpl::precomputeCov3D() {
     fenceCompute->WaitAndReset();
 }
 
-void GSComputeRendererImpl::createOutputImagesAndRenderSets() {
+void GaussianSplatComputeEngine::createOutputImagesAndRenderSets() {
     const auto count = GraphicsBase::Base().SwapchainImageCount();
     depthOutputs.resize(count);
     normalOutputs.resize(count);
+    colorOutputs.resize(count);
     set_render1.resize(count, VK_NULL_HANDLE);
     const auto extent = windowSize;
     const auto fmt = GraphicsBase::Base().SwapchainCreateInfo().imageFormat;
     for (uint32_t i = 0; i < count; ++i) {
         depthOutputs[i].create(extent, fmt);
         normalOutputs[i].create(extent, fmt);
+        if (embeddedMode_) {
+            colorOutputs[i].create(extent, fmt);
+        }
         set_render1[i] = allocateDescriptorSet(descriptorPool, descriptorSetLayouts[9]);
-        VkDescriptorImageInfo colorInfo{VK_NULL_HANDLE, GraphicsBase::Base().SwapchainImageView(i), VK_IMAGE_LAYOUT_GENERAL};
+        VkDescriptorImageInfo colorInfo{};
+        if (embeddedMode_) {
+            colorInfo = VkDescriptorImageInfo{VK_NULL_HANDLE, colorOutputs[i].view, VK_IMAGE_LAYOUT_GENERAL};
+        } else {
+            colorInfo = VkDescriptorImageInfo{VK_NULL_HANDLE, GraphicsBase::Base().SwapchainImageView(i), VK_IMAGE_LAYOUT_GENERAL};
+        }
         VkDescriptorImageInfo depthInfo{VK_NULL_HANDLE, depthOutputs[i].view, VK_IMAGE_LAYOUT_GENERAL};
         VkDescriptorImageInfo normalInfo{VK_NULL_HANDLE, normalOutputs[i].view, VK_IMAGE_LAYOUT_GENERAL};
         std::array<VkWriteDescriptorSet, 3> writes{
@@ -788,9 +849,10 @@ void GSComputeRendererImpl::createOutputImagesAndRenderSets() {
         };
         vkUpdateDescriptorSets(GraphicsBase::Base().Device(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
     }
+    embeddedSurfacePrimed.assign(count, 0);
 }
 
-void GSComputeRendererImpl::updateUniforms() {
+void GaussianSplatComputeEngine::updateUniforms() {
     GSUniformBufferCPU u{};
     const auto extent = windowSize;
     u.width = extent.width;
@@ -820,7 +882,7 @@ void GSComputeRendererImpl::updateUniforms() {
     uniformBuffer.TransferData(u);
 }
 
-PreprocessResult GSComputeRendererImpl::runPreprocessPass() {
+PreprocessResult GaussianSplatComputeEngine::runPreprocessPass() {
     auto& cmd = cmdBuffers[0];
     const uint32_t n = static_cast<uint32_t>(vertices.size());
     const uint32_t groups = ceilDiv(n, 256u);
@@ -858,7 +920,7 @@ PreprocessResult GSComputeRendererImpl::runPreprocessPass() {
     return PreprocessResult{total, prefixInPing};
 }
 
-void GSComputeRendererImpl::ensureSortCapacity(uint32_t numInstances) {
+void GaussianSplatComputeEngine::ensureSortCapacity(uint32_t numInstances) {
     const uint32_t n = static_cast<uint32_t>(vertices.size());
     if (numInstances <= n * sortBufferSizeMultiplier) return;
     while (numInstances > n * sortBufferSizeMultiplier) sortBufferSizeMultiplier++;
@@ -892,13 +954,14 @@ void GSComputeRendererImpl::ensureSortCapacity(uint32_t numInstances) {
     writeBuffer(set_render0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, sortVBufferEven, VK_WHOLE_SIZE);
 }
 
-void GSComputeRendererImpl::rebuildResizeDependentResources() {
+void GaussianSplatComputeEngine::rebuildResizeDependentResources() {
     auto extent = windowSize;
     if (extent.width == lastExtent.width && extent.height == lastExtent.height) return;
     GraphicsBase::Base().WaitIdle();
     lastExtent = extent;
     for (auto& img : depthOutputs) img.destroy();
     for (auto& img : normalOutputs) img.destroy();
+    for (auto& img : colorOutputs) img.destroy();
     const uint32_t tileX = ceilDiv(extent.width, kTileWidth);
     const uint32_t tileY = ceilDiv(extent.height, kTileHeight);
     tileBoundaryBuffer.Recreate(sizeof(uint32_t) * tileX * tileY * 2, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -907,23 +970,13 @@ void GSComputeRendererImpl::rebuildResizeDependentResources() {
     createOutputImagesAndRenderSets();
 }
 
-void GSComputeRendererImpl::drawFrame() {
-    rebuildResizeDependentResources();
-    updateUniforms();
-    VkSemaphore acquireSemaphore = imageAvailableSemaphores[frameSemaphoreIndex];
-    GraphicsBase::Base().SwapImage(acquireSemaphore);
-    const uint32_t imageIndex = GraphicsBase::Base().CurrentImageIndex();
-    VkSemaphore renderFinishedSemaphore = renderFinishedSemaphores[imageIndex];
-    auto prep = runPreprocessPass();
-    uint32_t numInstances = prep.numInstances == 0 ? 1 : prep.numInstances;
-    ensureSortCapacity(numInstances);
+void GaussianSplatComputeEngine::recordSortAndRenderIntoCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex, uint32_t numInstances,
+                                                                     bool prefixInPing) {
     const uint32_t n = static_cast<uint32_t>(vertices.size());
     const uint32_t groups = ceilDiv(n, 256u);
     const uint32_t sortInvocation = ceilDiv(ceilDiv(numInstances, kSortBlocksPerWorkgroup), 256u);
-    auto& cmd = cmdBuffers[1];
-    cmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_preprocessSort);
-    VkDescriptorSet preSortSet = prep.prefixInPing ? set_preprocessSortPing : set_preprocessSortPong;
+    VkDescriptorSet preSortSet = prefixInPing ? set_preprocessSortPing : set_preprocessSortPong;
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_preprocessSort, 0, 1, &preSortSet, 0, nullptr);
     uint32_t tileX = ceilDiv(windowSize.width, kTileWidth);
     vkCmdPushConstants(cmd, layout_preprocessSort, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t), &tileX);
@@ -966,44 +1019,96 @@ void GSComputeRendererImpl::drawFrame() {
     vkCmdDispatch(cmd, ceilDiv(numInstances, 256u), 1, 1);
     auto tbRead = bufferBarrier(tileBoundaryBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &tbRead, 0, nullptr);
+    const bool surfacePrimed =
+        embeddedMode_ && imageIndex < embeddedSurfacePrimed.size() && embeddedSurfacePrimed[imageIndex] != 0;
     VkImageMemoryBarrier colorBarrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
     colorBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    colorBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorBarrier.oldLayout =
+        embeddedMode_ ? (surfacePrimed ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED) : VK_IMAGE_LAYOUT_UNDEFINED;
+    colorBarrier.srcAccessMask = surfacePrimed ? VK_ACCESS_SHADER_READ_BIT : 0;
     colorBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     colorBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     colorBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    colorBarrier.image = GraphicsBase::Base().SwapchainImage(imageIndex);
+    colorBarrier.image = embeddedMode_ ? static_cast<VkImage>(colorOutputs[imageIndex].imageHandle)
+                                       : GraphicsBase::Base().SwapchainImage(imageIndex);
     colorBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &colorBarrier);
+    vkCmdPipelineBarrier(cmd,
+                         embeddedMode_ && surfacePrimed ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &colorBarrier);
     auto transitionStorageImage = [&](VkImage img) {
         VkImageMemoryBarrier b{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
         b.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        b.oldLayout =
+            embeddedMode_ ? (surfacePrimed ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED) : VK_IMAGE_LAYOUT_UNDEFINED;
+        b.srcAccessMask = surfacePrimed ? VK_ACCESS_SHADER_READ_BIT : 0;
         b.newLayout = VK_IMAGE_LAYOUT_GENERAL;
         b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         b.image = img;
         b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+        vkCmdPipelineBarrier(cmd,
+                             embeddedMode_ && surfacePrimed ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
     };
     transitionStorageImage(depthOutputs[imageIndex].imageHandle);
     transitionStorageImage(normalOutputs[imageIndex].imageHandle);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_render);
     std::array<VkDescriptorSet, 2> renderSets{set_render0, set_render1[imageIndex]};
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout_render, 0, 2, renderSets.data(), 0, nullptr);
+    constexpr float kDefaultDepthCaptureAlpha = 0.5f;
     GSRenderPushConstants renderPC{
         windowSize.width,
         windowSize.height,
         camera->GetNearPlane(),
-        camera->GetFarPlane()
+        camera->GetFarPlane(),
+        kDefaultDepthCaptureAlpha
     };
     vkCmdPushConstants(cmd, layout_render, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GSRenderPushConstants), &renderPC);
     vkCmdDispatch(cmd, ceilDiv(windowSize.width, kTileWidth), ceilDiv(windowSize.height, kTileHeight), 1);
-    colorBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    colorBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    colorBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    colorBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &colorBarrier);
+    if (embeddedMode_) {
+        std::array<VkImageMemoryBarrier, 3> outBar{};
+        for (auto& b : outBar) {
+            b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            b.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        }
+        outBar[0].image = colorOutputs[imageIndex].imageHandle;
+        outBar[1].image = depthOutputs[imageIndex].imageHandle;
+        outBar[2].image = normalOutputs[imageIndex].imageHandle;
+        for (auto& b : outBar) {
+            b.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            b.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            b.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        }
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr,
+                             static_cast<uint32_t>(outBar.size()), outBar.data());
+        if (imageIndex < embeddedSurfacePrimed.size()) {
+            embeddedSurfacePrimed[imageIndex] = 1;
+        }
+    } else {
+        colorBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        colorBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        colorBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &colorBarrier);
+    }
+}
+
+void GaussianSplatComputeEngine::drawFrame() {
+    rebuildResizeDependentResources();
+    updateUniforms();
+    VkSemaphore acquireSemaphore = imageAvailableSemaphores[frameSemaphoreIndex];
+    GraphicsBase::Base().SwapImage(acquireSemaphore);
+    const uint32_t imageIndex = GraphicsBase::Base().CurrentImageIndex();
+    VkSemaphore renderFinishedSemaphore = renderFinishedSemaphores[imageIndex];
+    auto prep = runPreprocessPass();
+    uint32_t numInstances = prep.numInstances == 0 ? 1 : prep.numInstances;
+    ensureSortCapacity(numInstances);
+    auto& cmd = cmdBuffers[1];
+    cmd.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    recordSortAndRenderIntoCommandBuffer(cmd, imageIndex, numInstances, prep.prefixInPing);
     cmd.End();
     VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     VkSubmitInfo submitInfo{
@@ -1016,28 +1121,82 @@ void GSComputeRendererImpl::drawFrame() {
     frameSemaphoreIndex = (frameSemaphoreIndex + 1) % static_cast<uint32_t>(imageAvailableSemaphores.size());
 }
 
-GSComputeRendererImpl* g_renderer = nullptr;
+GaussianSplatComputeEngine* g_standaloneEngine = nullptr;
 
-} // namespace
+GSComputeSubsystem::GSComputeSubsystem() : engine_(std::make_unique<GaussianSplatComputeEngine>()) {}
+
+GSComputeSubsystem::~GSComputeSubsystem() {
+    shutdown();
+}
+
+bool GSComputeSubsystem::initialize(const std::vector<GSVertex>& vertices, const std::shared_ptr<Camera>& camera) {
+    if (!camera) {
+        return false;
+    }
+    return engine_->initializeEmbedded(vertices, camera);
+}
+
+void GSComputeSubsystem::shutdown() {
+    if (engine_) {
+        engine_->shutdown();
+    }
+}
+
+void GSComputeSubsystem::updateUniforms() {
+    if (engine_) {
+        engine_->pushUniformsToGpu();
+    }
+}
+
+GSPreprocessResult GSComputeSubsystem::runPreprocessSubmitWait() {
+    if (!engine_) {
+        return {};
+    }
+    engine_->refreshForHybridPreprocess();
+    const auto prep = engine_->runPreprocessPassForHybrid();
+    GSPreprocessResult out{};
+    out.numInstances = prep.numInstances == 0 ? 1u : prep.numInstances;
+    out.prefixInPing = prep.prefixInPing;
+    return out;
+}
+
+void GSComputeSubsystem::recordSortAndRender(VkCommandBuffer cmd, uint32_t swapchainImageIndex, const GSPreprocessResult& prep) {
+    if (!engine_ || cmd == VK_NULL_HANDLE) {
+        return;
+    }
+    engine_->prepareSortedInstances(prep.numInstances);
+    engine_->recordSortAndRenderIntoCommandBuffer(cmd, swapchainImageIndex, prep.numInstances, prep.prefixInPing);
+}
+
+VkImageView GSComputeSubsystem::gsColorView(uint32_t index) const {
+    return engine_ ? engine_->gsColorImageView(index) : VK_NULL_HANDLE;
+}
+
+VkImageView GSComputeSubsystem::gsDepthView(uint32_t index) const {
+    return engine_ ? engine_->gsDepthImageView(index) : VK_NULL_HANDLE;
+}
+
+} // namespace gs
+} // namespace gt
 
 bool GSComputeRenderer::initialize(const std::vector<GSVertex>& vertices) {
-    if (!g_renderer) {
-        g_renderer = new GSComputeRendererImpl();
+    if (!gt::gs::g_standaloneEngine) {
+        gt::gs::g_standaloneEngine = new gt::gs::GaussianSplatComputeEngine();
     }
-    return g_renderer->initialize(vertices);
+    return gt::gs::g_standaloneEngine->initialize(vertices);
 }
 
 void GSComputeRenderer::run() {
-    if (g_renderer) {
-        g_renderer->run();
+    if (gt::gs::g_standaloneEngine) {
+        gt::gs::g_standaloneEngine->run();
     }
 }
 
 void GSComputeRenderer::shutdown() {
-    if (g_renderer) {
-        g_renderer->shutdown();
-        delete g_renderer;
-        g_renderer = nullptr;
+    if (gt::gs::g_standaloneEngine) {
+        gt::gs::g_standaloneEngine->shutdown();
+        delete gt::gs::g_standaloneEngine;
+        gt::gs::g_standaloneEngine = nullptr;
     }
 }
 

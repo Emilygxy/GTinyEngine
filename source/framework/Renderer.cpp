@@ -2,6 +2,7 @@
 #include "framework/RenderPass.h"
 #include "framework/RenderPassManager.h"
 #include "framework/VulkanDeferredPipeline.h"
+#include "framework/VulkanGeometryPass.h"
 #include "framework/VulkanPostProcessPass.h"
 #include "framework/VulkanPresentPass.h"
 #include "glad/glad.h"
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <utility>
+#include <new>
 #include "framework/RenderContext.h"
 #include "RenderView.h"
 
@@ -736,6 +738,9 @@ struct VulkanRenderer::Impl
     std::unique_ptr<vk::pipeline> presentPipeline{};
     OffscreenColorTarget lightingTarget{};
     OffscreenColorTarget postTarget{};
+    OffscreenColorTarget hybridCompositeTarget{};
+    std::function<void()> hybridPreprocess_{};
+    std::function<void(VkCommandBuffer, uint32_t)> hybridAfterLighting_{};
     vk::commandPool commandPool{};
     vk::commandBuffer commandBuffer{};
     std::unique_ptr<vk::fence> frameFence{};
@@ -819,6 +824,11 @@ bool VulkanRenderer::Initialize()
         std::cout << "VulkanRenderer::Initialize failed to create offscreen targets." << std::endl;
         return false;
     }
+    if (impl.hybridAfterLighting_ &&
+        !CreateOffscreenColorTarget(impl.extent, VK_FORMAT_R16G16B16A16_SFLOAT, *impl.postProcessRenderPass, impl.hybridCompositeTarget)) {
+        std::cout << "VulkanRenderer::Initialize failed to create hybrid composite target." << std::endl;
+        return false;
+    }
     impl.deferredPipeline.LightingPass().SetRenderTargets(*impl.postProcessRenderPass, impl.lightingTarget.framebuffer);
 
     {
@@ -894,15 +904,23 @@ bool VulkanRenderer::Initialize()
     passMgr.SetVulkanPostProcessCallback([this](VkCommandBuffer commandBuffer) {
         if (!impl_ || !impl_->initialized) return;
         auto& impl2 = *impl_;
-        CmdTransitionColorImage(commandBuffer, impl2.lightingTarget.image,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        if (impl2.hybridAfterLighting_) {
+            CmdTransitionColorImage(commandBuffer, impl2.hybridCompositeTarget.image,
+                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        } else {
+            CmdTransitionColorImage(commandBuffer, impl2.lightingTarget.image,
+                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        }
         CmdTransitionColorImage(commandBuffer, impl2.postTarget.image,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                 VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-        impl2.postProcessPass.Record(commandBuffer, impl2.lightingTarget.view);
+        const VkImageView postInput = impl2.hybridAfterLighting_ ? impl2.hybridCompositeTarget.view : impl2.lightingTarget.view;
+        impl2.postProcessPass.Record(commandBuffer, postInput);
     });
     passMgr.SetVulkanPresentCallback([this](VkCommandBuffer commandBuffer) {
         if (!impl_ || !impl_->initialized) return;
@@ -913,6 +931,7 @@ bool VulkanRenderer::Initialize()
                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         impl2.presentPass.Record(commandBuffer, impl2.postTarget.view);
     });
+    passMgr.SetVulkanHybridAfterLightingCallback(impl.hybridAfterLighting_);
     if (!passMgr.BuildVulkanDeferredGraph(&impl.deferredPipeline)) {
         std::cout << "VulkanRenderer::Initialize failed to rebuild Vulkan graph with post/present." << std::endl;
         return false;
@@ -939,20 +958,31 @@ void VulkanRenderer::Shutdown()
     }
 
     vk::GraphicsBase::Base().WaitIdle();
+
+    // Pipelines and pipeline layouts reference descriptor set layouts owned by deferred / post / present passes.
+    // Destroy pipelines and layouts before pass Shutdown() runs vkDestroyDescriptorSetLayout on those handles.
+    impl.geometryPipeline.reset();
+    impl.lightingPipeline.reset();
+    impl.presentPipeline.reset();
+    impl.postProcessPipeline.reset();
+
+    impl.geometryLayout.~pipelineLayout();
+    new (&impl.geometryLayout) vk::pipelineLayout();
+    impl.lightingLayout.~pipelineLayout();
+    new (&impl.lightingLayout) vk::pipelineLayout();
+
+    impl.presentLayout.reset();
+    impl.postProcessLayout.reset();
+
     impl.deferredPipeline.Shutdown();
     impl.presentPass.Shutdown();
     impl.postProcessPass.Shutdown();
     te::RenderPassManager::GetInstance().EnableVulkanGraph(false);
     te::RenderPassManager::GetInstance().Clear();
-    impl.presentPipeline.reset();
-    impl.presentLayout.reset();
-    impl.postProcessPipeline.reset();
-    impl.postProcessLayout.reset();
     DestroyOffscreenColorTarget(impl.postTarget);
+    DestroyOffscreenColorTarget(impl.hybridCompositeTarget);
     DestroyOffscreenColorTarget(impl.lightingTarget);
     impl.postProcessRenderPass.reset();
-    impl.lightingPipeline.reset();
-    impl.geometryPipeline.reset();
     impl.geometryRenderPass.reset();
     impl.imageAvailable.reset();
     impl.frameFence.reset();
@@ -982,6 +1012,7 @@ void VulkanRenderer::BeginFrame()
     }
     vk::GraphicsBase::Base().SwapImage(*impl.imageAvailable);
     const uint32_t imageIndex = vk::GraphicsBase::Base().CurrentImageIndex();
+    te::RenderPassManager::GetInstance().SetVulkanCurrentSwapchainImageIndex(imageIndex);
     if (imageIndex < impl.screen->framebuffers.size()) {
         impl.presentPass.SetRenderTargets(impl.screen->renderPass, impl.screen->framebuffers[imageIndex]);
     }
@@ -1045,6 +1076,12 @@ void VulkanRenderer::BeginFrame()
                                     VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                     0, VK_ACCESS_SHADER_READ_BIT,
                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            if (impl.hybridAfterLighting_ && impl.hybridCompositeTarget.image != VK_NULL_HANDLE) {
+                CmdTransitionColorImage(impl.commandBuffer, impl.hybridCompositeTarget.image,
+                                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+            }
         } else {
             CmdTransitionColorImage(impl.commandBuffer, impl.lightingTarget.image,
                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1063,6 +1100,9 @@ void VulkanRenderer::EndFrame()
         return;
     }
 
+    if (impl.hybridPreprocess_) {
+        impl.hybridPreprocess_();
+    }
     if (mMultiPassEnabled) {
         te::RenderPassManager::GetInstance().ExecuteAll(impl.pendingCommands);
         mStats.vulkanGraphNodesExecuted = te::RenderPassManager::GetInstance().GetLastVulkanGraphPassCount();
@@ -1169,7 +1209,61 @@ void VulkanRenderer::ExecuteRenderPasses(const std::vector<RenderCommand>& comma
     DrawMeshes(commands);
 }
 
+void VulkanRenderer::SetHybridPreprocessCallback(std::function<void()> callback)
+{
+    if (impl_) {
+        impl_->hybridPreprocess_ = std::move(callback);
+    }
+}
+
+void VulkanRenderer::SetHybridAfterLightingCallback(std::function<void(VkCommandBuffer, uint32_t)> callback)
+{
+    if (impl_) {
+        impl_->hybridAfterLighting_ = std::move(callback);
+    }
+}
+
 void VulkanRenderer::SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext)
 {
     mpRenderContext = pRenderContext;
+}
+
+VkImageView VulkanRenderer::GetLightingTargetView() const
+{
+    return impl_ ? impl_->lightingTarget.view : VK_NULL_HANDLE;
+}
+
+VkImage VulkanRenderer::GetLightingTargetImage() const
+{
+    return impl_ ? impl_->lightingTarget.image : VK_NULL_HANDLE;
+}
+
+VkImage VulkanRenderer::GetHybridCompositeTargetImage() const
+{
+    return impl_ ? impl_->hybridCompositeTarget.image : VK_NULL_HANDLE;
+}
+
+VkImageView VulkanRenderer::GetHybridCompositeTargetView() const
+{
+    return impl_ ? impl_->hybridCompositeTarget.view : VK_NULL_HANDLE;
+}
+
+VkFramebuffer VulkanRenderer::GetHybridCompositeFramebuffer() const
+{
+    return impl_ ? impl_->hybridCompositeTarget.framebuffer : VK_NULL_HANDLE;
+}
+
+VkRenderPass VulkanRenderer::GetHdrPostRenderPass() const
+{
+    return impl_ && impl_->postProcessRenderPass ? *impl_->postProcessRenderPass : VK_NULL_HANDLE;
+}
+
+VkExtent2D VulkanRenderer::GetFramebufferExtent() const
+{
+    return impl_ ? impl_->extent : VkExtent2D{0, 0};
+}
+
+void* VulkanRenderer::GetDeferredPipelineOpaque()
+{
+    return impl_ ? static_cast<void*>(&impl_->deferredPipeline) : nullptr;
 }

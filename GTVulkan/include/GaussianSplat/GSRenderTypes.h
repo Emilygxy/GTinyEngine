@@ -36,6 +36,8 @@ struct GSRenderPushConstants {
     uint32_t height;
     float depth_near;
     float depth_far;
+    /** When front-to-back transmittance T drops so (1-T) >= this, lock GS depth (Godot-style first-hit). Typical 0.4–0.6. */
+    float depth_capture_alpha;
 };
 
 struct GSRadixSortPushConstants {

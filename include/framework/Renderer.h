@@ -1,7 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <vector>
+
+#include <vulkan/vulkan.h>
 #include <unordered_map>
 #include <glm/glm.hpp>
 #include "materials/BaseMaterial.h"
@@ -184,6 +187,22 @@ public:
     std::shared_ptr<te::RenderPass> GetRenderPass(const std::string& name) const override;
     void ExecuteRenderPasses(const std::vector<RenderCommand>& commands = {}) override;
     void SetRenderContext(const std::shared_ptr<RenderContext>& pRenderContext) override;
+
+    /** Optional: runs once per frame before the Vulkan deferred graph (e.g. GS preprocess submit/wait). */
+    void SetHybridPreprocessCallback(std::function<void()> callback);
+    /** Optional: recorded after deferred lighting on the main frame command buffer (e.g. GS + compositor). */
+    void SetHybridAfterLightingCallback(std::function<void(VkCommandBuffer, uint32_t swapchainImageIndex)> callback);
+
+    VkImageView GetLightingTargetView() const;
+    VkImage GetLightingTargetImage() const;
+    VkImage GetHybridCompositeTargetImage() const;
+    VkImageView GetHybridCompositeTargetView() const;
+    VkFramebuffer GetHybridCompositeFramebuffer() const;
+    VkRenderPass GetHdrPostRenderPass() const;
+    VkExtent2D GetFramebufferExtent() const;
+    /** Opaque pointer to `te::VulkanDeferredPipeline` (avoids header include cycle). */
+    void* GetDeferredPipelineOpaque();
+    std::shared_ptr<RenderContext> GetRenderContext() const { return mpRenderContext; }
 
 private:
     struct Impl;

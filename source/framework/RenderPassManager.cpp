@@ -228,6 +228,8 @@ namespace te
         mVulkanResourceHandles.clear();
         mVulkanPostProcessCallback = {};
         mVulkanPresentCallback = {};
+        mVulkanHybridAfterLightingCallback = {};
+        mVulkanCurrentSwapchainImageIndex = 0;
         mpVulkanDeferredPipeline = nullptr;
         mVulkanCommandBuffer = VK_NULL_HANDLE;
     }
@@ -405,10 +407,25 @@ namespace te
         };
         mVulkanPassNodes.push_back(std::move(lightingNode));
 
+        std::string postDependency = "VkLightingPass";
+        if (mVulkanHybridAfterLightingCallback) {
+            VulkanPassNode hybridNode;
+            hybridNode.name = "VkHybridAfterLighting";
+            hybridNode.dependencies = { "VkLightingPass" };
+            hybridNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
+                if (!mVulkanHybridAfterLightingCallback) {
+                    return;
+                }
+                mVulkanHybridAfterLightingCallback(commandBuffer, mVulkanCurrentSwapchainImageIndex);
+            };
+            mVulkanPassNodes.push_back(std::move(hybridNode));
+            postDependency = "VkHybridAfterLighting";
+        }
+
         if (mVulkanPostProcessCallback) {
             VulkanPassNode postProcessNode;
             postProcessNode.name = "VkPostProcessPass";
-            postProcessNode.dependencies = { "VkLightingPass" };
+            postProcessNode.dependencies = { postDependency };
             postProcessNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
                 if (!mVulkanPostProcessCallback) return;
                 mVulkanPostProcessCallback(commandBuffer);
@@ -419,7 +436,7 @@ namespace te
         if (mVulkanPresentCallback) {
             VulkanPassNode presentNode;
             presentNode.name = "VkPresentPass";
-            presentNode.dependencies = { mVulkanPostProcessCallback ? "VkPostProcessPass" : "VkLightingPass" };
+            presentNode.dependencies = { mVulkanPostProcessCallback ? "VkPostProcessPass" : postDependency };
             presentNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
                 if (!mVulkanPresentCallback) return;
                 mVulkanPresentCallback(commandBuffer);

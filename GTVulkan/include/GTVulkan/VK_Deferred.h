@@ -43,6 +43,7 @@ public:
     VkFramebuffer Framebuffer() const { return framebuffer_; }
     VkImageView ColorView(GBufferSlot slot) const { return colorAttachments_[static_cast<uint32_t>(slot)].view; }
     VkImageView DepthView() const { return depthAttachment_.view; }
+    VkImage DepthImage() const { return depthAttachment_.image; }
     VkFormat ColorFormat(GBufferSlot slot) const { return colorAttachments_[static_cast<uint32_t>(slot)].format; }
     VkFormat DepthFormat() const { return depthAttachment_.format; }
 
