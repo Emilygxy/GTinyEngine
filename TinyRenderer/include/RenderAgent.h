@@ -119,9 +119,13 @@ private:
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
-	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
-	                          const te::AaBB& aabb, float& t);
-	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t);
+	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
+	                          const te::AaBB& aabb, float& t) const;
+	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t) const;
+	bool TryPickSceneGeometry(const Ray& ray,
+	                          std::shared_ptr<BasicGeometry>& outGeometry,
+	                          glm::vec3& outHitPosition,
+	                          float& outDistance) const;
 
 	void HandleMouseClick(double xpos, double ypos);
 
@@ -147,6 +151,7 @@ private:
 
 	// Mouse picking state
 	bool mGeomSelected{ false };
+	std::shared_ptr<BasicGeometry> mpPickedGeometry;
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 	bool mMultithreadedRendering{ true };
 };

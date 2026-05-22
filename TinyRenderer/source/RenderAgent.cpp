@@ -220,6 +220,7 @@ void RenderAgent::ActivateSandbox(int index)
     mSelectedSandboxIndex = index;
     mPendingSandboxIndex = -1;
     mGeomSelected = false;
+    mpPickedGeometry.reset();
 }
 
 void RenderAgent::ProcessPendingSandboxSwitch()
@@ -524,12 +525,12 @@ void RenderAgent::UpdateGUI()
     ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
     
-    if (mGeomSelected)
+    if (mGeomSelected && mpPickedGeometry)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected! Hit by AABB, there may in delta errors.");
-        ImGui::Text("Position: (%.2f, %.2f, %.2f)", 
-                   mSelectedGeomPosition.x, 
-                   mSelectedGeomPosition.y, 
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected!");
+        ImGui::Text("Hit position: (%.2f, %.2f, %.2f)",
+                   mSelectedGeomPosition.x,
+                   mSelectedGeomPosition.y,
                    mSelectedGeomPosition.z);
     }
     else
@@ -544,7 +545,10 @@ void RenderAgent::UpdateGUI()
     // Material Panel
     ImGui::Separator();
     ImGui::Text("Material Properties");
-    if (auto sceneGeometry = GetSceneGeometry())
+    const auto sceneGeometry = (mGeomSelected && mpPickedGeometry)
+        ? mpPickedGeometry
+        : GetSceneGeometry();
+    if (sceneGeometry)
     {
         auto pMat = sceneGeometry->GetMaterial();
         if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
@@ -713,7 +717,7 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
     return {rayOrigin, rayDirection};
 }
 
-bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
+bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t) const
 {
     // Ray-AABB intersection using slab method
     // This is a more general approach that works for any AABB
@@ -763,7 +767,7 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     return true;
 }
 
-bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t)
+bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t) const
 {
     if (!pGeometry) 
     {
@@ -851,66 +855,82 @@ bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<Ba
     return false;
 }
 
-void RenderAgent::HandleMouseClick(double xpos, double ypos)
+bool RenderAgent::TryPickSceneGeometry(const Ray& ray,
+                                       std::shared_ptr<BasicGeometry>& outGeometry,
+                                       glm::vec3& outHitPosition,
+                                       float& outDistance) const
 {
-    // Get camera position
-    auto camera = mpRenderContext->GetAttachedCamera();
-    if (!camera) return;
-    
-    glm::vec3 cameraPos = camera->GetEye();
-    auto re_ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
-    
-    // Debug output
-    std::cout << "Mouse click at: (" << xpos << ", " << ypos << ")" << std::endl;
-    std::cout << "Camera position: (" << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << ")" << std::endl;
-    std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
-    
-    // Get sphere information for intersection testing
-    auto sceneGeometry = GetSceneGeometry();
-    if (!sceneGeometry) return;
-    
-    // Get geometry's world transform to find center position
-    glm::mat4 worldTransform = sceneGeometry->GetWorldTransform();
-    glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
-    
-    // Get sphere radius (assuming it's a Sphere object)
-    auto sphere = std::dynamic_pointer_cast<Sphere>(sceneGeometry);
-    float sphereRadius = 1.0f; // Default radius
-    if (sphere) {
-        sphereRadius = sphere->GetRadius();
-    }
-    
-    // Debug sphere info
-    std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
-    
-    auto worldAABB = sceneGeometry->GetWorldAABB();
-    
-    if (!worldAABB.has_value()) {
-        std::cout << "No AABB available for geometry" << std::endl;
-        return;
-    }
-    
-    // Debug AABB info
-    std::cout << "World AABB min: (" << worldAABB->min.x << ", " << worldAABB->min.y << ", " << worldAABB->min.z << ")" << std::endl;
-    std::cout << "World AABB max: (" << worldAABB->max.x << ", " << worldAABB->max.y << ", " << worldAABB->max.z << ")" << std::endl;
-    
-    // Test intersection with geometry's world AABB
-    // Both ray and AABB are in world space, so we can test directly
-    float t;
-    if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
-    {
-        mGeomSelected = true;
+    float closestDistance = std::numeric_limits<float>::max();
+    std::shared_ptr<BasicGeometry> closestGeometry;
 
-        // detail hiting
-        mGeomSelected &= TrianglesIntersection(re_ray, sceneGeometry, t);
-        if (mGeomSelected)
+    for (const auto& command : GetSceneRenderCommands())
+    {
+        auto geometry = std::dynamic_pointer_cast<BasicGeometry>(command.fragmentsSource);
+        if (!geometry)
         {
-            mSelectedGeomPosition = geomCenter;
-            std::cout << "Geometry hit! Distance: " << t << std::endl;
+            continue;
+        }
+
+        const auto worldAABB = geometry->GetWorldAABB();
+        if (!worldAABB.has_value())
+        {
+            continue;
+        }
+
+        float t = 0.0f;
+        if (!RayIntersection(ray.origin, ray.direction, worldAABB.value(), t))
+        {
+            continue;
+        }
+
+        if (!TrianglesIntersection(ray, geometry, t))
+        {
+            continue;
+        }
+
+        if (t < closestDistance)
+        {
+            closestDistance = t;
+            closestGeometry = geometry;
         }
     }
-    else {
+
+    if (!closestGeometry)
+    {
+        return false;
+    }
+
+    outGeometry = closestGeometry;
+    outDistance = closestDistance;
+    outHitPosition = ray.origin + ray.direction * closestDistance;
+    return true;
+}
+
+void RenderAgent::HandleMouseClick(double xpos, double ypos)
+{
+    auto camera = mpRenderContext->GetAttachedCamera();
+    if (!camera)
+    {
+        return;
+    }
+
+    const auto ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
+
+    float hitDistance = 0.0f;
+    std::shared_ptr<BasicGeometry> pickedGeometry;
+    glm::vec3 hitPosition{ 0.0f };
+
+    if (TryPickSceneGeometry(ray, pickedGeometry, hitPosition, hitDistance))
+    {
+        mGeomSelected = true;
+        mpPickedGeometry = pickedGeometry;
+        mSelectedGeomPosition = hitPosition;
+        std::cout << "Geometry hit! Distance: " << hitDistance << std::endl;
+    }
+    else
+    {
         mGeomSelected = false;
+        mpPickedGeometry.reset();
         std::cout << "No hit" << std::endl;
     }
 }

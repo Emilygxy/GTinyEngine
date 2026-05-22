@@ -14,5 +14,5 @@ public:
 
 private:
     std::shared_ptr<BasicGeometry> mpGeometry;
-    std::shared_ptr<BasicGeometry> mpPlaneGeometry;
+    std::shared_ptr<BasicGeometry> mpPlaneGeometry; // Added plane geometry for shadow receiving( like a floor)
 };

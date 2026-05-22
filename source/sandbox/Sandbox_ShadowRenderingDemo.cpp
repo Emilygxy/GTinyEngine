@@ -11,7 +11,7 @@ void Sandbox_ShadowRenderingDemo::Init(const std::shared_ptr<IRenderer>& rendere
     (void)renderer;
 
     mpGeometry = std::make_shared<Sphere>();
-    mpPlaneGeometry = std::make_shared<Plane>();
+    mpPlaneGeometry = std::make_shared<Plane>(4.0f, 4.0f);
 
     auto material = std::make_shared<PBRMaterial>();
     material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
@@ -21,7 +21,9 @@ void Sandbox_ShadowRenderingDemo::Init(const std::shared_ptr<IRenderer>& rendere
     auto planeMaterial = std::make_shared<PBRMaterial>();
     planeMaterial->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
     mpPlaneGeometry->SetMaterial(planeMaterial);
-    mpPlaneGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+    glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
+    planeTransform = glm::rotate(planeTransform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    mpPlaneGeometry->SetWorldTransform(planeTransform);
 }
 
 void Sandbox_ShadowRenderingDemo::Update(const std::shared_ptr<IRenderer>& renderer)

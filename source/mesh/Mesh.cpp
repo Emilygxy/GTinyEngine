@@ -86,7 +86,7 @@ std::optional<te::AaBB> Mesh::GetWorldAABB()
 {
     auto frag = GetDefaultFragment();
     if (frag.mpGeometry)
-        return frag.mpGeometry->GetAABB(true);
+        return frag.mpGeometry->GetWorldAABB();
 
     return std::nullopt;
 }
