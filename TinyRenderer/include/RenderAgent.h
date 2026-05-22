@@ -30,6 +30,8 @@ class RenderCommandQueue;
 class FrameSync;
 class RenderThread;
 
+#include "TinyEngineHostUI.h"
+
 class EventHelper
 {
 public:
@@ -99,10 +101,6 @@ private:
 	void RenderLoop();
 	void ProcessPendingSandboxSwitch();
 	void ActivateSandbox(int index);
-	void DrawMainToolbar();
-	void DrawSandboxSelectorUI();
-	void DrawHelpUI();
-	void DrawSceneHelperUI();
 	std::vector<RenderCommand> GetSceneRenderCommands() const;
 	std::shared_ptr<FragmentsSource> GetSceneFragmentsSource() const;
 	std::shared_ptr<BasicGeometry> GetSceneGeometry() const;
@@ -157,10 +155,9 @@ private:
 	std::shared_ptr<BasicGeometry> mpPickedGeometry;
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 	bool mMultithreadedRendering{ true };
-	bool mEnableInteraction = false;
 	bool mShowHelpWindow{ false };
 	bool mShowFileHandleWindow{ false };
 	bool mShowSceneHelperWindow{ true };
-	static constexpr const char* kAppTitle = "Hi TinyEngine";
 
+	TinyEngineHostUI mHostUI;
 };

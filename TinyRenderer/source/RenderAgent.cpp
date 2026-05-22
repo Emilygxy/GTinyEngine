@@ -28,6 +28,7 @@
 #include <mutex>
 
 #include "GUIManager.h"
+#include "TinyEngineHostUI.h"
 #include "imgui.h"
 
 // declare external mutex for context synchronization (defined in RenderThread.cpp)
@@ -91,7 +92,7 @@ void RenderAgent::InitGL()
 
     // glfw window creation
     // --------------------
-    mWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, kAppTitle, NULL, NULL);
+    mWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, TinyEngineHostUI::kAppTitle, NULL, NULL);
     if (mWindow == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -236,38 +237,6 @@ void RenderAgent::ProcessPendingSandboxSwitch()
     }
 
     ActivateSandbox(mPendingSandboxIndex);
-}
-
-void RenderAgent::DrawSandboxSelectorUI()
-{
-    if (mSandboxCatalog.empty())
-    {
-        return;
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Sandbox");
-
-    std::vector<const char*> labels;
-    labels.reserve(mSandboxCatalog.size());
-    for (const auto& entry : mSandboxCatalog)
-    {
-        labels.push_back(entry.displayName.c_str());
-    }
-
-    if (ImGui::Combo("Active Demo", &mSelectedSandboxIndex, labels.data(), static_cast<int>(labels.size())))
-    {
-        if (mSelectedSandboxIndex != mActiveSandboxIndex)
-        {
-            mPendingSandboxIndex = mSelectedSandboxIndex;
-        }
-    }
-
-    if (mActiveSandboxIndex >= 0
-        && mActiveSandboxIndex < static_cast<int>(mSandboxCatalog.size()))
-    {
-        ImGui::Text("Running: %s", mSandboxCatalog[static_cast<size_t>(mActiveSandboxIndex)].displayName.c_str());
-    }
 }
 
 void RenderAgent::Run()
@@ -517,244 +486,38 @@ void RenderAgent::SetupMultiPassRendering()
     mpRenderer->SetMultiPassEnabled(true);
 }
 
-namespace
-{
-    void BeginPanelBelowToolbar(const char* title, bool* pOpen)
-    {
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        constexpr float kPad = 8.0f;
-        ImGui::SetNextWindowPos(
-            ImVec2(viewport->WorkPos.x + kPad, viewport->WorkPos.y + kPad),
-            ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowBgAlpha(0.92f);
-        ImGui::Begin(title, pOpen);
-    }
-}
-
-void RenderAgent::DrawMainToolbar()
-{
-    if (!ImGui::BeginMainMenuBar())
-    {
-        return;
-    }
-
-    if (ImGui::MenuItem("File", nullptr, &mShowFileHandleWindow))
-    {
-    }
-    ImGui::Separator();
-
-    if (ImGui::MenuItem("Help", nullptr, &mShowHelpWindow))
-    {
-    }
-    ImGui::Separator();
-    if (ImGui::MenuItem("Scene Helper", nullptr, &mShowSceneHelperWindow))
-    {
-    }
-
-    const char* interactionLabel = enableInteraction ? "Interaction: ON (Switch By INSERT Key)" : "Interaction: OFF (Switch By INSERT Key)";
-    const float statusWidth = ImGui::CalcTextSize(interactionLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SameLine(ImGui::GetWindowWidth() - statusWidth);
-    ImGui::TextDisabled("%s", interactionLabel);
-
-    ImGui::EndMainMenuBar();
-}
-
-void RenderAgent::DrawHelpUI()
-{
-    if (!mShowHelpWindow)
-    {
-        return;
-    }
-
-    BeginPanelBelowToolbar("Help", &mShowHelpWindow);
-
-    if (ImGui::CollapsingHeader("Camera & Mouse", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::BulletText("INSERT: toggle fly camera (capture / release mouse)");
-        ImGui::Text("  Status: %s", enableInteraction ? "ON (WASD + mouse look)" : "OFF (UI mode)");
-        ImGui::BulletText("W / A / S / D: move forward / left / back / right");
-        ImGui::BulletText("Mouse move: look around (when interaction is ON)");
-        ImGui::BulletText("Mouse wheel: adjust FOV (when interaction is ON)");
-    }
-
-    if (ImGui::CollapsingHeader("Scene Tools", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::BulletText("Left click: pick geometry (sphere / plane, etc.)");
-        ImGui::BulletText("B: toggle backface culling");
-        ImGui::BulletText("Active Demo: use the combo in \"Scene Helper\"");
-    }
-
-    if (ImGui::CollapsingHeader("Window", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::BulletText("ESC: close application");
-        ImGui::BulletText("Resize window: viewport updates automatically");
-    }
-
-    ImGui::Separator();
-    ImGui::TextDisabled("Use toolbar buttons to open Help / Scene Helper.");
-    ImGui::TextDisabled("Focus on a panel to use the mouse with UI controls.");
-
-    ImGui::End();
-}
-
-void RenderAgent::DrawSceneHelperUI()
-{
-    if (!mShowSceneHelperWindow)
-    {
-        return;
-    }
-
-    BeginPanelBelowToolbar("Scene Helper", &mShowSceneHelperWindow);
-
-    DrawSandboxSelectorUI();
-
-    ImGui::Text("Click on the Geometry to select it!");
-    ImGui::Separator();
-    
-    if (mGeomSelected && mpPickedGeometry)
-    {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected!");
-        ImGui::Text("Hit position: (%.2f, %.2f, %.2f)",
-                   mSelectedGeomPosition.x,
-                   mSelectedGeomPosition.y,
-                   mSelectedGeomPosition.z);
-    }
-    else
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No Geometry selected");
-    }
-    
-    ImGui::Separator();
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
-               1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-
-    // Material Panel
-    ImGui::Separator();
-    ImGui::Text("Material Properties");
-    const auto sceneGeometry = (mGeomSelected && mpPickedGeometry)
-        ? mpPickedGeometry
-        : GetSceneGeometry();
-    if (sceneGeometry)
-    {
-        auto pMat = sceneGeometry->GetMaterial();
-        if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
-        {
-            // Material Properties Section
-            if (ImGui::CollapsingHeader("PBR Material", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                // Albedo (Base Color)
-                glm::vec3 albedo = pPBRMat->GetAlbedo();
-                float albedoArray[3] = { albedo.r, albedo.g, albedo.b };
-                if (ImGui::ColorEdit3("Albedo", albedoArray))
-                {
-                    pPBRMat->SetAlbedo(glm::vec3(albedoArray[0], albedoArray[1], albedoArray[2]));
-                }
-                
-                // Metallic
-                float metallic = pPBRMat->GetMetallic();
-                if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f, "%.2f"))
-                {
-                    pPBRMat->SetMetallic(metallic);
-                }
-                
-                // Roughness
-                float roughness = pPBRMat->GetRoughness();
-                if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f, "%.2f"))
-                {
-                    pPBRMat->SetRoughness(roughness);
-                }
-                
-                // Ambient Occlusion
-                float ao = pPBRMat->GetAO();
-                if (ImGui::SliderFloat("AO", &ao, 0.0f, 1.0f, "%.2f"))
-                {
-                    pPBRMat->SetAO(ao);
-                }
-                
-                ImGui::Separator();
-                ImGui::Text("Lighting Controls");
-                
-                // Ambient Intensity
-                float ambientIntensity = pPBRMat->GetAmbientIntensity();
-                if (ImGui::SliderFloat("Ambient Intensity", &ambientIntensity, 0.0f, 2.0f, "%.2f"))
-                {
-                    pPBRMat->SetAmbientIntensity(ambientIntensity);
-                }
-                
-                // Light Intensity
-                float lightIntensity = pPBRMat->GetLightIntensity();
-                if (ImGui::SliderFloat("Light Intensity", &lightIntensity, 0.0f, 5.0f, "%.2f"))
-                {
-                    pPBRMat->SetLightIntensity(lightIntensity);
-                }
-                
-                // Exposure
-                float exposure = pPBRMat->GetExposure();
-                if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 3.0f, "%.2f"))
-                {
-                    pPBRMat->SetExposure(exposure);
-                }
-                
-                // Quick preset buttons
-                ImGui::Separator();
-                ImGui::Text("Presets");
-                if (ImGui::Button("Metal (Polished)"))
-                {
-                    pPBRMat->SetMetallic(1.0f);
-                    pPBRMat->SetRoughness(0.1f);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Metal (Rusted)"))
-                {
-                    pPBRMat->SetMetallic(0.8f);
-                    pPBRMat->SetRoughness(0.7f);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Plastic"))
-                {
-                    pPBRMat->SetMetallic(0.0f);
-                    pPBRMat->SetRoughness(0.3f);
-                }
-                if (ImGui::Button("Rubber"))
-                {
-                    pPBRMat->SetMetallic(0.0f);
-                    pPBRMat->SetRoughness(0.9f);
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("Default"))
-                {
-                    pPBRMat->SetAlbedo(glm::vec3(0.7f, 0.3f, 0.3f));
-                    pPBRMat->SetMetallic(0.0f);
-                    pPBRMat->SetRoughness(0.5f);
-                    pPBRMat->SetAO(1.0f);
-                    pPBRMat->SetAmbientIntensity(0.3f);
-                    pPBRMat->SetLightIntensity(1.0f);
-                    pPBRMat->SetExposure(1.0f);
-                }
-            }
-        }
-        else
-        {
-            ImGui::Text("Material type: Non-PBR Material");
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "PBR controls only available for PBRMaterial");
-        }
-    }
-    else
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No material attached");
-    }
-
-    ImGui::End();
-}
-
 void RenderAgent::UpdateGUI()
 {
-    // Build ImGui UI (this can be called without OpenGL context)
-    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
+    TinyEngineHostUIState uiState;
+    uiState.showHelpWindow = mShowHelpWindow;
+    uiState.showSceneHelperWindow = mShowSceneHelperWindow;
+    uiState.showFileHandleWindow = mShowFileHandleWindow;
+    uiState.cameraInteractionEnabled = enableInteraction;
+    uiState.selectedSandboxIndex = mSelectedSandboxIndex;
+    uiState.activeSandboxIndex = mActiveSandboxIndex;
+    uiState.geometrySelected = mGeomSelected;
+    uiState.selectedHitPosition = mSelectedGeomPosition;
+    uiState.pickedGeometry = mpPickedGeometry;
+    uiState.fallbackGeometry = GetSceneGeometry();
 
-    DrawMainToolbar();
-    DrawHelpUI();
-    DrawSceneHelperUI();
+    uiState.sandboxDisplayNames.reserve(mSandboxCatalog.size());
+    for (const auto& entry : mSandboxCatalog)
+    {
+        uiState.sandboxDisplayNames.push_back(entry.displayName);
+    }
+
+    mHostUI.BuildLayout(uiState);
+
+    mShowHelpWindow = uiState.showHelpWindow;
+    mShowSceneHelperWindow = uiState.showSceneHelperWindow;
+    mShowFileHandleWindow = uiState.showFileHandleWindow;
+    mSelectedSandboxIndex = uiState.selectedSandboxIndex;
+
+    if (uiState.pendingSandboxIndex >= 0
+        && uiState.pendingSandboxIndex != mActiveSandboxIndex)
+    {
+        mPendingSandboxIndex = uiState.pendingSandboxIndex;
+    }
 }
 
 void RenderAgent::RenderUI()
