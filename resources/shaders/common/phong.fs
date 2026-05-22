@@ -27,6 +27,7 @@ uniform vec4 u_useBlinn_Geometry; // if true, use Blinn-Phong shading model, oth
 
 uniform float u_enableShadow;
 uniform float u_shadowBias;
+uniform float u_enablePCF;
 
 bool isBlinnPhong()
 {
@@ -86,7 +87,7 @@ vec3 CalculatePhongColor()
     vec3 direct = diffuse + specular;
     if (u_enableShadow > 0.5)
     {
-        float shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, norm, lightDir, u_shadowBias);
+        float shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, norm, lightDir, u_shadowBias, u_enablePCF);
         direct *= (1.0 - shadow);
     }
 

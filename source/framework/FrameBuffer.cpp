@@ -64,6 +64,11 @@ namespace te
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mDesc.filterMode);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mDesc.filterMode);
 
+        if (mDesc.wrapMode == GL_CLAMP_TO_BORDER)
+        {
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, &mDesc.borderColor[0]);
+        }
+
         if (mDesc.generateMipmaps)
         {
             glGenerateMipmap(GL_TEXTURE_2D);

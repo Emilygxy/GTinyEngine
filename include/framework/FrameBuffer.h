@@ -44,7 +44,8 @@ namespace te
         bool generateMipmaps = false;        // Whether to generate mipmaps
         GLenum wrapMode = GL_CLAMP_TO_EDGE;  // Wrap mode
         GLenum filterMode = GL_LINEAR;       // Filter mode
-        
+        glm::vec4 borderColor{ 1.0f, 1.0f, 1.0f, 1.0f }; // Used with GL_CLAMP_TO_BORDER
+
         RenderTargetDesc() = default;
         RenderTargetDesc(const std::string& n, RenderTargetType t, RenderTargetFormat f, 
                         uint32_t w, uint32_t h)

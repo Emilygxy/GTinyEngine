@@ -80,6 +80,7 @@ public:
     void SetShadowMap(GLuint texture) { mShadowMap = texture; }
     void SetLightSpaceMatrix(const glm::mat4& matrix) { mLightSpaceMatrix = matrix; }
     void SetShadowBias(float bias) { mShadowBias = glm::max(bias, 0.0f); }
+    void SetShadowPCFEnabled(bool enabled) { mShadowPCFEnabled = enabled; }
 
 private:
     static constexpr int kShadowTextureUnit = 5;
@@ -104,4 +105,5 @@ private:
     GLuint mShadowMap{ 0 };
     glm::mat4 mLightSpaceMatrix{ 1.0f };
     float mShadowBias{ 0.005f };
+    bool mShadowPCFEnabled{ true };
 }; 

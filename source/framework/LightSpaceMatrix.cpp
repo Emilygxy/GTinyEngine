@@ -108,10 +108,16 @@ namespace te
         }
 
         const float pad = params.orthoPadding;
+
+        // GLM ortho(near, far) uses positive distances along -Z (OpenGL view space).
+        // View-space Z is usually negative: min.z = farthest, max.z = closest to the light camera.
+        const float nearPlaneDist = glm::max(-lightSpaceMax.z + pad, params.nearPlane);
+        const float farPlaneDist = glm::max(-lightSpaceMin.z + pad, nearPlaneDist + 0.1f);
+
         result.lightProjection = glm::ortho(
             lightSpaceMin.x - pad, lightSpaceMax.x + pad,
             lightSpaceMin.y - pad, lightSpaceMax.y + pad,
-            params.nearPlane, params.farPlane);
+            nearPlaneDist, farPlaneDist);
 
         result.lightSpace = result.lightProjection * result.lightView;
         return result;

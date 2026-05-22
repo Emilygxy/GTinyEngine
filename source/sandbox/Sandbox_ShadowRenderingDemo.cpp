@@ -16,10 +16,11 @@ void Sandbox_ShadowRenderingDemo::Init(const std::shared_ptr<IRenderer>& rendere
     auto material = std::make_shared<PBRMaterial>();
     material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
     mpGeometry->SetMaterial(material);
-    mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
+    mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.5f, -2.0f)));
 
     auto planeMaterial = std::make_shared<PBRMaterial>();
     //planeMaterial->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
+    planeMaterial->SetAlbedo({1.0f,1.0f,1.0f});
     mpPlaneGeometry->SetMaterial(planeMaterial);
     glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
     planeTransform = glm::rotate(planeTransform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -67,9 +68,8 @@ std::vector<RenderCommand> Sandbox_ShadowRenderingDemo::GetRenderCommands() cons
         planeCommand.fragmentsSource = mpPlaneGeometry;
         planeCommand.state = RenderMode::Opaque;
         planeCommand.hasUV = true;
-        planeCommand.renderpassflag = RenderPassFlag::Shadowing
-                                  | RenderPassFlag::Geometry
-                                  | RenderPassFlag::BaseColor;
+        // Floor only receives shadows; omit Shadowing so front-face cull does not remove it from the depth pass.
+        planeCommand.renderpassflag = RenderPassFlag::Geometry | RenderPassFlag::BaseColor;
         commands.push_back(planeCommand);
     }
 

@@ -158,6 +158,7 @@ void PhongMaterial::UpdateUniform()
     mpShader->setInt("u_shadowMap", kShadowTextureUnit);
     mpShader->setFloat("u_enableShadow", mShadowEnabled ? 1.0f : 0.0f);
     mpShader->setFloat("u_shadowBias", mShadowBias);
+    mpShader->setFloat("u_enablePCF", mShadowPCFEnabled ? 1.0f : 0.0f);
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)

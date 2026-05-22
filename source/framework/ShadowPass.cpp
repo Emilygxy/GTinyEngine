@@ -6,6 +6,7 @@
 #include "mesh/Vertex.h"
 #include "Light.h"
 #include "glad/glad.h"
+#include <algorithm>
 #include <iostream>
 
 namespace te
@@ -64,7 +65,8 @@ namespace te
             desc.format = output.format;
             desc.type = RenderTargetType::Depth;
             desc.filterMode = GL_NEAREST;
-            desc.wrapMode = GL_CLAMP_TO_EDGE;
+            desc.wrapMode = GL_CLAMP_TO_BORDER;
+            desc.borderColor = glm::vec4(1.0f);
 
             if (mFrameBuffer->AddRenderTarget(desc))
             {
@@ -85,24 +87,56 @@ namespace te
 
     AaBB ShadowPass::ComputeSceneBounds(const std::vector<RenderCommand>& commands) const
     {
-        AaBB bounds = AaBB::EmptyAaBB();
+        AaBB casterBounds = AaBB::EmptyAaBB();
+        AaBB receiverBounds = AaBB::EmptyAaBB();
+
         for (const auto& command : commands)
         {
-            if (!(command.renderpassflag & RenderPassFlag::Shadowing))
-            {
-                continue;
-            }
             if (!command.fragmentsSource)
             {
                 continue;
             }
+
             const AaBB objectBounds = ComputeSceneBoundsFromFragmentsSource(command.fragmentsSource);
-            if (!objectBounds.IsEmpty())
+            if (objectBounds.IsEmpty())
             {
-                bounds.Union(objectBounds);
+                continue;
+            }
+
+            if (command.renderpassflag & RenderPassFlag::Shadowing)
+            {
+                casterBounds.Union(objectBounds);
+            }
+            if (command.renderpassflag & RenderPassFlag::BaseColor)
+            {
+                receiverBounds.Union(objectBounds);
             }
         }
-        return bounds;
+
+        if (casterBounds.IsEmpty() && receiverBounds.IsEmpty())
+        {
+            return AaBB::EmptyAaBB();
+        }
+        if (casterBounds.IsEmpty())
+        {
+            return receiverBounds;
+        }
+        if (receiverBounds.IsEmpty())
+        {
+            return casterBounds;
+        }
+
+        // Expand caster bounds in XZ so the shadow map covers the floor under casters,
+        // without stretching the frustum to the full 20x20 plane (which wastes texels).
+        constexpr float kGroundMargin = 4.0f;
+        AaBB fitBounds = casterBounds;
+        fitBounds.min.x = std::min(fitBounds.min.x, receiverBounds.min.x) - kGroundMargin;
+        fitBounds.max.x = std::max(fitBounds.max.x, receiverBounds.max.x) + kGroundMargin;
+        fitBounds.min.z = std::min(fitBounds.min.z, receiverBounds.min.z) - kGroundMargin;
+        fitBounds.max.z = std::max(fitBounds.max.z, receiverBounds.max.z) + kGroundMargin;
+        fitBounds.min.y = std::min(casterBounds.min.y, receiverBounds.min.y);
+        fitBounds.max.y = std::max(casterBounds.max.y, receiverBounds.max.y);
+        return fitBounds;
     }
 
     glm::vec3 ShadowPass::ResolveLightDirection(const glm::vec3& sceneCenter) const
@@ -174,6 +208,8 @@ namespace te
 
         shadowMaterial->OnApply();
 
+        // Default back-face depth (front-face cull breaks closed meshes like spheres:
+        // only the far shell is written and the ground shadow becomes a thin crescent).
         for (const auto& command : mCandidateCommands)
         {
             if (!command.fragmentsSource)

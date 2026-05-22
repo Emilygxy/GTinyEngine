@@ -43,6 +43,7 @@ uniform vec2 u_useIBL_ao;             // x: IBL, y: AO
 // Shadow mapping
 uniform float u_enableShadow;         // 0 = off, 1 = on
 uniform float u_shadowBias;           // base depth bias
+uniform float u_enablePCF;            // 0 = hard shadow, 1 = 3x3 PCF
 
 // ============================================
 // PBR Functions
@@ -173,7 +174,7 @@ void main()
     float shadow = 0.0;
     if (u_enableShadow > 0.5)
     {
-        shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, N, L, u_shadowBias);
+        shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, N, L, u_shadowBias, u_enablePCF);
         Lo *= (1.0 - shadow);
     }
 
