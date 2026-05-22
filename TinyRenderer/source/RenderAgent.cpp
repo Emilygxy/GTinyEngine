@@ -1,7 +1,10 @@
 #include "RenderAgent.h"
 //#include "Renderer.h"
+#include "Fragment.h"
+#include "sandbox/ISandbox.h"
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
+#include "mesh/Mesh.h"
 #include "materials/BlinnPhongMaterial.h"
 #include "materials/PBRMaterial.h"
 #include "materials/BlitMaterial.h"
@@ -160,22 +163,156 @@ void RenderAgent::SetupRenderer()
     mpRenderContext->PushAttachLight(pLight);
 }
 
-void RenderAgent::Render()
+void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
 {
-    if (!mpGeometry)
+    if (mSandbox && mpRenderer)
     {
-        //mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
-        mpGeometry = std::make_shared<Sphere>();
-        /*auto material = std::make_shared<BlinnPhongMaterial>();
-        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");*/
-
-        auto material = std::make_shared<PBRMaterial>();
-        material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
-        
-        mpGeometry->SetMaterial(material);
-        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
+        mSandbox->Teardown(mpRenderer);
     }
 
+    mSandbox = std::move(sandbox);
+    mActiveSandboxIndex = -1;
+    mPendingSandboxIndex = -1;
+
+    if (mSandbox && mpRenderer && mWindow)
+    {
+        std::lock_guard<std::mutex> lock(g_GLContextMutex);
+        glfwMakeContextCurrent(mWindow);
+        mSandbox->Init(mpRenderer);
+        glfwMakeContextCurrent(nullptr);
+    }
+}
+
+void RenderAgent::RegisterSandbox(const std::string& displayName,
+                                  std::function<std::unique_ptr<ISandbox>()> factory)
+{
+    mSandboxCatalog.push_back(SandboxEntry{displayName, std::move(factory)});
+}
+
+void RenderAgent::ActivateSandbox(int index)
+{
+    if (index < 0 || index >= static_cast<int>(mSandboxCatalog.size()))
+    {
+        return;
+    }
+
+    if (mSandbox && mpRenderer)
+    {
+        mSandbox->Teardown(mpRenderer);
+    }
+
+    if (mpCommandQueue)
+    {
+        mpCommandQueue->Clear();
+    }
+
+    mSandbox = mSandboxCatalog[static_cast<size_t>(index)].factory();
+    if (mSandbox && mpRenderer && mWindow)
+    {
+        // PBR SetAlbedoTexturePath uploads via GL; must run with a current context on the main thread.
+        std::lock_guard<std::mutex> lock(g_GLContextMutex);
+        glfwMakeContextCurrent(mWindow);
+        mSandbox->Init(mpRenderer);
+        glfwMakeContextCurrent(nullptr);
+    }
+
+    mActiveSandboxIndex = index;
+    mSelectedSandboxIndex = index;
+    mPendingSandboxIndex = -1;
+    mGeomSelected = false;
+    mpPickedGeometry.reset();
+}
+
+void RenderAgent::ProcessPendingSandboxSwitch()
+{
+    if (mPendingSandboxIndex < 0 || mPendingSandboxIndex == mActiveSandboxIndex)
+    {
+        return;
+    }
+
+    ActivateSandbox(mPendingSandboxIndex);
+}
+
+void RenderAgent::DrawSandboxSelectorUI()
+{
+    if (mSandboxCatalog.empty())
+    {
+        return;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Sandbox");
+
+    std::vector<const char*> labels;
+    labels.reserve(mSandboxCatalog.size());
+    for (const auto& entry : mSandboxCatalog)
+    {
+        labels.push_back(entry.displayName.c_str());
+    }
+
+    if (ImGui::Combo("Active Demo", &mSelectedSandboxIndex, labels.data(), static_cast<int>(labels.size())))
+    {
+        if (mSelectedSandboxIndex != mActiveSandboxIndex)
+        {
+            mPendingSandboxIndex = mSelectedSandboxIndex;
+        }
+    }
+
+    if (mActiveSandboxIndex >= 0
+        && mActiveSandboxIndex < static_cast<int>(mSandboxCatalog.size()))
+    {
+        ImGui::Text("Running: %s", mSandboxCatalog[static_cast<size_t>(mActiveSandboxIndex)].displayName.c_str());
+    }
+}
+
+void RenderAgent::Run()
+{
+    PreRender();
+
+    if (!mSandboxCatalog.empty() && mActiveSandboxIndex < 0 && !mSandbox)
+    {
+        ActivateSandbox(0);
+    }
+    else if (mSandbox && mActiveSandboxIndex < 0 && mpRenderer)
+    {
+        mSandbox->Init(mpRenderer);
+    }
+
+    RenderLoop();
+
+    if (mSandbox)
+    {
+        mSandbox->Teardown(mpRenderer);
+    }
+
+    PostRender();
+}
+
+std::vector<RenderCommand> RenderAgent::GetSceneRenderCommands() const
+{
+    if (!mSandbox)
+    {
+        return {};
+    }
+    return mSandbox->GetRenderCommands();
+}
+
+std::shared_ptr<FragmentsSource> RenderAgent::GetSceneFragmentsSource() const
+{
+    if (!mSandbox)
+    {
+        return nullptr;
+    }
+    return mSandbox->GetFragmentsSource();
+}
+
+std::shared_ptr<BasicGeometry> RenderAgent::GetSceneGeometry() const
+{
+    return std::dynamic_pointer_cast<BasicGeometry>(GetSceneFragmentsSource());
+}
+
+void RenderAgent::RenderLoop()
+{
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -189,6 +326,15 @@ void RenderAgent::Render()
         // input
         // -----
         EventHelper::GetInstance().processInput(mWindow);
+
+        ProcessPendingSandboxSwitch();
+
+        if (mSandbox)
+        {
+            mSandbox->Update(mpRenderer);
+        }
+
+        auto sceneCommands = GetSceneRenderCommands();
 
         if (mMultithreadedRendering)
         {
@@ -206,19 +352,8 @@ void RenderAgent::Render()
             }
             
             // 2. generate render commands (main thread)
-            std::vector<RenderCommand> commands;
-            RenderCommand sphereCommand;
-            sphereCommand.fragmentsSource = mpGeometry;
-           /* sphereCommand.material = mpGeometry->GetMaterial();
-            sphereCommand.vertices = mpGeometry->GetVertices();
-            sphereCommand.indices = mpGeometry->GetIndices();
-            sphereCommand.transform = mpGeometry->GetWorldTransform();*/
-            sphereCommand.state = RenderMode::Opaque;
-            sphereCommand.hasUV = true;
-            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-            
-            commands.push_back(sphereCommand);
-            
+            const std::vector<RenderCommand> commands = sceneCommands;
+
             // 3. build ImGui UI (this can be done without OpenGL context)
             UpdateGUI();
             
@@ -258,29 +393,19 @@ void RenderAgent::Render()
             mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             mpRenderer->Clear(0x3); // clear color/clear depth
 
-            if (mpRenderer->IsMultiPassEnabled())
+            if (mpRenderer->IsMultiPassEnabled() && !sceneCommands.empty())
             {
-                // create render command
-                std::vector<RenderCommand> commands;
-                RenderCommand sphereCommand;
-                sphereCommand.fragmentsSource = mpGeometry;
-                /*fragmentsSource.material = mpGeometry->GetMaterial();
-                fragmentsSource.vertices = mpGeometry->GetVertices();
-                fragmentsSource.indices = mpGeometry->GetIndices();
-                fragmentsSource.transform = mpGeometry->GetWorldTransform();*/
-                sphereCommand.state = RenderMode::Opaque;
-                sphereCommand.hasUV = true;
-                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-
-                commands.push_back(sphereCommand);
-
-                // use RenderPassManager to execute Pass (with correct dependency management)
-                te::RenderPassManager::GetInstance().ExecuteAll(commands);
+                te::RenderPassManager::GetInstance().ExecuteAll(sceneCommands);
             }
             else
             {
-                // traditional single Pass rendering
-                mpRenderer->DrawMesh(mpGeometry);
+                for (const auto& command : sceneCommands)
+                {
+                    if (auto mesh = std::dynamic_pointer_cast<Mesh>(command.fragmentsSource))
+                    {
+                        mpRenderer->DrawMesh(mesh);
+                    }
+                }
             }
 
             //mpRenderer->DrawBackgroud();
@@ -394,16 +519,18 @@ void RenderAgent::UpdateGUI()
     
     // Create a simple window
     ImGui::Begin("GUI Helper");
-    
+
+    DrawSandboxSelectorUI();
+
     ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
     
-    if (mGeomSelected)
+    if (mGeomSelected && mpPickedGeometry)
     {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected! Hit by AABB, there may in delta errors.");
-        ImGui::Text("Position: (%.2f, %.2f, %.2f)", 
-                   mSelectedGeomPosition.x, 
-                   mSelectedGeomPosition.y, 
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Geometry Selected!");
+        ImGui::Text("Hit position: (%.2f, %.2f, %.2f)",
+                   mSelectedGeomPosition.x,
+                   mSelectedGeomPosition.y,
                    mSelectedGeomPosition.z);
     }
     else
@@ -418,8 +545,12 @@ void RenderAgent::UpdateGUI()
     // Material Panel
     ImGui::Separator();
     ImGui::Text("Material Properties");
-    if (auto pMat = mpGeometry->GetMaterial())
+    const auto sceneGeometry = (mGeomSelected && mpPickedGeometry)
+        ? mpPickedGeometry
+        : GetSceneGeometry();
+    if (sceneGeometry)
     {
+        auto pMat = sceneGeometry->GetMaterial();
         if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
         {
             // Material Properties Section
@@ -586,7 +717,7 @@ Ray RenderAgent::ScreenToWorldRay(float mouseX, float mouseY)
     return {rayOrigin, rayDirection};
 }
 
-bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t)
+bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const te::AaBB& aabb, float& t) const
 {
     // Ray-AABB intersection using slab method
     // This is a more general approach that works for any AABB
@@ -636,7 +767,7 @@ bool RenderAgent::RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& r
     return true;
 }
 
-bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t)
+bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t) const
 {
     if (!pGeometry) 
     {
@@ -724,65 +855,82 @@ bool RenderAgent::TrianglesIntersection(const Ray& ray, const std::shared_ptr<Ba
     return false;
 }
 
-void RenderAgent::HandleMouseClick(double xpos, double ypos)
+bool RenderAgent::TryPickSceneGeometry(const Ray& ray,
+                                       std::shared_ptr<BasicGeometry>& outGeometry,
+                                       glm::vec3& outHitPosition,
+                                       float& outDistance) const
 {
-    // Get camera position
-    auto camera = mpRenderContext->GetAttachedCamera();
-    if (!camera) return;
-    
-    glm::vec3 cameraPos = camera->GetEye();
-    auto re_ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
-    
-    // Debug output
-    std::cout << "Mouse click at: (" << xpos << ", " << ypos << ")" << std::endl;
-    std::cout << "Camera position: (" << cameraPos.x << ", " << cameraPos.y << ", " << cameraPos.z << ")" << std::endl;
-    std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
-    
-    // Get sphere information for intersection testing
-    if (!mpGeometry) return;
-    
-    // Get geometry's world transform to find center position
-    glm::mat4 worldTransform = mpGeometry->GetWorldTransform();
-    glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
-    
-    // Get sphere radius (assuming it's a Sphere object)
-    auto sphere = std::dynamic_pointer_cast<Sphere>(mpGeometry);
-    float sphereRadius = 1.0f; // Default radius
-    if (sphere) {
-        sphereRadius = sphere->GetRadius();
-    }
-    
-    // Debug sphere info
-    std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
-    
-    auto worldAABB = mpGeometry->GetWorldAABB();
-    
-    if (!worldAABB.has_value()) {
-        std::cout << "No AABB available for geometry" << std::endl;
-        return;
-    }
-    
-    // Debug AABB info
-    std::cout << "World AABB min: (" << worldAABB->min.x << ", " << worldAABB->min.y << ", " << worldAABB->min.z << ")" << std::endl;
-    std::cout << "World AABB max: (" << worldAABB->max.x << ", " << worldAABB->max.y << ", " << worldAABB->max.z << ")" << std::endl;
-    
-    // Test intersection with geometry's world AABB
-    // Both ray and AABB are in world space, so we can test directly
-    float t;
-    if (RayIntersection(re_ray.origin, re_ray.direction, worldAABB.value(), t))
-    {
-        mGeomSelected = true;
+    float closestDistance = std::numeric_limits<float>::max();
+    std::shared_ptr<BasicGeometry> closestGeometry;
 
-        // detail hiting
-        mGeomSelected &= TrianglesIntersection(re_ray, mpGeometry, t);
-        if (mGeomSelected)
+    for (const auto& command : GetSceneRenderCommands())
+    {
+        auto geometry = std::dynamic_pointer_cast<BasicGeometry>(command.fragmentsSource);
+        if (!geometry)
         {
-            mSelectedGeomPosition = geomCenter;
-            std::cout << "Geometry hit! Distance: " << t << std::endl;
+            continue;
+        }
+
+        const auto worldAABB = geometry->GetWorldAABB();
+        if (!worldAABB.has_value())
+        {
+            continue;
+        }
+
+        float t = 0.0f;
+        if (!RayIntersection(ray.origin, ray.direction, worldAABB.value(), t))
+        {
+            continue;
+        }
+
+        if (!TrianglesIntersection(ray, geometry, t))
+        {
+            continue;
+        }
+
+        if (t < closestDistance)
+        {
+            closestDistance = t;
+            closestGeometry = geometry;
         }
     }
-    else {
+
+    if (!closestGeometry)
+    {
+        return false;
+    }
+
+    outGeometry = closestGeometry;
+    outDistance = closestDistance;
+    outHitPosition = ray.origin + ray.direction * closestDistance;
+    return true;
+}
+
+void RenderAgent::HandleMouseClick(double xpos, double ypos)
+{
+    auto camera = mpRenderContext->GetAttachedCamera();
+    if (!camera)
+    {
+        return;
+    }
+
+    const auto ray = ScreenToWorldRay(static_cast<float>(xpos), static_cast<float>(ypos));
+
+    float hitDistance = 0.0f;
+    std::shared_ptr<BasicGeometry> pickedGeometry;
+    glm::vec3 hitPosition{ 0.0f };
+
+    if (TryPickSceneGeometry(ray, pickedGeometry, hitPosition, hitDistance))
+    {
+        mGeomSelected = true;
+        mpPickedGeometry = pickedGeometry;
+        mSelectedGeomPosition = hitPosition;
+        std::cout << "Geometry hit! Distance: " << hitDistance << std::endl;
+    }
+    else
+    {
         mGeomSelected = false;
+        mpPickedGeometry.reset();
         std::cout << "No hit" << std::endl;
     }
 }

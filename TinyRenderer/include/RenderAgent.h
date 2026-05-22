@@ -3,7 +3,10 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <glm/glm.hpp>
+#include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace te
 {
@@ -14,7 +17,10 @@ namespace te
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+struct RenderCommand;
 class IRenderer;
+class ISandbox;
+class FragmentsSource;
 class Camera_Event;
 class RenderAgent;
 class BasicGeometry;
@@ -68,8 +74,12 @@ public:
 
 	void InitGL(); // main thread
 
+	void SetSandbox(std::unique_ptr<ISandbox> sandbox);
+	void RegisterSandbox(const std::string& displayName,
+	                     std::function<std::unique_ptr<ISandbox>()> factory);
+	void Run();
+
 	void PreRender();
-	void Render();
 	void PostRender();
 
 	GLFWwindow* GetWindow()
@@ -86,6 +96,20 @@ public:
 	void ResizeRenderView(int width, int height);
 
 private:
+	void RenderLoop();
+	void ProcessPendingSandboxSwitch();
+	void ActivateSandbox(int index);
+	void DrawSandboxSelectorUI();
+	std::vector<RenderCommand> GetSceneRenderCommands() const;
+	std::shared_ptr<FragmentsSource> GetSceneFragmentsSource() const;
+	std::shared_ptr<BasicGeometry> GetSceneGeometry() const;
+
+	struct SandboxEntry
+	{
+		std::string displayName;
+		std::function<std::unique_ptr<ISandbox>()> factory;
+	};
+
 	void SetupRenderer();
 	void SetupMultiPassRendering();
 
@@ -95,9 +119,13 @@ private:
 	
 	// Mouse picking functions
 	Ray ScreenToWorldRay(float mouseX, float mouseY);
-	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, 
-	                          const te::AaBB& aabb, float& t);
-	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t);
+	bool RayIntersection(const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
+	                          const te::AaBB& aabb, float& t) const;
+	bool TrianglesIntersection(const Ray& ray, const std::shared_ptr<BasicGeometry>& pGeometry, float& t) const;
+	bool TryPickSceneGeometry(const Ray& ray,
+	                          std::shared_ptr<BasicGeometry>& outGeometry,
+	                          glm::vec3& outHitPosition,
+	                          float& outDistance) const;
 
 	void HandleMouseClick(double xpos, double ypos);
 
@@ -110,7 +138,12 @@ private:
 
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
-	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
+
+	std::unique_ptr<ISandbox> mSandbox;
+	std::vector<SandboxEntry> mSandboxCatalog;
+	int mActiveSandboxIndex{ -1 };
+	int mSelectedSandboxIndex{ 0 };
+	int mPendingSandboxIndex{ -1 };
 	
 	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
 	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };
@@ -118,6 +151,7 @@ private:
 
 	// Mouse picking state
 	bool mGeomSelected{ false };
+	std::shared_ptr<BasicGeometry> mpPickedGeometry;
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 	bool mMultithreadedRendering{ true };
 };
