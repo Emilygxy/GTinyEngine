@@ -91,7 +91,7 @@ void RenderAgent::InitGL()
 
     // glfw window creation
     // --------------------
-    mWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Hi TinyEngine", NULL, NULL);
+    mWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, kAppTitle, NULL, NULL);
     if (mWindow == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -517,13 +517,94 @@ void RenderAgent::SetupMultiPassRendering()
     mpRenderer->SetMultiPassEnabled(true);
 }
 
-void RenderAgent::UpdateGUI()
+namespace
 {
-    // Build ImGui UI (this can be called without OpenGL context)
-    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
-    
-    // Create a simple window
-    ImGui::Begin("GUI Helper");
+    void BeginPanelBelowToolbar(const char* title, bool* pOpen)
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        constexpr float kPad = 8.0f;
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->WorkPos.x + kPad, viewport->WorkPos.y + kPad),
+            ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowBgAlpha(0.92f);
+        ImGui::Begin(title, pOpen);
+    }
+}
+
+void RenderAgent::DrawMainToolbar()
+{
+    if (!ImGui::BeginMainMenuBar())
+    {
+        return;
+    }
+
+    if (ImGui::MenuItem("File", nullptr, &mShowFileHandleWindow))
+    {
+    }
+    ImGui::Separator();
+
+    if (ImGui::MenuItem("Help", nullptr, &mShowHelpWindow))
+    {
+    }
+    ImGui::Separator();
+    if (ImGui::MenuItem("Scene Helper", nullptr, &mShowSceneHelperWindow))
+    {
+    }
+
+    const char* interactionLabel = enableInteraction ? "Interaction: ON (Switch By INSERT Key)" : "Interaction: OFF (Switch By INSERT Key)";
+    const float statusWidth = ImGui::CalcTextSize(interactionLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    ImGui::SameLine(ImGui::GetWindowWidth() - statusWidth);
+    ImGui::TextDisabled("%s", interactionLabel);
+
+    ImGui::EndMainMenuBar();
+}
+
+void RenderAgent::DrawHelpUI()
+{
+    if (!mShowHelpWindow)
+    {
+        return;
+    }
+
+    BeginPanelBelowToolbar("Help", &mShowHelpWindow);
+
+    if (ImGui::CollapsingHeader("Camera & Mouse", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::BulletText("INSERT: toggle fly camera (capture / release mouse)");
+        ImGui::Text("  Status: %s", enableInteraction ? "ON (WASD + mouse look)" : "OFF (UI mode)");
+        ImGui::BulletText("W / A / S / D: move forward / left / back / right");
+        ImGui::BulletText("Mouse move: look around (when interaction is ON)");
+        ImGui::BulletText("Mouse wheel: adjust FOV (when interaction is ON)");
+    }
+
+    if (ImGui::CollapsingHeader("Scene Tools", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::BulletText("Left click: pick geometry (sphere / plane, etc.)");
+        ImGui::BulletText("B: toggle backface culling");
+        ImGui::BulletText("Active Demo: use the combo in \"Scene Helper\"");
+    }
+
+    if (ImGui::CollapsingHeader("Window", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::BulletText("ESC: close application");
+        ImGui::BulletText("Resize window: viewport updates automatically");
+    }
+
+    ImGui::Separator();
+    ImGui::TextDisabled("Use toolbar buttons to open Help / Scene Helper.");
+    ImGui::TextDisabled("Focus on a panel to use the mouse with UI controls.");
+
+    ImGui::End();
+}
+
+void RenderAgent::DrawSceneHelperUI()
+{
+    if (!mShowSceneHelperWindow)
+    {
+        return;
+    }
+
+    BeginPanelBelowToolbar("Scene Helper", &mShowSceneHelperWindow);
 
     DrawSandboxSelectorUI();
 
@@ -663,8 +744,17 @@ void RenderAgent::UpdateGUI()
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No material attached");
     }
 
-    
     ImGui::End();
+}
+
+void RenderAgent::UpdateGUI()
+{
+    // Build ImGui UI (this can be called without OpenGL context)
+    // Note: ImGui::NewFrame() must be called before this, and ImGui::Render() after
+
+    DrawMainToolbar();
+    DrawHelpUI();
+    DrawSceneHelperUI();
 }
 
 void RenderAgent::RenderUI()

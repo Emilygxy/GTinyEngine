@@ -19,10 +19,11 @@ void Sandbox_ShadowRenderingDemo::Init(const std::shared_ptr<IRenderer>& rendere
     mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
 
     auto planeMaterial = std::make_shared<PBRMaterial>();
-    planeMaterial->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
+    //planeMaterial->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
     mpPlaneGeometry->SetMaterial(planeMaterial);
     glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
     planeTransform = glm::rotate(planeTransform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    planeTransform = glm::scale(planeTransform, glm::vec3(5.0f, 1.0f, 5.0f));
     mpPlaneGeometry->SetWorldTransform(planeTransform);
 }
 
