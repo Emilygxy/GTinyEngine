@@ -524,9 +524,10 @@ namespace te
             {"Depth", "GeometryPass", "depth", 0, true}
         };
         
-        // Setup outputs
+        // Setup outputs (forward_depth is used for depth testing only, not sampled downstream)
         mConfig.outputs = {
-            {"BaseColor", "basecolor", RenderTargetFormat::RGBA8}
+            {"BaseColor", "basecolor", RenderTargetFormat::RGBA8},
+            {"ForwardDepth", "forward_depth", RenderTargetFormat::Depth24}
         };
 
         mRenderPassFlag = RenderPassFlag::BaseColor;
@@ -544,7 +545,8 @@ namespace te
             {"Depth", "GeometryPass", "depth", 0, true}
         }; // inputs
         mConfig.outputs = {
-            {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8}
+            {"BaseColor", "basecolor", te::RenderTargetFormat::RGBA8},
+            {"ForwardDepth", "forward_depth", te::RenderTargetFormat::Depth24}
         }; // outputs
         mConfig.dependencies = {
             {"SkyboxPass", true, []() { return true; }},   // Need BackgroundColor input
@@ -596,6 +598,12 @@ namespace te
         
         // Apply render settings
         ApplyRenderSettings();
+
+        if (mConfig.clearDepth)
+        {
+            glClear(GL_DEPTH_BUFFER_BIT);
+        }
+        glDepthMask(GL_TRUE);
 
         // Bind input textures
         BindInputs();
