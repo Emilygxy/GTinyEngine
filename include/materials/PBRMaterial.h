@@ -1,5 +1,7 @@
 #pragma once
 #include "materials/BaseMaterial.h"
+#include <glm/glm.hpp>
+#include "glad/glad.h"
 
 class PBRMaterial : public MaterialBase
 {
@@ -74,7 +76,13 @@ public:
     void SetExposure(float exposure) { mExposure = glm::max(exposure, 0.0f); }
     float GetExposure() const { return mExposure; }
 
+    void SetShadowEnabled(bool enabled) { mShadowEnabled = enabled; }
+    void SetShadowMap(GLuint texture) { mShadowMap = texture; }
+    void SetLightSpaceMatrix(const glm::mat4& matrix) { mLightSpaceMatrix = matrix; }
+    void SetShadowBias(float bias) { mShadowBias = glm::max(bias, 0.0f); }
+
 private:
+    static constexpr int kShadowTextureUnit = 5;
     std::shared_ptr<TextureBase> mpAlbedoTexture{ nullptr };
     std::shared_ptr<TextureBase> mpNormalTexture{ nullptr };
     std::shared_ptr<TextureBase> mpRoughnessTexture{ nullptr };
@@ -91,4 +99,9 @@ private:
     float mAmbientIntensity{ 0.3f };  // Default ambient intensity (increased from 0.03)
     float mLightIntensity{ 1.0f };     // Light intensity multiplier
     float mExposure{ 1.0f };          // Exposure for tone mapping
+
+    bool mShadowEnabled{ false };
+    GLuint mShadowMap{ 0 };
+    glm::mat4 mLightSpaceMatrix{ 1.0f };
+    float mShadowBias{ 0.005f };
 }; 

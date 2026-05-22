@@ -108,12 +108,21 @@ void PhongMaterial::OnBind()
             std::cout << "PhongMaterial::OnBind() - Successfully bound texture " << mpDiffuseTexture->GetHandle() << " to GL_TEXTURE0" << std::endl;
         }
     }
+
+    if (mShadowEnabled && mShadowMap != 0)
+    {
+        glActiveTexture(GL_TEXTURE0 + kShadowTextureUnit);
+        glBindTexture(GL_TEXTURE_2D, mShadowMap);
+    }
 }
 
 void PhongMaterial::UnBind()
 {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    for (int i = 0; i <= kShadowTextureUnit; ++i)
+    {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
 
 void PhongMaterial::UpdateUniform()
@@ -144,6 +153,11 @@ void PhongMaterial::UpdateUniform()
     }
 
     mpShader->setVec4("u_useBlinn_Geometry", mUseEnables);
+
+    mpShader->setMat4("u_lightSpaceMatrix", mLightSpaceMatrix);
+    mpShader->setInt("u_shadowMap", kShadowTextureUnit);
+    mpShader->setFloat("u_enableShadow", mShadowEnabled ? 1.0f : 0.0f);
+    mpShader->setFloat("u_shadowBias", mShadowBias);
 }
 
 void PhongMaterial::SetDiffuseTexturePath(const std::string& path)

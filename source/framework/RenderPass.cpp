@@ -6,7 +6,9 @@
 #include "materials/GeometryMaterial.h"
 #include "materials/BlinnPhongMaterial.h"
 #include "materials/PBRMaterial.h"
+#include "materials/BaseMaterial.h"
 #include "materials/SkyboxMaterial.h"
+#include "framework/RenderPassManager.h"
 #include "framework/FullscreenQuad.h"
 #include <iostream>
 #include "framework/RenderContext.h"
@@ -554,6 +556,7 @@ namespace te
             {"ForwardDepth", "forward_depth", te::RenderTargetFormat::Depth24}
         }; // outputs
         mConfig.dependencies = {
+            {"ShadowPass", true, []() { return true; }},
             {"SkyboxPass", true, []() { return true; }},   // Need BackgroundColor input
             {"GeometryPass", true, []() { return true; }}, // Need G-Buffer inputs
         }; // dependencies
@@ -617,6 +620,18 @@ namespace te
         // Bind input textures
         BindInputs();
 
+        glm::mat4 lightSpaceMatrix(1.0f);
+        GLuint shadowMapTexture = 0;
+        if (auto shadowPass = RenderPassManager::GetInstance().GetPass("ShadowPass"))
+        {
+            if (auto shadow = std::dynamic_pointer_cast<ShadowPass>(shadowPass))
+            {
+                lightSpaceMatrix = shadow->GetLightSpaceMatrix();
+                shadowMapTexture = shadow->GetShadowMapTexture();
+            }
+        }
+        const bool shadowAvailable = shadowMapTexture != 0;
+
         // Render all geometry
         for (const auto& command : mCandidateCommands)
         {
@@ -652,6 +667,19 @@ namespace te
                 if (auto pLight = mpRenderContext->GetDefaultLight())
                 {
                     pMaterial->AttachedLight(pLight);
+                }
+
+                if (auto pbrMaterial = std::dynamic_pointer_cast<PBRMaterial>(pMaterial))
+                {
+                    pbrMaterial->SetShadowEnabled(shadowAvailable);
+                    pbrMaterial->SetLightSpaceMatrix(lightSpaceMatrix);
+                    pbrMaterial->SetShadowMap(shadowMapTexture);
+                }
+                else if (auto phongMaterial = std::dynamic_pointer_cast<PhongMaterial>(pMaterial))
+                {
+                    phongMaterial->SetShadowEnabled(shadowAvailable);
+                    phongMaterial->SetLightSpaceMatrix(lightSpaceMatrix);
+                    phongMaterial->SetShadowMap(shadowMapTexture);
                 }
 
                 pMaterial->OnApply();

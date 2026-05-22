@@ -23,7 +23,7 @@ void Sandbox_ShadowRenderingDemo::Init(const std::shared_ptr<IRenderer>& rendere
     mpPlaneGeometry->SetMaterial(planeMaterial);
     glm::mat4 planeTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, 0.0f));
     planeTransform = glm::rotate(planeTransform, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    planeTransform = glm::scale(planeTransform, glm::vec3(5.0f, 1.0f, 5.0f));
+    planeTransform = glm::scale(planeTransform, glm::vec3(5.0f, 5.0f, 1.0f));
     mpPlaneGeometry->SetWorldTransform(planeTransform);
 }
 

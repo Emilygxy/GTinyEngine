@@ -25,7 +25,7 @@ namespace te
         mConfig.state = RenderPassState::Enabled;
         mConfig.inputs = {};
         mConfig.outputs = {
-            {"Depth", "depth", RenderTargetFormat::Depth32F}
+            {"ShadowMap", "shadowmap", RenderTargetFormat::Depth32F}
         };
         mConfig.dependencies = {};
         mConfig.clearColor = false;
@@ -75,7 +75,7 @@ namespace te
 
     GLuint ShadowPass::GetShadowMapTexture() const
     {
-        auto depthTarget = GetOutput("depth");
+        auto depthTarget = GetOutput("shadowmap");
         if (!depthTarget)
         {
             return 0;

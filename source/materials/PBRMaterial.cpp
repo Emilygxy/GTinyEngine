@@ -51,12 +51,18 @@ void PBRMaterial::OnBind()
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_2D, mpAOTexture->GetHandle());
     }
+
+    if (mShadowEnabled && mShadowMap != 0)
+    {
+        glActiveTexture(GL_TEXTURE0 + kShadowTextureUnit);
+        glBindTexture(GL_TEXTURE_2D, mShadowMap);
+    }
 }
 
 void PBRMaterial::UnBind()
 {
     // Unbind all texture units
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i <= kShadowTextureUnit; ++i)
     {
         glActiveTexture(GL_TEXTURE0 + i);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -112,6 +118,11 @@ void PBRMaterial::UpdateUniform()
     // Disable IBL by default (can be enabled later if needed)
     glm::vec2 use_ibl_ao(0.0f, (mpAOTexture && mpAOTexture->IsValid()) ? 1.0f : 0.0f);
     mpShader->setVec2("u_useIBL_ao", use_ibl_ao);
+
+    mpShader->setMat4("u_lightSpaceMatrix", mLightSpaceMatrix);
+    mpShader->setInt("u_shadowMap", kShadowTextureUnit);
+    mpShader->setFloat("u_enableShadow", mShadowEnabled ? 1.0f : 0.0f);
+    mpShader->setFloat("u_shadowBias", mShadowBias);
 }
 void PBRMaterial::SetAlbedoTexturePath(const std::string& path)
 {

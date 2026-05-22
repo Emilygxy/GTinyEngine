@@ -53,3 +53,6 @@ A Simple Game Engine Project
 - 接入 framework RenderGraph
 - 目前Vulkan MRT支持 geometry/lighting/postprocess/present pass，在此条件下，可以尝试实现GS混合传统管线的渲染
 - 实现 材质 → gMaterial（roughness / metallic / ao）
+
+### 2026.05.22
+- TinyRenderer 支持阴影

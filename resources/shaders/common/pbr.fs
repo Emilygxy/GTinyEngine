@@ -2,12 +2,14 @@
 
 // include common math functions
 #include <includes/math_common.glsl>
+#include <includes/shadow_common.glsl>
 
 out vec4 FragColor;
 
 in vec3 FragPos;
 in vec3 Normal;
 in vec2 TexCoords;
+in vec4 FragPosLightSpace;
 
 // PBR Textures
 uniform sampler2D u_albedoMap;      // Albedo (Base Color) - texture unit 0
@@ -15,6 +17,7 @@ uniform sampler2D u_normalMap;      // Normal Map - texture unit 1
 uniform sampler2D u_metallicMap;    // Metallic Map - texture unit 2
 uniform sampler2D u_roughnessMap;   // Roughness Map - texture unit 3
 uniform sampler2D u_aoMap;          // Ambient Occlusion Map - texture unit 4
+uniform sampler2D u_shadowMap;      // Shadow map - texture unit 5
 
 // Material Properties (fallback when textures are not available)
 uniform vec3 u_albedo;              // Base color
@@ -36,6 +39,10 @@ uniform vec2 u_intensities;          // x: ambient(default: 0.3), y: light(defau
 
 // IBL (Image Based Lighting) - optional
 uniform vec2 u_useIBL_ao;             // x: IBL, y: AO
+
+// Shadow mapping
+uniform float u_enableShadow;         // 0 = off, 1 = on
+uniform float u_shadowBias;           // base depth bias
 
 // ============================================
 // PBR Functions
@@ -162,7 +169,14 @@ void main()
     // Add to outgoing radiance Lo
     float NdotL = max(dot(N, L), 0.0);
     Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-    
+
+    float shadow = 0.0;
+    if (u_enableShadow > 0.5)
+    {
+        shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, N, L, u_shadowBias);
+        Lo *= (1.0 - shadow);
+    }
+
     // Ambient lighting with adjustable intensity
     vec3 ambient = u_intensities.x * albedo * ao;
     

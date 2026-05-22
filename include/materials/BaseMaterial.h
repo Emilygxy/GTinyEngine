@@ -4,6 +4,7 @@
 #include "textures/Texture.h"
 #include <glm/glm.hpp>
 #include "shader.h"
+#include "glad/glad.h"
 
 class Camera;
 class Light;
@@ -77,12 +78,24 @@ public:
 	bool HasTexture() const { return mbHasTexture; }
 
 	void SetUseGeometryTarget(bool use) override;
+
+	void SetShadowEnabled(bool enabled) { mShadowEnabled = enabled; }
+	void SetShadowMap(GLuint texture) { mShadowMap = texture; }
+	void SetLightSpaceMatrix(const glm::mat4& matrix) { mLightSpaceMatrix = matrix; }
+	void SetShadowBias(float bias) { mShadowBias = glm::max(bias, 0.0f); }
+
 protected:
-	glm::vec4 mUseEnables; // ƒ¨»œ π”√ Blinn-Phong
+	glm::vec4 mUseEnables;
 
 private:
+	static constexpr int kShadowTextureUnit = 5;
+
 	std::shared_ptr<TextureBase> mpDiffuseTexture{ nullptr };
 	bool mbHasTexture = false;
 	glm::vec4 mIntensities{ 1.0f,1.0f, 1.0f, 1.0f};// environment,diffuse,specular,shininess
-	//bool useBlinnPhong = true;
+
+	bool mShadowEnabled{ false };
+	GLuint mShadowMap{ 0 };
+	glm::mat4 mLightSpaceMatrix{ 1.0f };
+	float mShadowBias{ 0.005f };
 };

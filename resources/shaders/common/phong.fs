@@ -2,18 +2,21 @@
 
 // include common math functions
 #include <includes/math_common.glsl>
+#include <includes/shadow_common.glsl>
 
 out vec4 FragColor;
 
 in vec3 FragPos;
 in vec3 Normal;
 in vec2 TexCoords;
+in vec4 FragPosLightSpace;
 
 uniform sampler2D u_diffuseTexture; // texture sampler(optional)
 uniform sampler2D u_geomAlbedoMap; // texture sampler(optional)
 uniform sampler2D u_geomNormalMap; // texture sampler(optional)
 uniform sampler2D u_geomPositionMap; // texture sampler(optional)
 uniform sampler2D u_geomDepthMap; // texture sampler(optional)
+uniform sampler2D u_shadowMap;    // texture unit 5
 
 uniform vec3 u_lightPos;
 uniform vec3 u_viewPos;
@@ -21,6 +24,9 @@ uniform vec3 u_lightColor;
 uniform vec3 u_objectColor;
 uniform vec4 u_Strengths; // x: ambientStrength, y: diffuseStrength, z: specularStrength, w: shininess
 uniform vec4 u_useBlinn_Geometry; // if true, use Blinn-Phong shading model, otherwise use Phong shading model
+
+uniform float u_enableShadow;
+uniform float u_shadowBias;
 
 bool isBlinnPhong()
 {
@@ -76,11 +82,15 @@ vec3 CalculatePhongColor()
         spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
     }
     vec3 specular = specularStrength * spec * u_lightColor;
-    
-    // 4. Combine the lighting results and write the final color to the FragColor output
-    vec3 result = (ambient + diffuse + specular);
 
-    return result;
+    vec3 direct = diffuse + specular;
+    if (u_enableShadow > 0.5)
+    {
+        float shadow = ShadowCalculation(FragPosLightSpace, u_shadowMap, norm, lightDir, u_shadowBias);
+        direct *= (1.0 - shadow);
+    }
+
+    return ambient + direct;
 }
 
 void main()
