@@ -52,6 +52,7 @@ namespace
     }
 
     bool enableInteraction = false;
+
     // timing
     float deltaTime = 0.0f;	// time between current frame and last frame
     float lastFrame = 0.0f;
@@ -180,6 +181,8 @@ void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
         glfwMakeContextCurrent(mWindow);
         mSandbox->Init(mpRenderer);
         glfwMakeContextCurrent(nullptr);
+
+        enableInteraction = mSandbox->IsEnableInteraction();
     }
 }
 
@@ -214,6 +217,8 @@ void RenderAgent::ActivateSandbox(int index)
         glfwMakeContextCurrent(mWindow);
         mSandbox->Init(mpRenderer);
         glfwMakeContextCurrent(nullptr);
+
+        enableInteraction = mSandbox->IsEnableInteraction();
     }
 
     mActiveSandboxIndex = index;

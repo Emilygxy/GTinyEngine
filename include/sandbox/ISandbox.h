@@ -14,4 +14,12 @@ public:
     virtual std::shared_ptr<FragmentsSource> GetFragmentsSource() const { return nullptr; }
     /** Drawables submitted to the host render loop each frame. */
     virtual std::vector<RenderCommand> GetRenderCommands() const;
+
+    bool IsEnableInteraction() const noexcept
+    {
+        return mEnableInteraction;
+    }
+
+protected:
+    bool mEnableInteraction = true;
 };

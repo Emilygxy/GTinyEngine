@@ -154,4 +154,6 @@ private:
 	std::shared_ptr<BasicGeometry> mpPickedGeometry;
 	glm::vec3 mSelectedGeomPosition{ 0.0f, 0.0f, 0.0f };
 	bool mMultithreadedRendering{ true };
+	bool mEnableInteraction = false;
+
 };
