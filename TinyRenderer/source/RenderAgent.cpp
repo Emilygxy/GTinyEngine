@@ -4,6 +4,7 @@
 #include "sandbox/ISandbox.h"
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
+#include "mesh/Mesh.h"
 #include "materials/BlinnPhongMaterial.h"
 #include "materials/PBRMaterial.h"
 #include "materials/BlitMaterial.h"
@@ -286,6 +287,15 @@ void RenderAgent::Run()
     PostRender();
 }
 
+std::vector<RenderCommand> RenderAgent::GetSceneRenderCommands() const
+{
+    if (!mSandbox)
+    {
+        return {};
+    }
+    return mSandbox->GetRenderCommands();
+}
+
 std::shared_ptr<FragmentsSource> RenderAgent::GetSceneFragmentsSource() const
 {
     if (!mSandbox)
@@ -323,7 +333,7 @@ void RenderAgent::RenderLoop()
             mSandbox->Update(mpRenderer);
         }
 
-        auto fragmentsSource = GetSceneFragmentsSource();
+        auto sceneCommands = GetSceneRenderCommands();
 
         if (mMultithreadedRendering)
         {
@@ -341,16 +351,7 @@ void RenderAgent::RenderLoop()
             }
             
             // 2. generate render commands (main thread)
-            std::vector<RenderCommand> commands;
-            if (fragmentsSource)
-            {
-                RenderCommand sphereCommand;
-                sphereCommand.fragmentsSource = fragmentsSource;
-                sphereCommand.state = RenderMode::Opaque;
-                sphereCommand.hasUV = true;
-                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-                commands.push_back(sphereCommand);
-            }
+            const std::vector<RenderCommand> commands = sceneCommands;
 
             // 3. build ImGui UI (this can be done without OpenGL context)
             UpdateGUI();
@@ -391,21 +392,19 @@ void RenderAgent::RenderLoop()
             mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             mpRenderer->Clear(0x3); // clear color/clear depth
 
-            if (mpRenderer->IsMultiPassEnabled() && fragmentsSource)
+            if (mpRenderer->IsMultiPassEnabled() && !sceneCommands.empty())
             {
-                std::vector<RenderCommand> commands;
-                RenderCommand sphereCommand;
-                sphereCommand.fragmentsSource = fragmentsSource;
-                sphereCommand.state = RenderMode::Opaque;
-                sphereCommand.hasUV = true;
-                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-                commands.push_back(sphereCommand);
-                te::RenderPassManager::GetInstance().ExecuteAll(commands);
+                te::RenderPassManager::GetInstance().ExecuteAll(sceneCommands);
             }
-            else if (auto sceneGeometry = GetSceneGeometry())
+            else
             {
-                // traditional single Pass rendering
-                mpRenderer->DrawMesh(sceneGeometry);
+                for (const auto& command : sceneCommands)
+                {
+                    if (auto mesh = std::dynamic_pointer_cast<Mesh>(command.fragmentsSource))
+                    {
+                        mpRenderer->DrawMesh(mesh);
+                    }
+                }
             }
 
             //mpRenderer->DrawBackgroud();

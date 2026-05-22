@@ -40,3 +40,31 @@ std::shared_ptr<FragmentsSource> Sandbox_ShadowRenderingDemo::GetFragmentsSource
 {
     return mpGeometry;
 }
+
+std::vector<RenderCommand> Sandbox_ShadowRenderingDemo::GetRenderCommands() const
+{
+    std::vector<RenderCommand> commands;
+    commands.reserve(2);
+
+    if (mpGeometry)
+    {
+        RenderCommand sphereCommand;
+        sphereCommand.fragmentsSource = mpGeometry;
+        sphereCommand.state = RenderMode::Opaque;
+        sphereCommand.hasUV = true;
+        sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+        commands.push_back(sphereCommand);
+    }
+
+    if (mpPlaneGeometry)
+    {
+        RenderCommand planeCommand;
+        planeCommand.fragmentsSource = mpPlaneGeometry;
+        planeCommand.state = RenderMode::Opaque;
+        planeCommand.hasUV = true;
+        planeCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+        commands.push_back(planeCommand);
+    }
+
+    return commands;
+}

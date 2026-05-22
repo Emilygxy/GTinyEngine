@@ -17,6 +17,7 @@ namespace te
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+struct RenderCommand;
 class IRenderer;
 class ISandbox;
 class FragmentsSource;
@@ -99,6 +100,7 @@ private:
 	void ProcessPendingSandboxSwitch();
 	void ActivateSandbox(int index);
 	void DrawSandboxSelectorUI();
+	std::vector<RenderCommand> GetSceneRenderCommands() const;
 	std::shared_ptr<FragmentsSource> GetSceneFragmentsSource() const;
 	std::shared_ptr<BasicGeometry> GetSceneGeometry() const;
 
