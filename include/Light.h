@@ -24,6 +24,8 @@ public:
 		return mColor;
 	}
 
+	void SetDirection(const glm::vec3& direction);
+
 private:
 	glm::vec3 mPos{ glm::vec3(0.0f, 0.0f, 0.0f) };
 	glm::vec3 mColor{ glm::vec3(1.0f, 1.0f, 1.0f) };

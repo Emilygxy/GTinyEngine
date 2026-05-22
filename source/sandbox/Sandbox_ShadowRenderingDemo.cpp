@@ -55,7 +55,9 @@ std::vector<RenderCommand> Sandbox_ShadowRenderingDemo::GetRenderCommands() cons
         sphereCommand.fragmentsSource = mpGeometry;
         sphereCommand.state = RenderMode::Opaque;
         sphereCommand.hasUV = true;
-        sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+        sphereCommand.renderpassflag = RenderPassFlag::Shadowing
+                                   | RenderPassFlag::Geometry
+                                   | RenderPassFlag::BaseColor;
         commands.push_back(sphereCommand);
     }
 
@@ -65,7 +67,9 @@ std::vector<RenderCommand> Sandbox_ShadowRenderingDemo::GetRenderCommands() cons
         planeCommand.fragmentsSource = mpPlaneGeometry;
         planeCommand.state = RenderMode::Opaque;
         planeCommand.hasUV = true;
-        planeCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+        planeCommand.renderpassflag = RenderPassFlag::Shadowing
+                                  | RenderPassFlag::Geometry
+                                  | RenderPassFlag::BaseColor;
         commands.push_back(planeCommand);
     }
 

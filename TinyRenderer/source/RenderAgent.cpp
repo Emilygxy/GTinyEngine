@@ -162,6 +162,7 @@ void RenderAgent::SetupRenderer()
     auto pLight = std::make_shared<Light>();
     pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
     pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
+    pLight->SetDirection(glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f)));
     mpRenderContext->PushAttachLight(pLight);
 }
 
@@ -457,6 +458,9 @@ void RenderAgent::PreRender()
 
 void RenderAgent::SetupMultiPassRendering()
 {
+    auto shadowPass = std::make_shared<te::ShadowPass>();
+    shadowPass->Initialize(mpRenderView, mpRenderContext);
+
     // create skybox Pass
     auto skyboxPass = std::make_shared<te::SkyboxPass>();
     skyboxPass->Initialize(mpRenderView, mpRenderContext);
@@ -477,6 +481,7 @@ void RenderAgent::SetupMultiPassRendering()
 
     // add Pass to RenderPassManager (for dependency management)
     // note: the order of adding Pass is important, SkyboxPass should be added before other Passes, so it will be rendered first
+    te::RenderPassManager::GetInstance().AddPass(shadowPass);
     te::RenderPassManager::GetInstance().AddPass(skyboxPass);
     te::RenderPassManager::GetInstance().AddPass(geometryPass);
     te::RenderPassManager::GetInstance().AddPass(basePass);

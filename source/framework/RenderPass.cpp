@@ -228,8 +228,13 @@ namespace te
         if (mConfig.outputs.empty())
             return;
 
-        // Get the size of the first output
-        uint32_t width = mpAttachView->Width(), height = mpAttachView->Height(); // Default size, should be obtained from configuration or global settings
+        uint32_t width = mpAttachView ? mpAttachView->Width() : 800;
+        uint32_t height = mpAttachView ? mpAttachView->Height() : 600;
+        if (mConfig.useCustomViewport && mConfig.viewport.z > 0 && mConfig.viewport.w > 0)
+        {
+            width = static_cast<uint32_t>(mConfig.viewport.z);
+            height = static_cast<uint32_t>(mConfig.viewport.w);
+        }
         
         mFrameBuffer = std::make_shared<MultiRenderTarget>();
         if (!mFrameBuffer->Initialize(width, height))
@@ -567,11 +572,15 @@ namespace te
 
     void RenderPass::Prepare()
     {
-        // sync viewport
-        uint16_t active_W = 800, active_H = 600; // default size
+        uint16_t active_W = 800, active_H = 600;
         if (mpAttachView) {
             active_W = mpAttachView->Width();
             active_H = mpAttachView->Height();
+        }
+        if (mConfig.useCustomViewport && mConfig.viewport.z > 0 && mConfig.viewport.w > 0)
+        {
+            active_W = static_cast<uint16_t>(mConfig.viewport.z);
+            active_H = static_cast<uint16_t>(mConfig.viewport.w);
         }
         mConfig.viewport = glm::ivec4(0, 0, active_W, active_H);
 

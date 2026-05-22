@@ -6,6 +6,7 @@
 #include <functional>
 #include <glm/glm.hpp>
 #include "FrameBuffer.h"
+#include "mesh/AaBB.h"
 #include "mesh/Vertex.h"
 #include "materials/BaseMaterial.h"
 #include "framework/Renderer.h"
@@ -171,7 +172,7 @@ namespace te
         virtual void ApplyRenderCommand(const std::vector<RenderCommand>& commands);
 
         // Helper functions
-        void SetupFrameBuffer();
+        virtual void SetupFrameBuffer();
         virtual void BindInputs();
         virtual void UnbindInputs();
 
@@ -246,6 +247,31 @@ namespace te
         std::unordered_map<std::string, PostProcessEffect> mEffects;
         std::vector<Vertex> mQuadVertices;
         std::vector<unsigned int> mQuadIndices;
+    };
+
+    // Shadow map pass (depth from light's perspective)
+    class ShadowPass : public RenderPass
+    {
+    public:
+        static constexpr uint32_t kShadowMapSize = 1024;
+
+        ShadowPass();
+        ~ShadowPass() override = default;
+
+        void Execute(const std::vector<RenderCommand>& commands) override;
+
+        const glm::mat4& GetLightSpaceMatrix() const { return mLightSpaceMatrix; }
+        GLuint GetShadowMapTexture() const;
+
+    protected:
+        void OnInitialize() override;
+        void SetupFrameBuffer() override;
+
+    private:
+        AaBB ComputeSceneBounds(const std::vector<RenderCommand>& commands) const;
+        glm::vec3 ResolveLightDirection(const glm::vec3& sceneCenter) const;
+
+        glm::mat4 mLightSpaceMatrix{ 1.0f };
     };
 
     // Skybox Pass
