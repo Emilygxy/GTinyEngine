@@ -1,5 +1,7 @@
 #include "RenderAgent.h"
 //#include "Renderer.h"
+#include "Fragment.h"
+#include "sandbox/ISandbox.h"
 #include "framework/Renderer.h"
 #include "geometry/Sphere.h"
 #include "materials/BlinnPhongMaterial.h"
@@ -160,22 +162,46 @@ void RenderAgent::SetupRenderer()
     mpRenderContext->PushAttachLight(pLight);
 }
 
-void RenderAgent::Render()
+void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
 {
-    if (!mpGeometry)
-    {
-        //mpGeometry = std::make_shared<Plane>(2.0f, 2.0f);
-        mpGeometry = std::make_shared<Sphere>();
-        /*auto material = std::make_shared<BlinnPhongMaterial>();
-        material->SetDiffuseTexturePath("resources/textures/IMG_8515.JPG");*/
+    mSandbox = std::move(sandbox);
+}
 
-        auto material = std::make_shared<PBRMaterial>();
-        material->SetAlbedoTexturePath("resources/textures/IMG_8516.JPG");
-        
-        mpGeometry->SetMaterial(material);
-        mpGeometry->SetWorldTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-1.5f, 0.0f, -2.0f)));
+void RenderAgent::Run()
+{
+    PreRender();
+
+    if (mSandbox)
+    {
+        mSandbox->Init(mpRenderer);
     }
 
+    RenderLoop();
+
+    if (mSandbox)
+    {
+        mSandbox->Teardown(mpRenderer);
+    }
+
+    PostRender();
+}
+
+std::shared_ptr<FragmentsSource> RenderAgent::GetSceneFragmentsSource() const
+{
+    if (!mSandbox)
+    {
+        return nullptr;
+    }
+    return mSandbox->GetFragmentsSource();
+}
+
+std::shared_ptr<BasicGeometry> RenderAgent::GetSceneGeometry() const
+{
+    return std::dynamic_pointer_cast<BasicGeometry>(GetSceneFragmentsSource());
+}
+
+void RenderAgent::RenderLoop()
+{
     // render loop
     // -----------
     while (!glfwWindowShouldClose(mWindow))
@@ -189,6 +215,13 @@ void RenderAgent::Render()
         // input
         // -----
         EventHelper::GetInstance().processInput(mWindow);
+
+        if (mSandbox)
+        {
+            mSandbox->Update(mpRenderer);
+        }
+
+        auto fragmentsSource = GetSceneFragmentsSource();
 
         if (mMultithreadedRendering)
         {
@@ -207,8 +240,14 @@ void RenderAgent::Render()
             
             // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
+            if (!fragmentsSource)
+            {
+                glfwPollEvents();
+                continue;
+            }
+
             RenderCommand sphereCommand;
-            sphereCommand.fragmentsSource = mpGeometry;
+            sphereCommand.fragmentsSource = fragmentsSource;
            /* sphereCommand.material = mpGeometry->GetMaterial();
             sphereCommand.vertices = mpGeometry->GetVertices();
             sphereCommand.indices = mpGeometry->GetIndices();
@@ -260,10 +299,18 @@ void RenderAgent::Render()
 
             if (mpRenderer->IsMultiPassEnabled())
             {
+                if (!fragmentsSource)
+                {
+                    mpRenderer->EndFrame();
+                    glfwSwapBuffers(mWindow);
+                    glfwPollEvents();
+                    continue;
+                }
+
                 // create render command
                 std::vector<RenderCommand> commands;
                 RenderCommand sphereCommand;
-                sphereCommand.fragmentsSource = mpGeometry;
+                sphereCommand.fragmentsSource = fragmentsSource;
                 /*fragmentsSource.material = mpGeometry->GetMaterial();
                 fragmentsSource.vertices = mpGeometry->GetVertices();
                 fragmentsSource.indices = mpGeometry->GetIndices();
@@ -277,10 +324,10 @@ void RenderAgent::Render()
                 // use RenderPassManager to execute Pass (with correct dependency management)
                 te::RenderPassManager::GetInstance().ExecuteAll(commands);
             }
-            else
+            else if (auto sceneGeometry = GetSceneGeometry())
             {
                 // traditional single Pass rendering
-                mpRenderer->DrawMesh(mpGeometry);
+                mpRenderer->DrawMesh(sceneGeometry);
             }
 
             //mpRenderer->DrawBackgroud();
@@ -418,8 +465,9 @@ void RenderAgent::UpdateGUI()
     // Material Panel
     ImGui::Separator();
     ImGui::Text("Material Properties");
-    if (auto pMat = mpGeometry->GetMaterial())
+    if (auto sceneGeometry = GetSceneGeometry())
     {
+        auto pMat = sceneGeometry->GetMaterial();
         if (auto pPBRMat = std::dynamic_pointer_cast<PBRMaterial>(pMat))
         {
             // Material Properties Section
@@ -739,14 +787,15 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     std::cout << "Ray direction: (" << re_ray.direction.x << ", " << re_ray.direction.y << ", " << re_ray.direction.z << ")" << std::endl;
     
     // Get sphere information for intersection testing
-    if (!mpGeometry) return;
+    auto sceneGeometry = GetSceneGeometry();
+    if (!sceneGeometry) return;
     
     // Get geometry's world transform to find center position
-    glm::mat4 worldTransform = mpGeometry->GetWorldTransform();
+    glm::mat4 worldTransform = sceneGeometry->GetWorldTransform();
     glm::vec3 geomCenter = glm::vec3(worldTransform[3]); // Extract translation from transform matrix
     
     // Get sphere radius (assuming it's a Sphere object)
-    auto sphere = std::dynamic_pointer_cast<Sphere>(mpGeometry);
+    auto sphere = std::dynamic_pointer_cast<Sphere>(sceneGeometry);
     float sphereRadius = 1.0f; // Default radius
     if (sphere) {
         sphereRadius = sphere->GetRadius();
@@ -755,7 +804,7 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
     // Debug sphere info
     std::cout << "Geomtry center: (" << geomCenter.x << ", " << geomCenter.y << ", " << geomCenter.z << ")" << std::endl;
     
-    auto worldAABB = mpGeometry->GetWorldAABB();
+    auto worldAABB = sceneGeometry->GetWorldAABB();
     
     if (!worldAABB.has_value()) {
         std::cout << "No AABB available for geometry" << std::endl;
@@ -774,7 +823,7 @@ void RenderAgent::HandleMouseClick(double xpos, double ypos)
         mGeomSelected = true;
 
         // detail hiting
-        mGeomSelected &= TrianglesIntersection(re_ray, mpGeometry, t);
+        mGeomSelected &= TrianglesIntersection(re_ray, sceneGeometry, t);
         if (mGeomSelected)
         {
             mSelectedGeomPosition = geomCenter;

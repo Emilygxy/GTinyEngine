@@ -77,6 +77,7 @@ file(GLOB SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/source/geometry/*.cpp
                    ${CMAKE_CURRENT_SOURCE_DIR}/source/shader/*.cpp
                    ${CMAKE_CURRENT_SOURCE_DIR}/source/math/*.cpp
+                   ${CMAKE_CURRENT_SOURCE_DIR}/source/sandbox/*.cpp
 				   ${CMAKE_CURRENT_SOURCE_DIR}/OpenGL/src/*.c)
 file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/framework/*.h
@@ -88,6 +89,7 @@ file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
 				  ${CMAKE_CURRENT_SOURCE_DIR}/include/geometry/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/math/*.h
                   ${CMAKE_CURRENT_SOURCE_DIR}/include/shader/*.h
+                  ${CMAKE_CURRENT_SOURCE_DIR}/include/sandbox/*.h
                   )
 
 # 为源文件和头文件设置 source_group
@@ -191,6 +193,7 @@ add_subdirectory(Examples/LoadModelDemo)
 add_subdirectory(Examples/MultiPassWithBackgroundDemo)
 add_subdirectory(Examples/ObserverModeRenderingDemo)
 add_subdirectory(TinyRenderer)
+add_subdirectory(Examples/ShadowRenderingDemo)
 
 add_custom_command(TARGET GTinyEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${RESOURCE_OUTPUT_DIR}

@@ -15,6 +15,8 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 class IRenderer;
+class ISandbox;
+class FragmentsSource;
 class Camera_Event;
 class RenderAgent;
 class BasicGeometry;
@@ -68,8 +70,10 @@ public:
 
 	void InitGL(); // main thread
 
+	void SetSandbox(std::unique_ptr<ISandbox> sandbox);
+	void Run();
+
 	void PreRender();
-	void Render();
 	void PostRender();
 
 	GLFWwindow* GetWindow()
@@ -86,6 +90,10 @@ public:
 	void ResizeRenderView(int width, int height);
 
 private:
+	void RenderLoop();
+	std::shared_ptr<FragmentsSource> GetSceneFragmentsSource() const;
+	std::shared_ptr<BasicGeometry> GetSceneGeometry() const;
+
 	void SetupRenderer();
 	void SetupMultiPassRendering();
 
@@ -110,7 +118,8 @@ private:
 
 	std::shared_ptr<Camera_Event> mpCameraEvent{ nullptr };
 	//EventHelper mEventHelper;
-	std::shared_ptr<BasicGeometry> mpGeometry{nullptr};
+
+	std::unique_ptr<ISandbox> mSandbox;
 	
 	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
 	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };

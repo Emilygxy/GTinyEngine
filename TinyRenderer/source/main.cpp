@@ -1,26 +1,13 @@
-#include "shader.h"
 #include <memory>
 
 #include "RenderAgent.h"
-
-RenderAgent gRenderAgent;
+#include "sandbox/Sandbox_TinyRenderer.h"
 
 int main()
 {
-    gRenderAgent.InitGL();
-    // build and compile our shader program
-    // prepare mesh
-    gRenderAgent.PreRender();
-
-    // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-    gRenderAgent.Render();
-
-    // optional: de-allocate all resources once they've outlived their purpose:
-    // ------------------------------------------------------------------------
-    //
-    gRenderAgent.PostRender();
-    
+    RenderAgent agent;
+    agent.InitGL();
+    agent.SetSandbox(std::make_unique<Sandbox_TinyRenderer>());
+    agent.Run();
     return 0;
 }
