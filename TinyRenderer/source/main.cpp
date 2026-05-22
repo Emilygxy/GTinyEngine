@@ -1,13 +1,11 @@
-#include <memory>
-
 #include "RenderAgent.h"
-#include "sandbox/Sandbox_TinyRenderer.h"
+#include "SandboxCatalog.h"
 
 int main()
 {
     RenderAgent agent;
     agent.InitGL();
-    agent.SetSandbox(std::make_unique<Sandbox_TinyRenderer>());
+    RegisterDefaultSandboxes(agent);
     agent.Run();
     return 0;
 }

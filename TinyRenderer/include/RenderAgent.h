@@ -3,7 +3,10 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <glm/glm.hpp>
+#include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace te
 {
@@ -71,6 +74,8 @@ public:
 	void InitGL(); // main thread
 
 	void SetSandbox(std::unique_ptr<ISandbox> sandbox);
+	void RegisterSandbox(const std::string& displayName,
+	                     std::function<std::unique_ptr<ISandbox>()> factory);
 	void Run();
 
 	void PreRender();
@@ -91,8 +96,17 @@ public:
 
 private:
 	void RenderLoop();
+	void ProcessPendingSandboxSwitch();
+	void ActivateSandbox(int index);
+	void DrawSandboxSelectorUI();
 	std::shared_ptr<FragmentsSource> GetSceneFragmentsSource() const;
 	std::shared_ptr<BasicGeometry> GetSceneGeometry() const;
+
+	struct SandboxEntry
+	{
+		std::string displayName;
+		std::function<std::unique_ptr<ISandbox>()> factory;
+	};
 
 	void SetupRenderer();
 	void SetupMultiPassRendering();
@@ -120,6 +134,10 @@ private:
 	//EventHelper mEventHelper;
 
 	std::unique_ptr<ISandbox> mSandbox;
+	std::vector<SandboxEntry> mSandboxCatalog;
+	int mActiveSandboxIndex{ -1 };
+	int mSelectedSandboxIndex{ 0 };
+	int mPendingSandboxIndex{ -1 };
 	
 	std::shared_ptr<RenderCommandQueue> mpCommandQueue{ nullptr };
 	std::shared_ptr<FrameSync> mpFrameSync{ nullptr };

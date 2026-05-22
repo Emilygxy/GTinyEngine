@@ -164,14 +164,114 @@ void RenderAgent::SetupRenderer()
 
 void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
 {
+    if (mSandbox && mpRenderer)
+    {
+        mSandbox->Teardown(mpRenderer);
+    }
+
     mSandbox = std::move(sandbox);
+    mActiveSandboxIndex = -1;
+    mPendingSandboxIndex = -1;
+
+    if (mSandbox && mpRenderer && mWindow)
+    {
+        std::lock_guard<std::mutex> lock(g_GLContextMutex);
+        glfwMakeContextCurrent(mWindow);
+        mSandbox->Init(mpRenderer);
+        glfwMakeContextCurrent(nullptr);
+    }
+}
+
+void RenderAgent::RegisterSandbox(const std::string& displayName,
+                                  std::function<std::unique_ptr<ISandbox>()> factory)
+{
+    mSandboxCatalog.push_back(SandboxEntry{displayName, std::move(factory)});
+}
+
+void RenderAgent::ActivateSandbox(int index)
+{
+    if (index < 0 || index >= static_cast<int>(mSandboxCatalog.size()))
+    {
+        return;
+    }
+
+    if (mSandbox && mpRenderer)
+    {
+        mSandbox->Teardown(mpRenderer);
+    }
+
+    if (mpCommandQueue)
+    {
+        mpCommandQueue->Clear();
+    }
+
+    mSandbox = mSandboxCatalog[static_cast<size_t>(index)].factory();
+    if (mSandbox && mpRenderer && mWindow)
+    {
+        // PBR SetAlbedoTexturePath uploads via GL; must run with a current context on the main thread.
+        std::lock_guard<std::mutex> lock(g_GLContextMutex);
+        glfwMakeContextCurrent(mWindow);
+        mSandbox->Init(mpRenderer);
+        glfwMakeContextCurrent(nullptr);
+    }
+
+    mActiveSandboxIndex = index;
+    mSelectedSandboxIndex = index;
+    mPendingSandboxIndex = -1;
+    mGeomSelected = false;
+}
+
+void RenderAgent::ProcessPendingSandboxSwitch()
+{
+    if (mPendingSandboxIndex < 0 || mPendingSandboxIndex == mActiveSandboxIndex)
+    {
+        return;
+    }
+
+    ActivateSandbox(mPendingSandboxIndex);
+}
+
+void RenderAgent::DrawSandboxSelectorUI()
+{
+    if (mSandboxCatalog.empty())
+    {
+        return;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Sandbox");
+
+    std::vector<const char*> labels;
+    labels.reserve(mSandboxCatalog.size());
+    for (const auto& entry : mSandboxCatalog)
+    {
+        labels.push_back(entry.displayName.c_str());
+    }
+
+    if (ImGui::Combo("Active Demo", &mSelectedSandboxIndex, labels.data(), static_cast<int>(labels.size())))
+    {
+        if (mSelectedSandboxIndex != mActiveSandboxIndex)
+        {
+            mPendingSandboxIndex = mSelectedSandboxIndex;
+        }
+    }
+
+    if (mActiveSandboxIndex >= 0
+        && mActiveSandboxIndex < static_cast<int>(mSandboxCatalog.size()))
+    {
+        ImGui::Text("Running: %s", mSandboxCatalog[static_cast<size_t>(mActiveSandboxIndex)].displayName.c_str());
+    }
 }
 
 void RenderAgent::Run()
 {
     PreRender();
 
-    if (mSandbox)
+    if (!mSandboxCatalog.empty() && mActiveSandboxIndex < 0 && !mSandbox)
+    {
+        ActivateSandbox(0);
+    }
+    else if (mSandbox && mActiveSandboxIndex < 0 && mpRenderer)
     {
         mSandbox->Init(mpRenderer);
     }
@@ -216,6 +316,8 @@ void RenderAgent::RenderLoop()
         // -----
         EventHelper::GetInstance().processInput(mWindow);
 
+        ProcessPendingSandboxSwitch();
+
         if (mSandbox)
         {
             mSandbox->Update(mpRenderer);
@@ -240,24 +342,16 @@ void RenderAgent::RenderLoop()
             
             // 2. generate render commands (main thread)
             std::vector<RenderCommand> commands;
-            if (!fragmentsSource)
+            if (fragmentsSource)
             {
-                glfwPollEvents();
-                continue;
+                RenderCommand sphereCommand;
+                sphereCommand.fragmentsSource = fragmentsSource;
+                sphereCommand.state = RenderMode::Opaque;
+                sphereCommand.hasUV = true;
+                sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
+                commands.push_back(sphereCommand);
             }
 
-            RenderCommand sphereCommand;
-            sphereCommand.fragmentsSource = fragmentsSource;
-           /* sphereCommand.material = mpGeometry->GetMaterial();
-            sphereCommand.vertices = mpGeometry->GetVertices();
-            sphereCommand.indices = mpGeometry->GetIndices();
-            sphereCommand.transform = mpGeometry->GetWorldTransform();*/
-            sphereCommand.state = RenderMode::Opaque;
-            sphereCommand.hasUV = true;
-            sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-            
-            commands.push_back(sphereCommand);
-            
             // 3. build ImGui UI (this can be done without OpenGL context)
             UpdateGUI();
             
@@ -297,31 +391,15 @@ void RenderAgent::RenderLoop()
             mpRenderer->SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             mpRenderer->Clear(0x3); // clear color/clear depth
 
-            if (mpRenderer->IsMultiPassEnabled())
+            if (mpRenderer->IsMultiPassEnabled() && fragmentsSource)
             {
-                if (!fragmentsSource)
-                {
-                    mpRenderer->EndFrame();
-                    glfwSwapBuffers(mWindow);
-                    glfwPollEvents();
-                    continue;
-                }
-
-                // create render command
                 std::vector<RenderCommand> commands;
                 RenderCommand sphereCommand;
                 sphereCommand.fragmentsSource = fragmentsSource;
-                /*fragmentsSource.material = mpGeometry->GetMaterial();
-                fragmentsSource.vertices = mpGeometry->GetVertices();
-                fragmentsSource.indices = mpGeometry->GetIndices();
-                fragmentsSource.transform = mpGeometry->GetWorldTransform();*/
                 sphereCommand.state = RenderMode::Opaque;
                 sphereCommand.hasUV = true;
                 sphereCommand.renderpassflag = RenderPassFlag::BaseColor | RenderPassFlag::Geometry;
-
                 commands.push_back(sphereCommand);
-
-                // use RenderPassManager to execute Pass (with correct dependency management)
                 te::RenderPassManager::GetInstance().ExecuteAll(commands);
             }
             else if (auto sceneGeometry = GetSceneGeometry())
@@ -441,7 +519,9 @@ void RenderAgent::UpdateGUI()
     
     // Create a simple window
     ImGui::Begin("GUI Helper");
-    
+
+    DrawSandboxSelectorUI();
+
     ImGui::Text("Click on the Geometry to select it!");
     ImGui::Separator();
     
