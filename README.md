@@ -1,5 +1,6 @@
 # GTinyEngine
-A Simple Game Engine Project
+A Simple Game Engine Project.
+纯个人业余练手实现，仅用于技术学习，算法及框架思路均来自开源学习资料。
 
 ## 注意事项
 ### 1. 关于Vulkan环境
@@ -56,3 +57,8 @@ A Simple Game Engine Project
 
 ### 2026.05.22
 - TinyRenderer 支持阴影
+- TODO 
+- [ ] 实现视锥体剔除 Demo
+- [ ] 实现BVH，并结合视锥体剔除 Demo 展示
+- [ ] 实现SDF Demo
+- [ ] 实现SDF + BVH Demo
