@@ -49,6 +49,14 @@ void Texture2D::Destroy()
 
 void Texture2D::ParseData()
 {
+	if (mTexturePaths.empty())
+	{
+		return;
+	}
+	if (glfwGetCurrentContext() == nullptr)
+	{
+		return;
+	}
 	mHandle = loadTexture(mTexturePaths[0].c_str());
 }
 
@@ -66,5 +74,13 @@ void TextureCube::Destroy()
 
 void TextureCube::ParseData()
 {
+	if (mTexturePaths.empty())
+	{
+		return;
+	}
+	if (glfwGetCurrentContext() == nullptr)
+	{
+		return;
+	}
 	mHandle = loadCubemap(mTexturePaths);
 }

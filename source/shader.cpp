@@ -126,8 +126,48 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, te::ShaderPrepr
 	constructWithPreprocessor(vertexPath, fragmentPath, preprocessor);
 }
 
+bool Shader::isOpenGLContextValid() const
+{
+	// Vulkan GLFW windows are created with GLFW_NO_API, so there is no current GL
+	// context and GLAD entry points were never loaded. Calling glCreateShader then
+	// jumps through a null function pointer.
+	return glfwGetCurrentContext() != nullptr && glCreateShader != nullptr;
+}
+
+unsigned int Shader::createShaderSafely(GLenum shaderType, const char* source) const
+{
+	if (!isOpenGLContextValid() || source == nullptr)
+	{
+		return 0;
+	}
+
+	const unsigned int shader = glCreateShader(shaderType);
+	if (shader == 0)
+	{
+		return 0;
+	}
+
+	glShaderSource(shader, 1, &source, NULL);
+	glCompileShader(shader);
+	return shader;
+}
+
 void Shader::constructWithPreprocessor(const char* vertexPath, const char* fragmentPath, te::ShaderPreprocessor& preprocessor)
 {
+	if (!isOpenGLContextValid())
+	{
+		mId = 0;
+		static bool loggedOnce = false;
+		if (!loggedOnce)
+		{
+			std::cout << "Shader: no OpenGL context, skipping GLSL compile. "
+			          << "Vulkan uses SPIR-V from resources/shaders/vk, not common.vs/pbr.fs."
+			          << std::endl;
+			loggedOnce = true;
+		}
+		return;
+	}
+
 	// 1. use the preprocessor to process the shader source code
 	std::string vertexCode = preprocessor.ProcessShader(vertexPath);
 	std::string fragmentCode = preprocessor.ProcessShader(fragmentPath);
@@ -148,20 +188,14 @@ void Shader::constructWithPreprocessor(const char* vertexPath, const char* fragm
 	unsigned int vertex = 0, fragment = 0;
 	bool compilationSuccess = true;
 
-	// vertex shader
-	vertex = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertex, 1, &vShaderCode, NULL);
-	glCompileShader(vertex);
-	if (!checkCompileErrors(vertex, "VERTEX"))
+	vertex = createShaderSafely(GL_VERTEX_SHADER, vShaderCode);
+	if (vertex == 0 || !checkCompileErrors(vertex, "VERTEX"))
 	{
 		compilationSuccess = false;
 	}
 
-	// fragment Shader
-	fragment = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragment, 1, &fShaderCode, NULL);
-	glCompileShader(fragment);
-	if (!checkCompileErrors(fragment, "FRAGMENT"))
+	fragment = createShaderSafely(GL_FRAGMENT_SHADER, fShaderCode);
+	if (fragment == 0 || !checkCompileErrors(fragment, "FRAGMENT"))
 	{
 		compilationSuccess = false;
 	}
@@ -197,7 +231,7 @@ void Shader::constructWithPreprocessor(const char* vertexPath, const char* fragm
 
 Shader::~Shader() 
 {
-	if (mId != 0)
+	if (mId != 0 && isOpenGLContextValid())
 	{
 		glDeleteProgram(mId);
 		mId = 0;
