@@ -1,0 +1,14 @@
+{
+  "_usage": "Set renderer.backend to OpenGL or Vulkan. Optional CLI: --backend Vulkan  --config path/to/EngineConfig.json",
+  "renderer": {
+    "backend": "Vulkan",
+    "vsync": true,
+    "multithreaded": true
+  },
+  "window": {
+    "width": 800,
+    "height": 600,
+    "title": "Hi TinyEngine",
+    "fullscreen": false
+  }
+}

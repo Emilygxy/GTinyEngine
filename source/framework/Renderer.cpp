@@ -514,6 +514,39 @@ vk::pipeline CreateDeferredLightingPipeline(VkExtent2D extent, VkRenderPass rend
     return vk::pipeline(ciPack);
 }
 
+vk::pipeline CreateSkyboxPipeline(VkExtent2D extent, VkRenderPass renderPass, VkPipelineLayout layout)
+{
+    vk::shaderModule vert("resources/compiled_shaders/skybox_vert.spv");
+    vk::shaderModule frag("resources/compiled_shaders/skybox_frag.spv");
+    VkPipelineShaderStageCreateInfo stages[2] = {
+        vert.StageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT),
+        frag.StageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
+    vk::graphicsPipelineCreateInfoPack ciPack;
+    ciPack.createInfo.layout = layout;
+    ciPack.createInfo.renderPass = renderPass;
+    ciPack.createInfo.subpass = 0;
+    ciPack.createInfo.stageCount = 2;
+    ciPack.createInfo.pStages = stages;
+    ciPack.vertexInputBindings.push_back(te::VulkanSkyboxPass::VertexBindingDescription());
+    ciPack.vertexInputAttributes.push_back(te::VulkanSkyboxPass::VertexAttributeDescription());
+    ciPack.inputAssemblyStateCi.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    ciPack.viewports.emplace_back(0.f, 0.f, float(extent.width), float(extent.height), 0.f, 1.f);
+    ciPack.scissors.emplace_back(VkOffset2D{}, extent);
+    ciPack.rasterizationStateCi.polygonMode = VK_POLYGON_MODE_FILL;
+    ciPack.rasterizationStateCi.cullMode = VK_CULL_MODE_NONE;
+    ciPack.rasterizationStateCi.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    ciPack.rasterizationStateCi.lineWidth = 1.0f;
+    ciPack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    ciPack.depthStencilStateCi.depthTestEnable = VK_TRUE;
+    ciPack.depthStencilStateCi.depthWriteEnable = VK_FALSE;
+    ciPack.depthStencilStateCi.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    ciPack.colorBlendAttachmentStates.resize(1);
+    ciPack.colorBlendAttachmentStates[0].colorWriteMask = 0b1111;
+    ciPack.UpdateAllArrays();
+    return vk::pipeline(ciPack);
+}
+
 vk::RenderPass CreateSingleColorRenderPass(VkFormat format)
 {
     VkAttachmentDescription color{};
@@ -729,6 +762,8 @@ struct VulkanRenderer::Impl
     std::unique_ptr<vk::pipeline> geometryPipeline{};
     vk::pipelineLayout lightingLayout{};
     std::unique_ptr<vk::pipeline> lightingPipeline{};
+    std::unique_ptr<vk::pipelineLayout> skyboxLayout{};
+    std::unique_ptr<vk::pipeline> skyboxPipeline{};
     te::VulkanPostProcessPass postProcessPass{};
     te::VulkanPresentPass presentPass{};
     std::unique_ptr<vk::RenderPass> postProcessRenderPass{};
@@ -779,6 +814,9 @@ bool VulkanRenderer::Initialize()
     deferredCi.geometry.depthFormat = VK_FORMAT_D32_SFLOAT;
     deferredCi.lighting.extent = impl.extent;
     deferredCi.lighting.renderPass = impl.screen->renderPass;
+    deferredCi.skybox.extent = impl.extent;
+    deferredCi.skybox.colorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    deferredCi.skybox.depthFormat = deferredCi.geometry.depthFormat;
     if (!impl.screen->framebuffers.empty()) {
         deferredCi.lighting.framebuffer = impl.screen->framebuffers[0];
     }
@@ -840,6 +878,19 @@ bool VulkanRenderer::Initialize()
     }
     impl.lightingPipeline = std::make_unique<vk::pipeline>(CreateDeferredLightingPipeline(impl.extent, *impl.postProcessRenderPass, impl.lightingLayout));
     impl.deferredPipeline.LightingPass().SetPipeline(*impl.lightingPipeline, impl.lightingLayout);
+
+    impl.deferredPipeline.SkyboxPass().SetAttachments(impl.lightingTarget.view, gbuffer.DepthView());
+    impl.skyboxLayout = std::make_unique<vk::pipelineLayout>();
+    {
+        VkDescriptorSetLayout setLayout = impl.deferredPipeline.SkyboxPass().GetDescriptorSetLayout();
+        VkPipelineLayoutCreateInfo layoutCi{};
+        layoutCi.setLayoutCount = setLayout == VK_NULL_HANDLE ? 0u : 1u;
+        layoutCi.pSetLayouts = setLayout == VK_NULL_HANDLE ? nullptr : &setLayout;
+        impl.skyboxLayout->Create(layoutCi);
+    }
+    impl.skyboxPipeline = std::make_unique<vk::pipeline>(CreateSkyboxPipeline(
+        impl.extent, impl.deferredPipeline.SkyboxPass().GetRenderPass(), *impl.skyboxLayout));
+    impl.deferredPipeline.SkyboxPass().SetPipeline(*impl.skyboxPipeline, *impl.skyboxLayout);
 
     te::VulkanPostProcessPassCreateInfo postCi{};
     postCi.extent = impl.extent;
@@ -963,6 +1014,7 @@ void VulkanRenderer::Shutdown()
     // Destroy pipelines and layouts before pass Shutdown() runs vkDestroyDescriptorSetLayout on those handles.
     impl.geometryPipeline.reset();
     impl.lightingPipeline.reset();
+    impl.skyboxPipeline.reset();
     impl.presentPipeline.reset();
     impl.postProcessPipeline.reset();
 
@@ -970,6 +1022,7 @@ void VulkanRenderer::Shutdown()
     new (&impl.geometryLayout) vk::pipelineLayout();
     impl.lightingLayout.~pipelineLayout();
     new (&impl.lightingLayout) vk::pipelineLayout();
+    impl.skyboxLayout.reset();
 
     impl.presentLayout.reset();
     impl.postProcessLayout.reset();
@@ -1030,6 +1083,7 @@ void VulkanRenderer::BeginFrame()
     }
     proj[1][1] *= -1.0f;
     impl.deferredPipeline.GeometryPass().SetViewProjection(view, proj);
+    impl.deferredPipeline.SkyboxPass().SetViewProjection(view, proj);
 
     if (mpRenderContext && mpRenderContext->GetDefaultLight()) {
         const glm::vec3 lightPos = mpRenderContext->GetDefaultLight()->GetPosition();

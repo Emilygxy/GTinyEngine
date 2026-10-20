@@ -27,12 +27,20 @@
 #include "framework/RenderThread.h"
 #include <mutex>
 
+#include "EngineConfig.h"
 #include "GUIManager.h"
 #include "TinyEngineHostUI.h"
 #include "imgui.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include "GTVulkan/GlfwGeneral.h"
 
 // declare external mutex for context synchronization (defined in RenderThread.cpp)
 extern std::mutex g_GLContextMutex;
+
+unsigned int SCR_WIDTH = 800;
+unsigned int SCR_HEIGHT = 600;
 
 namespace
 {
@@ -77,10 +85,35 @@ RenderAgent::~RenderAgent()
     }
 }
 
-void RenderAgent::InitGL()
+bool RenderAgent::Initialize(const EngineConfig& config)
 {
-    // glfw: initialize and configure
-    // ------------------------------
+    mConfig = config;
+    mBackend = config.backend;
+    mWindowTitle = config.windowTitle + " [" + EngineConfig::BackendToString(mBackend) + "]";
+    SCR_WIDTH = static_cast<unsigned int>((std::max)(1, config.windowWidth));
+    SCR_HEIGHT = static_cast<unsigned int>((std::max)(1, config.windowHeight));
+    lastX = SCR_WIDTH / 2.0f;
+    lastY = SCR_HEIGHT / 2.0f;
+    mMultithreadedRendering = config.multithreaded && IsOpenGLBackend();
+    if (config.multithreaded && !IsOpenGLBackend())
+    {
+        std::cout << "EngineConfig: multithreaded rendering is OpenGL-only; disabled for "
+                  << EngineConfig::BackendToString(mBackend) << "." << std::endl;
+    }
+
+    const bool ok = IsOpenGLBackend() ? InitOpenGLHost() : InitVulkanHost();
+    if (!ok)
+    {
+        return false;
+    }
+
+    std::cout << "TinyRenderer host ready (" << EngineConfig::BackendToString(mBackend)
+              << ", " << SCR_WIDTH << "x" << SCR_HEIGHT << ")." << std::endl;
+    return true;
+}
+
+bool RenderAgent::InitOpenGLHost()
+{
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -90,80 +123,131 @@ void RenderAgent::InitGL()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    // glfw window creation
-    // --------------------
-    mWindow = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, TinyEngineHostUI::kAppTitle, NULL, NULL);
+    mWindow = glfwCreateWindow(static_cast<int>(SCR_WIDTH), static_cast<int>(SCR_HEIGHT),
+                               mWindowTitle.c_str(), NULL, NULL);
     if (mWindow == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return;
+        return false;
     }
     glfwMakeContextCurrent(mWindow);
+    glfwSwapInterval(mConfig.vsync ? 1 : 0);
     glfwSetFramebufferSizeCallback(mWindow, EventHelper::framebuffer_size_callback);
     glfwSetCursorPosCallback(mWindow, EventHelper::mouse_callback);
     glfwSetScrollCallback(mWindow, EventHelper::scroll_callback);
-    
-    // Add mouse button callback for picking
+
     glfwSetMouseButtonCallback(mWindow, [](GLFWwindow* window, int button, int action, int mods) {
+        (void)mods;
         if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
-            // Get RenderAgent instance and handle click
             RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
             if (agent) {
                 agent->HandleMouseClick(xpos, ypos);
             }
         }
     });
-    
-    // Set window user pointer for callbacks
+
     glfwSetWindowUserPointer(mWindow, this);
 
-    //not to capture mouse in initing state
-
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
-        return;
+        return false;
     }
 
-    // enable backface culling
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glFrontFace(GL_CCW); // ccw is default positive face
-    
-    // Initialize ImGui
+    glFrontFace(GL_CCW);
+
     GUIManager::GetInstance().Init(mWindow);
+    return true;
+}
+
+bool RenderAgent::InitVulkanHost()
+{
+    easy_vk::windowTitle = mWindowTitle.c_str();
+    const VkExtent2D size{ static_cast<uint32_t>(SCR_WIDTH), static_cast<uint32_t>(SCR_HEIGHT) };
+    if (!easy_vk::InitializeWindow(size, mConfig.fullscreen, true, mConfig.vsync))
+    {
+        std::cout << "Failed to initialize Vulkan window." << std::endl;
+        return false;
+    }
+
+    mWindow = easy_vk::pWindow;
+    if (!mWindow)
+    {
+        std::cout << "Vulkan window was not created." << std::endl;
+        return false;
+    }
+
+    glfwSetFramebufferSizeCallback(mWindow, EventHelper::framebuffer_size_callback);
+    glfwSetCursorPosCallback(mWindow, EventHelper::mouse_callback);
+    glfwSetScrollCallback(mWindow, EventHelper::scroll_callback);
+    glfwSetMouseButtonCallback(mWindow, [](GLFWwindow* window, int button, int action, int mods) {
+        (void)mods;
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
+            if (agent) {
+                agent->HandleMouseClick(xpos, ypos);
+            }
+        }
+    });
+    glfwSetWindowUserPointer(mWindow, this);
+    std::cout << "Vulkan host UI (ImGui) is OpenGL-only; using the default sandbox. Press ESC to quit." << std::endl;
+    return true;
 }
 
 void RenderAgent::SetupRenderer()
 {
-    // create renderer
-    mpRenderer = RendererFactory::CreateRenderer(RendererBackend::OpenGL);
+    mpRenderer = RendererFactory::CreateRenderer(mBackend);
     if (!mpRenderer || !mpRenderer->Initialize())
     {
         std::cout << "Failed to initialize renderer" << std::endl;
+        mpRenderer.reset();
+        return;
     }
 
     mpRenderView = std::make_shared<RenderView>(SCR_WIDTH, SCR_HEIGHT);
     mpRenderContext = std::make_shared<RenderContext>();
     mpRenderer->SetRenderContext(mpRenderContext);
-    
-    //init camera
+
     auto pCamera = std::make_shared<Camera>(glm::vec3(0.0f, 0.0f, 3.0f));
     pCamera->SetAspectRatio((float)SCR_WIDTH / (float)SCR_HEIGHT);
     mpCameraEvent = std::make_shared<Camera_Event>(pCamera);
     EventHelper::GetInstance().AttachCameraEvent(mpCameraEvent);
     mpRenderContext->AttachCamera(pCamera);
-    //init light
+
     auto pLight = std::make_shared<Light>();
-    pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f)); // set light pos
-    pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f)); // set light color
+    pLight->SetPosition(glm::vec3(2.0f, 2.0f, 2.0f));
+    pLight->SetColor(glm::vec3(1.0f, 1.0f, 1.0f));
     pLight->SetDirection(glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f)));
     mpRenderContext->PushAttachLight(pLight);
+}
+
+void RenderAgent::InitActiveSandbox()
+{
+    if (!mSandbox || !mpRenderer || !mWindow)
+    {
+        return;
+    }
+
+    if (IsOpenGLBackend())
+    {
+        std::lock_guard<std::mutex> lock(g_GLContextMutex);
+        glfwMakeContextCurrent(mWindow);
+        mSandbox->Init(mpRenderer);
+        glfwMakeContextCurrent(nullptr);
+    }
+    else
+    {
+        mSandbox->Init(mpRenderer);
+    }
+
+    enableInteraction = mSandbox->IsEnableInteraction();
 }
 
 void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
@@ -177,15 +261,7 @@ void RenderAgent::SetSandbox(std::unique_ptr<ISandbox> sandbox)
     mActiveSandboxIndex = -1;
     mPendingSandboxIndex = -1;
 
-    if (mSandbox && mpRenderer && mWindow)
-    {
-        std::lock_guard<std::mutex> lock(g_GLContextMutex);
-        glfwMakeContextCurrent(mWindow);
-        mSandbox->Init(mpRenderer);
-        glfwMakeContextCurrent(nullptr);
-
-        enableInteraction = mSandbox->IsEnableInteraction();
-    }
+    InitActiveSandbox();
 }
 
 void RenderAgent::RegisterSandbox(const std::string& displayName,
@@ -212,16 +288,7 @@ void RenderAgent::ActivateSandbox(int index)
     }
 
     mSandbox = mSandboxCatalog[static_cast<size_t>(index)].factory();
-    if (mSandbox && mpRenderer && mWindow)
-    {
-        // PBR SetAlbedoTexturePath uploads via GL; must run with a current context on the main thread.
-        std::lock_guard<std::mutex> lock(g_GLContextMutex);
-        glfwMakeContextCurrent(mWindow);
-        mSandbox->Init(mpRenderer);
-        glfwMakeContextCurrent(nullptr);
-
-        enableInteraction = mSandbox->IsEnableInteraction();
-    }
+    InitActiveSandbox();
 
     mActiveSandboxIndex = index;
     mSelectedSandboxIndex = index;
@@ -243,6 +310,12 @@ void RenderAgent::ProcessPendingSandboxSwitch()
 void RenderAgent::Run()
 {
     PreRender();
+    if (!mpRenderer || !mWindow)
+    {
+        std::cout << "TinyRenderer host is not ready; aborting run loop." << std::endl;
+        PostRender();
+        return;
+    }
 
     if (!mSandboxCatalog.empty() && mActiveSandboxIndex < 0 && !mSandbox)
     {
@@ -250,7 +323,7 @@ void RenderAgent::Run()
     }
     else if (mSandbox && mActiveSandboxIndex < 0 && mpRenderer)
     {
-        mSandbox->Init(mpRenderer);
+        InitActiveSandbox();
     }
 
     RenderLoop();
@@ -311,7 +384,11 @@ void RenderAgent::RenderLoop()
 
         auto sceneCommands = GetSceneRenderCommands();
 
-        if (mMultithreadedRendering)
+        if (!IsOpenGLBackend())
+        {
+            RenderVulkanFrame(sceneCommands);
+        }
+        else if (mMultithreadedRendering)
         {
             // multi-thread rendering path
             // 1. prepare ImGui frame (must be done early in main thread for input handling)
@@ -402,56 +479,101 @@ void RenderAgent::RenderLoop()
             glfwPollEvents();
         }
 
-        static bool dummy = (PrintCullingInfo(), true); // print culling info once per frame
+        if (IsOpenGLBackend())
+        {
+            static bool dummy = (PrintCullingInfo(), true);
+            (void)dummy;
+        }
     }
+}
+
+void RenderAgent::RenderVulkanFrame(const std::vector<RenderCommand>& sceneCommands)
+{
+    if (!mpRenderer)
+    {
+        glfwPollEvents();
+        return;
+    }
+
+    while (glfwGetWindowAttrib(mWindow, GLFW_ICONIFIED))
+    {
+        glfwWaitEvents();
+    }
+
+    mpRenderer->BeginFrame();
+    if (mpRenderView)
+    {
+        mpRenderer->SetViewport(0, 0, mpRenderView->Width(), mpRenderView->Height());
+    }
+    mpRenderer->DrawMeshes(sceneCommands);
+    mpRenderer->EndFrame();
+    glfwPollEvents();
+    easy_vk::TitleFps();
 }
 
 void RenderAgent::PostRender()
 {
-    // stop render thread
     if (mpRenderThread)
     {
         mpRenderThread->Stop();
         mpRenderThread->Join();
     }
 
-    // Terminate ImGui
-    GUIManager::GetInstance().EndRender();
-    te::RenderPassManager::GetInstance().GenerateVisualization("rendergraph.dot");
+    if (GUIManager::GetInstance().IsInited())
+    {
+        GUIManager::GetInstance().EndRender();
+    }
 
-    mpRenderer->Shutdown();
+    if (IsOpenGLBackend())
+    {
+        te::RenderPassManager::GetInstance().GenerateVisualization("rendergraph.dot");
+    }
 
-    // glfw: terminate, clearing all previously allocated GLFW resources.
-    // ------------------------------------------------------------------
-    glfwTerminate();
+    if (mpRenderer)
+    {
+        mpRenderer->Shutdown();
+        mpRenderer.reset();
+    }
+
+    if (!IsOpenGLBackend())
+    {
+        easy_vk::TerminateWindow();
+        mWindow = nullptr;
+    }
+    else
+    {
+        glfwTerminate();
+        mWindow = nullptr;
+    }
 }
 
 void RenderAgent::PreRender()
 {
     SetupRenderer();
-    SetupMultiPassRendering();
+    if (!mpRenderer)
+    {
+        return;
+    }
 
-    // initialize multi-thread rendering
-    if (mMultithreadedRendering)
+    if (IsOpenGLBackend())
+    {
+        SetupMultiPassRendering();
+    }
+
+    if (mMultithreadedRendering && IsOpenGLBackend())
     {
         mpCommandQueue = std::make_shared<RenderCommandQueue>();
         mpFrameSync = std::make_shared<FrameSync>();
-        
-        // create render thread (share OpenGL context)
-        // note: use mutex to synchronize context access
+
         mpRenderThread = std::make_shared<RenderThread>(
             mpCommandQueue,
             mpFrameSync,
             mpRenderer,
-            mWindow  // pass main window
+            mWindow
         );
-        
-        // set RenderView to get viewport size
+
         mpRenderThread->SetRenderView(mpRenderView);
-        
         mpRenderThread->Start();
-        
-        // wait for render thread initialization to complete
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
@@ -830,12 +952,16 @@ void EventHelper::AttachCameraEvent(const std::shared_ptr<Camera_Event>& pCamera
 void EventHelper::processInput(GLFWwindow* window)
 {
     auto cameraEvent = GetInstance().GetCameraEvent();
-    if (!cameraEvent) return; 
+    if (!cameraEvent) return;
 
-    // Check if ImGui wants to capture input
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureKeyboard || io.WantCaptureMouse) {
-        return; // Skip camera controls if ImGui is using input
+    RenderAgent* agent = static_cast<RenderAgent*>(glfwGetWindowUserPointer(window));
+
+    if (GUIManager::GetInstance().IsInited())
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantCaptureKeyboard || io.WantCaptureMouse) {
+            return;
+        }
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -884,31 +1010,34 @@ void EventHelper::processInput(GLFWwindow* window)
             cameraEvent->ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
     }
 
-    // switch culling mode with B key
-    static bool cullingEnabled = true;
-    static bool cullingKeyPressed = false;
+    // switch culling mode with B key (OpenGL only)
+    if (agent && agent->IsOpenGLBackend())
+    {
+        static bool cullingEnabled = true;
+        static bool cullingKeyPressed = false;
 
-    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
-    {
-        if (!cullingKeyPressed)
+        if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
         {
-            cullingEnabled = !cullingEnabled;
-            if (cullingEnabled)
+            if (!cullingKeyPressed)
             {
-                glEnable(GL_CULL_FACE);
-                std::cout << "Backface Culling: Enabled" << std::endl;
+                cullingEnabled = !cullingEnabled;
+                if (cullingEnabled)
+                {
+                    glEnable(GL_CULL_FACE);
+                    std::cout << "Backface Culling: Enabled" << std::endl;
+                }
+                else
+                {
+                    glDisable(GL_CULL_FACE);
+                    std::cout << "Backface Culling: Disabled" << std::endl;
+                }
+                cullingKeyPressed = true;
             }
-            else
-            {
-                glDisable(GL_CULL_FACE);
-                std::cout << "Backface Culling: Disabled" << std::endl;
-            }
-            cullingKeyPressed = true;
         }
-    }
-    else
-    {
-        cullingKeyPressed = false;
+        else
+        {
+            cullingKeyPressed = false;
+        }
     }
 }
 

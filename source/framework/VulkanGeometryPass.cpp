@@ -153,18 +153,21 @@ void VulkanGeometryPass::Record(VkCommandBuffer commandBuffer, const std::vector
                 VkDeviceSize vertexOffset = 0;
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, &meshBuffer.vertexBuffer, &vertexOffset);
                 vkCmdBindIndexBuffer(commandBuffer, meshBuffer.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                if (pipelineLayout_ != VK_NULL_HANDLE && descriptorSet_ != VK_NULL_HANDLE) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 1, &dynamicOffset);
-                }
                 VkDescriptorSet materialSet = VK_NULL_HANDLE;
-                if (GetOrCreateMaterialTextureSet(command.fragmentsSource->GetMaterial(), materialSet) &&
-                    pipelineLayout_ != VK_NULL_HANDLE && materialSet != VK_NULL_HANDLE) {
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 1, 1, &materialSet, 0, nullptr);
+                if (!GetOrCreateMaterialTextureSet(command.fragmentsSource->GetMaterial(), materialSet)) {
+                    if (const auto fallback = materialTextures_.find(nullptr); fallback != materialTextures_.end()) {
+                        materialSet = fallback->second.descriptorSet;
+                    }
                 }
-                if (pipelineLayout_ != VK_NULL_HANDLE) {
-                    const glm::vec4 matPush = MaterialPushParams(command.fragmentsSource->GetMaterial());
-                    vkCmdPushConstants(commandBuffer, pipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4), &matPush);
+                // deferred_geometry.frag statically uses set 1. Drawing with only set 0
+                // invalidates the command buffer and loses the device.
+                if (pipelineLayout_ == VK_NULL_HANDLE || descriptorSet_ == VK_NULL_HANDLE || materialSet == VK_NULL_HANDLE) {
+                    continue;
                 }
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 0, 1, &descriptorSet_, 1, &dynamicOffset);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout_, 1, 1, &materialSet, 0, nullptr);
+                const glm::vec4 matPush = MaterialPushParams(command.fragmentsSource->GetMaterial());
+                vkCmdPushConstants(commandBuffer, pipelineLayout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4), &matPush);
                 vkCmdDrawIndexed(commandBuffer, meshBuffer.indexCount, 1, 0, 0, 0);
             }
         }
@@ -366,6 +369,29 @@ void VulkanGeometryPass::SetViewProjection(const glm::mat4& view, const glm::mat
     proj_ = proj;
 }
 
+bool VulkanGeometryPass::EnsureDescriptorPool()
+{
+    if (descriptorPool_ != VK_NULL_HANDLE) {
+        return true;
+    }
+
+    // Camera/model set plus one combined-image set per material.
+    VkDescriptorPoolSize poolSizes[3]{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = 1;
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    poolSizes[1].descriptorCount = 1;
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[2].descriptorCount = 256;
+
+    VkDescriptorPoolCreateInfo poolCi{};
+    poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolCi.maxSets = 257;
+    poolCi.poolSizeCount = 3;
+    poolCi.pPoolSizes = poolSizes;
+    return vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) == VK_SUCCESS;
+}
+
 bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
 {
     if (!CreateBuffer(sizeof(CameraUbo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -400,24 +426,8 @@ bool VulkanGeometryPass::CreatePerObjectDescriptorResources()
         return false;
     }
 
-    VkDescriptorPoolSize poolSizes[2]{};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = 1;
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = 1;
-    VkDescriptorPoolSize dynamicUboPoolSize{};
-    dynamicUboPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    dynamicUboPoolSize.descriptorCount = 1;
-    if (descriptorPool_ == VK_NULL_HANDLE) {
-        VkDescriptorPoolCreateInfo poolCi{};
-        poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolCi.maxSets = 2;
-        VkDescriptorPoolSize allPoolSizes[3] = { poolSizes[0], poolSizes[1], dynamicUboPoolSize };
-        poolCi.poolSizeCount = 3;
-        poolCi.pPoolSizes = allPoolSizes;
-        if (vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) != VK_SUCCESS) {
-            return false;
-        }
+    if (!EnsureDescriptorPool()) {
+        return false;
     }
 
     VkDescriptorSetAllocateInfo allocInfo{};
@@ -489,21 +499,8 @@ bool VulkanGeometryPass::CreateTextureDescriptorResources()
         return false;
     }
 
-    if (descriptorPool_ == VK_NULL_HANDLE) {
-        VkDescriptorPoolSize poolSizes[2]{};
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = 2;
-        poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = 256;
-
-        VkDescriptorPoolCreateInfo poolCi{};
-        poolCi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolCi.maxSets = 256;
-        poolCi.poolSizeCount = 2;
-        poolCi.pPoolSizes = poolSizes;
-        if (vkCreateDescriptorPool(vk::GraphicsBase::Base().Device(), &poolCi, nullptr, &descriptorPool_) != VK_SUCCESS) {
-            return false;
-        }
+    if (!EnsureDescriptorPool()) {
+        return false;
     }
 
     VkSamplerCreateInfo samplerCi{};
@@ -693,6 +690,15 @@ bool VulkanGeometryPass::GetOrCreateMaterialTextureSet(const std::shared_ptr<Mat
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &textureDescriptorSetLayout_;
     if (vkAllocateDescriptorSets(vk::GraphicsBase::Base().Device(), &allocInfo, &entry.descriptorSet) != VK_SUCCESS) {
+        if (entry.view != VK_NULL_HANDLE) {
+            vkDestroyImageView(vk::GraphicsBase::Base().Device(), entry.view, nullptr);
+        }
+        if (entry.image != VK_NULL_HANDLE) {
+            vkDestroyImage(vk::GraphicsBase::Base().Device(), entry.image, nullptr);
+        }
+        if (entry.memory != VK_NULL_HANDLE) {
+            vkFreeMemory(vk::GraphicsBase::Base().Device(), entry.memory, nullptr);
+        }
         return false;
     }
     VkDescriptorImageInfo imageInfo{};

@@ -31,9 +31,22 @@ set_target_properties(TinyRenderer
 )
 target_compile_features(TinyRenderer PRIVATE cxx_std_17)
 
-# 定义宏将资源路径传递给代码
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/EngineConfig.json" TINYRENDERER_ENGINE_CONFIG_SOURCE)
 target_compile_definitions(TinyRenderer PRIVATE 
     RESOURCE_PATH="${RESOURCE_OUTPUT_DIR}/"
+    ENGINE_CONFIG_SOURCE_PATH="${TINYRENDERER_ENGINE_CONFIG_SOURCE}"
+)
+
+set(TINYRENDERER_CONFIG_FILE ${CMAKE_CURRENT_SOURCE_DIR}/EngineConfig.json)
+set_source_files_properties(${TINYRENDERER_CONFIG_FILE} PROPERTIES HEADER_FILE_ONLY TRUE)
+target_sources(TinyRenderer PRIVATE ${TINYRENDERER_CONFIG_FILE})
+source_group("Config" FILES ${TINYRENDERER_CONFIG_FILE})
+
+add_custom_command(TARGET TinyRenderer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${TINYRENDERER_CONFIG_FILE}
+        $<TARGET_FILE_DIR:TinyRenderer>/EngineConfig.json
+    COMMENT "Copying EngineConfig.json next to TinyRenderer"
 )
 
 # 将上级资源拷贝到work path中

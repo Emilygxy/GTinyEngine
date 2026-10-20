@@ -13,9 +13,9 @@ namespace te
 	struct AaBB;
 }
 
-// settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+// settings (overridden by EngineConfig.json at startup)
+extern unsigned int SCR_WIDTH;
+extern unsigned int SCR_HEIGHT;
 
 struct RenderCommand;
 class IRenderer;
@@ -30,6 +30,7 @@ class RenderCommandQueue;
 class FrameSync;
 class RenderThread;
 
+#include "EngineConfig.h"
 #include "TinyEngineHostUI.h"
 
 class EventHelper
@@ -74,7 +75,13 @@ public:
 	RenderAgent();
 	~RenderAgent();
 
-	void InitGL(); // main thread
+	bool Initialize(const EngineConfig& config);
+
+	RendererBackend GetBackend() const noexcept { return mBackend; }
+	bool IsOpenGLBackend() const noexcept
+	{
+		return mBackend == RendererBackend::OpenGL || mBackend == RendererBackend::OpenGLES;
+	}
 
 	void SetSandbox(std::unique_ptr<ISandbox> sandbox);
 	void RegisterSandbox(const std::string& displayName,
@@ -111,8 +118,12 @@ private:
 		std::function<std::unique_ptr<ISandbox>()> factory;
 	};
 
+	bool InitOpenGLHost();
+	bool InitVulkanHost();
 	void SetupRenderer();
 	void SetupMultiPassRendering();
+	void InitActiveSandbox();
+	void RenderVulkanFrame(const std::vector<RenderCommand>& sceneCommands);
 
 	// ui
 	void RenderUI();  // Legacy method for single-threaded rendering
@@ -131,6 +142,9 @@ private:
 	void HandleMouseClick(double xpos, double ypos);
 
 	GLFWwindow* mWindow { nullptr };
+	EngineConfig mConfig;
+	RendererBackend mBackend{ RendererBackend::OpenGL };
+	std::string mWindowTitle;
 
 	std::shared_ptr<IRenderer> mpRenderer{ nullptr };
 
