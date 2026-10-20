@@ -57,6 +57,7 @@ private:
     static uint32_t FindMemoryType(uint32_t memoryTypeBits, VkMemoryPropertyFlags requiredProperties);
     static bool UploadDeviceLocalBuffer(const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer& outBuffer, VkDeviceMemory& outMemory);
 
+    bool EnsureDescriptorPool();
     bool CreatePerObjectDescriptorResources();
     void DestroyPerObjectDescriptorResources();
     bool CreateTextureDescriptorResources();

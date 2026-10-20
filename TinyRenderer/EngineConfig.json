@@ -1,7 +1,7 @@
 {
   "_usage": "Set renderer.backend to OpenGL or Vulkan. Optional CLI: --backend Vulkan  --config path/to/EngineConfig.json",
   "renderer": {
-    "backend": "OpenGL",
+    "backend": "Vulkan",
     "vsync": true,
     "multithreaded": true
   },

@@ -198,7 +198,6 @@ bool VulkanLightingPass::CreateDescriptorResources()
     if (vkCreateSampler(vk::GraphicsBase::Base().Device(), &samplerCi, nullptr, &gbufferSampler_) != VK_SUCCESS) {
         return false;
     }
-
     return true;
 }
 

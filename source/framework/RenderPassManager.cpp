@@ -407,11 +407,20 @@ namespace te
         };
         mVulkanPassNodes.push_back(std::move(lightingNode));
 
-        std::string postDependency = "VkLightingPass";
+        VulkanPassNode skyboxNode;
+        skyboxNode.name = "VkSkyboxPass";
+        skyboxNode.dependencies = { "VkLightingPass" };
+        skyboxNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
+            if (!mpVulkanDeferredPipeline) return;
+            mpVulkanDeferredPipeline->SkyboxPass().Record(commandBuffer);
+        };
+        mVulkanPassNodes.push_back(std::move(skyboxNode));
+
+        std::string postDependency = "VkSkyboxPass";
         if (mVulkanHybridAfterLightingCallback) {
             VulkanPassNode hybridNode;
             hybridNode.name = "VkHybridAfterLighting";
-            hybridNode.dependencies = { "VkLightingPass" };
+            hybridNode.dependencies = { "VkSkyboxPass" };
             hybridNode.execute = [this](VkCommandBuffer commandBuffer, const std::vector<RenderCommand>&) {
                 if (!mVulkanHybridAfterLightingCallback) {
                     return;
