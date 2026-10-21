@@ -1,11 +1,11 @@
 #pragma once
-#include "root_dir.h"
+#include "filesystem.h"
 #include<string>
 #include <vector>
 
-// use CMake defined micro path
-const std::string g_vk_shader_resource_path = VK_SHADER_RESOURCE_PATH;
-const std::string g_resource_path = RESOURCE_PATH;
+// Runtime resources live next to the executable, under resources/.
+const std::string g_vk_shader_resource_path = FileSystem::getPath("resources/compiled_shaders");
+const std::string g_resource_path = FileSystem::getPath("resources");
 
 // utility function for loading a 2D texture from file
 // ---------------------------------------------------

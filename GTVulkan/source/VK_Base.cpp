@@ -1,6 +1,8 @@
 #include "GTVulkan/VK_Base.h"
+#include "filesystem.h"
 #include <format>
 #include <fstream>
+#include <filesystem>
 #include <array>
 #include "glm/glm.hpp"
 
@@ -1119,9 +1121,10 @@ result_t shaderModule::Create(VkShaderModuleCreateInfo& createInfo)
 }
 result_t shaderModule::Create(const char* filepath)
 {
-    std::ifstream file(filepath, std::ios::ate | std::ios::binary);
+    const std::string resolved = FileSystem::getPath(filepath ? filepath : "");
+    std::ifstream file(std::filesystem::path(resolved), std::ios::ate | std::ios::binary);
     if (!file) {
-       outStream << std::format("[ shader ] ERROR\nFailed to open the file: {}\n", filepath);
+       outStream << std::format("[ shader ] ERROR\nFailed to open the file: {}\n", resolved);
        return VK_RESULT_MAX_ENUM; // no suitable error code, don't use VK_ERROR_UNKNOWN
     }
     size_t fileSize = size_t(file.tellg());

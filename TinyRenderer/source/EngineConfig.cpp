@@ -549,11 +549,11 @@ std::vector<std::string> EngineConfigLoader::CollectSearchPaths(const std::strin
     }
 
     addPath(std::filesystem::current_path() / "EngineConfig.json");
+    addPath(ExecutableDirectory() / "EngineConfig.json");
     addPath(std::filesystem::current_path() / "TinyRenderer" / "EngineConfig.json");
 #ifdef ENGINE_CONFIG_SOURCE_PATH
     addPath(ENGINE_CONFIG_SOURCE_PATH);
 #endif
-    addPath(ExecutableDirectory() / "EngineConfig.json");
 
 #ifdef RESOURCE_PATH
     addPath(std::filesystem::path(RESOURCE_PATH) / "EngineConfig.json");
